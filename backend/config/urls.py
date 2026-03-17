@@ -29,6 +29,7 @@ api_v1_patterns = [
     path("support/",  include("apps.support.urls")),      # ← fixed
     path("reports/",  include("apps.reports.urls")),
     path("api/v1/payments/", include("apps.payments.urls")),# ← fixed
+    path("api/v1/receptionist/", include("apps.receptionist.urls")),
     *schema_patterns,
 ]
 
