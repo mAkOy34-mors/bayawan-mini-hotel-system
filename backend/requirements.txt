@@ -1,0 +1,24 @@
+# ── Core ─────────────────────────────────────────────────────────
+Django==6.0.3
+djangorestframework==3.16.1
+psycopg[binary]==3.3.3       # PostgreSQL adapter
+
+# ── Supabase ─────────────────────────────────────────────────────
+supabase==2.7.4                # supabase-py SDK (auth + storage)
+PyJWT==2.11.0                   # JWT decode/verify for Supabase tokens
+
+# ── DRF extras ───────────────────────────────────────────────────
+django-cors-headers==4.9.0     # CORS
+drf-spectacular==0.29.0        # OpenAPI / Swagger
+django-filter==25.2             # QuerySet filtering
+
+# ── Config ───────────────────────────────────────────────────────
+django-environ==0.13.0          # .env file loading
+
+# ── Production ───────────────────────────────────────────────────
+gunicorn==25.1.0
+whitenoise==6.12.0               # Serve static files
+
+djangorestframework-simplejwt==5.3.1
+bcrypt==4.2.1
+httpx

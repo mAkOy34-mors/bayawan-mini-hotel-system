@@ -1,0 +1,50 @@
+"""
+apps/rooms/views.py
+
+GET /api/v1/rooms/available?checkIn=YYYY-MM-DD&checkOut=YYYY-MM-DD
+"""
+import logging
+from datetime import date
+
+from rest_framework.response import Response
+from rest_framework.views import APIView
+
+from apps.bookings.models import Booking
+from .models import Room
+from .serializers import RoomSerializer
+
+logger = logging.getLogger(__name__)
+
+
+class AvailableRoomsView(APIView):
+
+    def get(self, request):
+        check_in_str  = request.query_params.get("checkIn")
+        check_out_str = request.query_params.get("checkOut")
+
+        # Filter only available rooms (Spring Boot uses Boolean available)
+        qs = Room.objects.filter(available=True)
+
+        if check_in_str and check_out_str:
+            try:
+                check_in  = date.fromisoformat(check_in_str)
+                check_out = date.fromisoformat(check_out_str)
+            except ValueError:
+                return Response({"message": "Invalid date format. Use YYYY-MM-DD."}, status=400)
+
+            # Exclude rooms with overlapping confirmed bookings
+            conflicting_room_ids = (
+                Booking.objects.filter(
+                    status__in=[
+                        Booking.BookingStatus.CONFIRMED,
+                        Booking.BookingStatus.CHECKED_IN,
+                    ],
+                    check_in_date__lt=check_out,
+                    check_out_date__gt=check_in,
+                )
+                .values_list("room_id", flat=True)
+            )
+            qs = qs.exclude(id__in=conflicting_room_ids)
+
+        rooms = qs.order_by("room_number")
+        return Response(RoomSerializer(rooms, many=True).data)

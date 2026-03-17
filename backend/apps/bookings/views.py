@@ -1,0 +1,169 @@
+"""
+apps/bookings/views.py
+
+GET  /api/v1/bookings/my-bookings/ → list authenticated user's bookings
+POST /api/v1/bookings/             → create a booking
+"""
+import logging
+import uuid
+
+from django.db import transaction
+from rest_framework import status
+from rest_framework.response import Response
+from rest_framework.views import APIView
+
+from apps.rooms.models import Room
+from .models import Booking
+from .serializers import BookingCreateSerializer, BookingSerializer
+
+logger = logging.getLogger(__name__)
+
+
+class MyBookingsView(APIView):
+    """GET /api/v1/bookings/my-bookings/"""
+
+    def get(self, request):
+        bookings = (
+            Booking.objects.filter(user=request.user)
+            .select_related("room")
+            .order_by("-created_at")
+        )
+        return Response(BookingSerializer(bookings, many=True).data)
+
+
+class CreateBookingView(APIView):
+    """POST /api/v1/bookings/"""
+
+    @transaction.atomic
+    def post(self, request):
+        logger.error("Raw request data: %s", request.data)
+        ser = BookingCreateSerializer(data=request.data)
+        if not ser.is_valid():
+            logger.error("Booking validation errors: %s", ser.errors)
+            return Response(
+                {"message": "Validation failed.", "errors": ser.errors},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        d = ser.validated_data
+        logger.error("Booking validated data: %s", d)
+
+        # Check room exists and is available
+        # Check room exists and is available
+        try:
+            room = Room.objects.get(id=d["roomId"], available=True)
+        except Room.DoesNotExist:
+            return Response(
+                {"message": "Room not found or not available."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        # Get guest information — required by Spring Boot bookings table
+        from apps.guests.models import GuestInformation
+        try:
+            guest_info = GuestInformation.objects.get(user=request.user)
+        except GuestInformation.DoesNotExist:
+            return Response(
+                {"message": "Please complete your profile before making a booking."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Check for date conflicts with existing bookings
+        conflict = Booking.objects.filter(
+            room=room,
+            status__in=[
+                Booking.BookingStatus.CONFIRMED,
+                Booking.BookingStatus.CHECKED_IN,
+            ],
+            check_in_date__lt=d["checkOutDate"],
+            check_out_date__gt=d["checkInDate"],
+        ).exists()
+
+        if conflict:
+            return Response(
+                {"message": "Room is already booked for the selected dates."},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        # Calculate nights and amounts
+        nights         = (d["checkOutDate"] - d["checkInDate"]).days
+        total_amount   = d.get("totalAmount") or (room.price_per_night * nights)
+        payment_type = d.get("paymentType", "DEPOSIT").upper()
+
+        if payment_type == "FULL":
+            deposit_amount = total_amount  # full amount paid upfront
+            remaining = 0  # nothing left to pay
+        else:
+            deposit_amount = total_amount / 2  # 50% deposit
+            remaining = total_amount - deposit_amount
+
+        # Generate unique booking reference
+        booking_reference = f"CGH-{uuid.uuid4().hex[:8].upper()}"
+
+        booking = Booking.objects.create(
+            booking_reference   = booking_reference,
+            user                = request.user,
+            guest_information_id = guest_info.id,
+            room                = room,
+            check_in_date       = d["checkInDate"],
+            check_out_date      = d["checkOutDate"],
+            number_of_guests    = d.get("numAdults", 1) + d.get("numChildren", 0),
+            number_of_nights    = nights,
+            total_amount        = total_amount,
+            deposit_amount      = deposit_amount,
+            remaining_amount    = remaining,
+            special_requests    = d.get("specialRequests", ""),
+            #status=Booking.BookingStatus.CONFIRMED if payment_type == "FULL" else Booking.BookingStatus.PENDING_DEPOSIT,
+            status=Booking.BookingStatus.PENDING_DEPOSIT,  # always start pending
+            payment_status=Booking.PaymentStatus.UNPAID,
+
+        )
+
+        logger.info(
+            "Booking %s created for user %s (room %s)",
+            booking.booking_reference, request.user.id, room.room_number,
+        )
+
+        # Create PayMongo payment link if online payment
+        checkout_url = None
+        if d.get("paymentMethod") == "ONLINE":
+            try:
+                from apps.payments.paymongo import create_payment_link
+                amount_to_pay = total_amount if d.get("paymentType") == "FULL" else deposit_amount
+                payment_link = create_payment_link(
+                    amount=float(amount_to_pay),
+                    description=f"Booking {booking.booking_reference} - {room.room_type} Room",
+                    remarks=f"{d['checkInDate']} to {d['checkOutDate']}",
+                    booking_id=booking.id,
+                    booking_reference=booking.booking_reference,
+                )
+                checkout_url = payment_link.get("checkout_url")
+
+                # Save payment link ID to booking
+                booking.deposit_payment_id = payment_link.get("paymongo_link_id")
+                booking.save(update_fields=["deposit_payment_id"])
+
+                # Create payment record
+                from apps.payments.models import Payment
+                Payment.objects.create(
+                    paymongo_link_id=payment_link.get("paymongo_link_id"),
+                    checkout_url=checkout_url,
+                    email=request.user.email,
+                    description=f"Booking {booking.booking_reference}",
+                    amount=amount_to_pay,
+                    status="PENDING",
+                    type="ROOM_BOOKING" if payment_type == "FULL" else "DEPOSIT",
+                    booking_id=booking.id,
+                )
+            except Exception as e:
+                logger.error("PayMongo error: %s", e)
+
+        return Response(
+            {
+                "id": booking.id,
+                "bookingReference": booking.booking_reference,
+                "depositAmount": str(booking.deposit_amount),
+                "checkoutUrl": checkout_url,
+                **BookingSerializer(booking).data,
+            },
+            status=status.HTTP_201_CREATED,
+        )
