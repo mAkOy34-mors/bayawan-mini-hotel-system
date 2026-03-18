@@ -1,6 +1,6 @@
-# Cebu Grand Hotel — Django Backend
+# Bayawan-Mini-Hotel — Django Backend
 
-REST API powering the CGH guest portal frontend.
+REST API powering the BMH guest portal frontend.
 
 ---
 
