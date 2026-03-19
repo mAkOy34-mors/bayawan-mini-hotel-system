@@ -15,7 +15,7 @@ import { PAGE_TITLES } from './constants/config';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import './styles/main.css';
 import { AdminApp } from './admin/AdminApp';
-
+import { ReceptionistApp } from './receptionist/ReceptionistApp';
 function AppShell() {
   const { user, token, logout } = useAuth();
   const { lang, setLang, t } = useLang();
@@ -95,6 +95,9 @@ export default function App() {
   if (user?.role === 'ADMIN') {
     return <AdminApp user={user} token={token} onLogout={logout} />;
   }
-
+  if (user?.role === 'RECEPTIONIST') {
+    return <ReceptionistApp user={user} token={token} onLogout={logout} />;
+  }
+  
   return <AppShell />;
 }

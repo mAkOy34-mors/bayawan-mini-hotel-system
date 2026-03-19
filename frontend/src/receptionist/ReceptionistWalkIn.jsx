@@ -6,7 +6,7 @@ import {
   CheckCircle2, AlertTriangle, Search, RefreshCw,
 } from 'lucide-react';
 
-const BASE = '/api/v1';
+import { API_BASE as BASE } from '../constants/config';
 const h  = (t) => ({ Authorization:`Bearer ${t}`,'ngrok-skip-browser-warning':'true' });
 const hj = (t) => ({ ...h(t),'Content-Type':'application/json' });
 

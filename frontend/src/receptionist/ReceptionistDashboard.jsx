@@ -6,7 +6,8 @@ import {
   Clock, CheckCircle2, AlertTriangle, ChevronRight,
 } from 'lucide-react';
 
-const BASE = '/api/v1';
+import { API_BASE as BASE } from '../constants/config';
+// then remove: const BASE = '/api/v1';
 const h = (t) => ({ Authorization: `Bearer ${t}`, 'ngrok-skip-browser-warning': 'true' });
 
 export function ReceptionistDashboard({ token, setPage }) {

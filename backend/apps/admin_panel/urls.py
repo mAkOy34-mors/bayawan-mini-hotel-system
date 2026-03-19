@@ -2,6 +2,10 @@
 from django.urls import path
 from . import views
 
+
+
+
+
 urlpatterns = [
     # Rooms
     path("rooms/",                        views.AdminRoomsView.as_view()),

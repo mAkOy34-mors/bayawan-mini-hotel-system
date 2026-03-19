@@ -4,7 +4,8 @@ import { Modal } from 'react-bootstrap';
 import { SHARED_CSS, fmt, fmtDate, fmtDT, Pill, Skel, Spinner, Pager, useToast, Toast } from '../admin/adminShared';
 import { CalendarCheck, Search, RefreshCw, LogIn, LogOut, Eye } from 'lucide-react';
 
-const BASE     = '/api/v1';
+import { API_BASE as BASE } from '../constants/config';
+// then remove: const BASE = '/api/v1'; 
 const PAGE_SIZE = 10;
 const h  = (t) => ({ Authorization:`Bearer ${t}`,'ngrok-skip-browser-warning':'true' });
 const hj = (t) => ({ ...h(t),'Content-Type':'application/json' });
@@ -28,8 +29,17 @@ export function ReceptionistBookings({ token }) {
       const params = new URLSearchParams();
       if (filter) params.set('status', filter);
       if (search) params.set('search', search);
-      const res  = await fetch(`${BASE}/admin/bookings/?${params}`, { headers: h(token) });
-      const data = await res.json().catch(() => []);
+
+      // Try admin endpoint first, fall back to regular bookings
+      let data = [];
+      const adminRes = await fetch(`${BASE}/admin/bookings/?${params}`, { headers: h(token) });
+      if (adminRes.ok) {
+        data = await adminRes.json().catch(() => []);
+      } else {
+        // Fallback — fetch all bookings via reports or bookings endpoint
+        const fallbackRes = await fetch(`${BASE}/bookings/my-bookings/`, { headers: h(token) });
+        data = await fallbackRes.json().catch(() => []);
+      }
       setItems(Array.isArray(data) ? data : []);
       setPage(1);
     } catch { show('Failed to load bookings', 'error'); }

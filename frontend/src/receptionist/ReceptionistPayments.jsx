@@ -1,80 +1,104 @@
-// ReceptionistGuests.jsx — View guest profiles, edit contact details (no delete)
-import { useState } from 'react';
+// ReceptionistPayments.jsx — View payments and record cash payments
+import { useState, useEffect } from 'react';
 import { Modal } from 'react-bootstrap';
-import { SHARED_CSS, fmt, fmtDate, Pill, Spinner, useToast, Toast } from '../admin/adminShared';
+import { SHARED_CSS, fmt, fmtDate, fmtDT, Pill, Skel, Spinner, Pager, useToast, Toast } from '../admin/adminShared';
 import {
-  Users, Search, User, Mail, Phone, BedDouble,
-  Edit3, Save, X, CheckCircle2, AlertTriangle,
+  CreditCard, Search, RefreshCw, CheckCircle2, Clock,
+  XCircle, Banknote, AlertTriangle, Receipt,
 } from 'lucide-react';
 
-const BASE = '/api/v1';
+import { API_BASE as BASE } from '../constants/config';
+// then remove: const BASE = '/api/v1';
+const PAGE_SIZE = 12;
 const h  = (t) => ({ Authorization:`Bearer ${t}`,'ngrok-skip-browser-warning':'true' });
 const hj = (t) => ({ ...h(t),'Content-Type':'application/json' });
 
-export function ReceptionistGuests({ token }) {
-  const [query,    setQuery]    = useState('');
-  const [guests,   setGuests]   = useState([]);
-  const [loading,  setLoading]  = useState(false);
-  const [selected, setSelected] = useState(null);
-  const [bookings, setBookings] = useState([]);
-  const [bLoading, setBLoading] = useState(false);
-  const [searched, setSearched] = useState(false);
+export function ReceptionistPayments({ token }) {
+  const [payments, setPayments] = useState([]);
+  const [loading,  setLoading]  = useState(true);
+  const [search,   setSearch]   = useState('');
+  const [filter,   setFilter]   = useState('all');
+  const [page,     setPage]     = useState(1);
 
-  // Edit modal
-  const [editOpen,  setEditOpen]  = useState(false);
-  const [editData,  setEditData]  = useState({});
-  const [saving,    setSaving]    = useState(false);
+  // Cash payment modal
+  const [showCash, setShowCash]   = useState(false);
+  const [bookRef,  setBookRef]    = useState('');
+  const [cashAmt,  setCashAmt]    = useState('');
+  const [cashNote, setCashNote]   = useState('');
+  const [cashBook, setCashBook]   = useState(null);
+  const [bSearching,setBSearching]= useState(false);
+  const [recording, setRecording] = useState(false);
   const { toast, show } = useToast();
 
-  const search = async () => {
-    if (!query.trim()) return;
-    setLoading(true); setSearched(true); setSelected(null);
+  const load = async () => {
+    setLoading(true);
     try {
-      const res  = await fetch(`${BASE}/admin/guests/?search=${encodeURIComponent(query)}`, { headers: h(token) });
+      const res  = await fetch(`${BASE}/admin/payments/`, { headers: h(token) });
       const data = await res.json().catch(() => []);
-      setGuests(Array.isArray(data) ? data : (data.results || []));
-    } catch { show('Search failed', 'error'); }
+      setPayments(Array.isArray(data) ? data : (data.results || []));
+    } catch { show('Failed to load payments', 'error'); }
     finally { setLoading(false); }
   };
 
-  const selectGuest = async (guest) => {
-    setSelected(guest);
-    setBLoading(true);
+  useEffect(() => { load(); }, [token]);
+
+  const isRefund = (p) => p.description?.toLowerCase().startsWith('refund') || p.type === 'REFUND';
+
+  const filtered = payments.filter(p => {
+    const matchSearch = !search ||
+      p.description?.toLowerCase().includes(search.toLowerCase()) ||
+      p.guestEmail?.toLowerCase().includes(search.toLowerCase()) ||
+      p.bookingReference?.toLowerCase().includes(search.toLowerCase());
+    let matchFilter = true;
+    if (filter === 'REFUNDED') matchFilter = isRefund(p);
+    else if (filter !== 'all') matchFilter = p.status === filter && !isRefund(p);
+    return matchFilter && matchSearch;
+  });
+
+  const visible    = filtered.slice((page-1)*PAGE_SIZE, page*PAGE_SIZE);
+  const totalPaid  = payments.filter(p=>p.status==='PAID'&&!isRefund(p)).reduce((s,p)=>s+parseFloat(p.amount||0),0);
+  const totalPend  = payments.filter(p=>p.status==='PENDING').reduce((s,p)=>s+parseFloat(p.amount||0),0);
+  const totalRef   = payments.filter(p=>isRefund(p)).reduce((s,p)=>s+parseFloat(p.amount||0),0);
+
+  const searchBooking = async () => {
+    if (!bookRef.trim()) return;
+    setBSearching(true); setCashBook(null);
     try {
-      const res  = await fetch(`${BASE}/admin/bookings/?guest=${guest.id}`, { headers: h(token) });
+      const res  = await fetch(`${BASE}/admin/bookings/?search=${encodeURIComponent(bookRef)}`, { headers: h(token) });
       const data = await res.json().catch(() => []);
-      setBookings(Array.isArray(data) ? data : []);
-    } catch { setBookings([]); }
-    finally { setBLoading(false); }
+      const list = Array.isArray(data) ? data : [];
+      const match = list.find(b => b.bookingReference?.toLowerCase() === bookRef.toLowerCase().trim());
+      if (match) { setCashBook(match); setCashAmt(String(parseFloat(match.remainingAmount||0))); }
+      else show('Booking not found', 'error');
+    } catch { show('Search failed', 'error'); }
+    finally { setBSearching(false); }
   };
 
-  const openEdit = () => {
-    setEditData({
-      username: selected.username || '',
-      email:    selected.email    || '',
-      phone:    selected.phone    || selected.profile?.phone || '',
-    });
-    setEditOpen(true);
-  };
-
-  const saveContact = async () => {
-    setSaving(true);
+  const recordCash = async () => {
+    if (!cashBook) { show('Find a booking first', 'error'); return; }
+    if (!cashAmt || parseFloat(cashAmt) <= 0) { show('Enter a valid amount', 'error'); return; }
+    setRecording(true);
     try {
-      const res = await fetch(`${BASE}/admin/guests/${selected.id}/`, {
-        method: 'PATCH', headers: hj(token),
-        body: JSON.stringify({ username: editData.username, phone: editData.phone }),
+      const res = await fetch(`${BASE}/admin/payments/`, {
+        method: 'POST', headers: hj(token),
+        body: JSON.stringify({
+          bookingId:   cashBook.id,
+          amount:      parseFloat(cashAmt),
+          type:        'BALANCE',
+          status:      'PAID',
+          description: cashNote || `Cash payment for booking ${cashBook.bookingReference}`,
+          email:       cashBook.guestEmail,
+        }),
       });
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
-        throw new Error(d.message || 'Failed to update guest');
+        throw new Error(d.message || 'Failed to record payment');
       }
-      const updated = await res.json().catch(() => ({ ...selected, ...editData }));
-      setSelected(prev => ({ ...prev, ...editData, ...updated }));
-      setGuests(prev => prev.map(g => g.id === selected.id ? { ...g, ...editData } : g));
-      show('Guest contact updated!');
-      setEditOpen(false);
+      show(`Cash payment of ${fmt(cashAmt)} recorded!`);
+      setShowCash(false); setBookRef(''); setCashAmt(''); setCashNote(''); setCashBook(null);
+      load();
     } catch (e) { show(e.message, 'error'); }
-    finally { setSaving(false); }
+    finally { setRecording(false); }
   };
 
   return (
@@ -85,182 +109,173 @@ export function ReceptionistGuests({ token }) {
       <div className="ap-hd">
         <div>
           <h1 className="ap-title" style={{ display:'flex', alignItems:'center', gap:'.6rem' }}>
-            <Users size={22} color="var(--gold-dark)"/>Guest Profiles
+            <CreditCard size={22} color="var(--gold-dark)"/>Payment Records
           </h1>
-          <p className="ap-sub">Search and manage guest information · Edit contact details</p>
+          <p className="ap-sub">View transactions · Record cash payments for walk-ins and balance payments</p>
+        </div>
+        <div style={{ display:'flex', gap:'.5rem' }}>
+          <button className="ap-btn-ghost" onClick={load}><RefreshCw size={14}/>Refresh</button>
+          <button className="ap-btn-primary" onClick={() => setShowCash(true)}>
+            <Banknote size={14}/>Record Cash Payment
+          </button>
         </div>
       </div>
 
-      {/* Search */}
+      {/* Stats */}
+      <div className="ap-stats">
+        {[
+          { label:'Total Collected', value:fmt(totalPaid),  color:'green'  },
+          { label:'Pending',         value:fmt(totalPend),  color:'orange' },
+          { label:'Total Refunds',   value:fmt(totalRef),   color:'red'    },
+          { label:'Transactions',    value:payments.length, color:'blue'   },
+        ].map((s,i) => (
+          <div key={i} className={`ap-stat ${s.color}`} style={{ animationDelay:`${i*0.05}s` }}>
+            <div className="ap-stat-lbl">{s.label}</div>
+            <div className="ap-stat-val">{loading ? <Skel h={24} w={60}/> : s.value}</div>
+          </div>
+        ))}
+      </div>
+
       <div className="ap-panel">
-        <div className="ap-panel-body">
-          <div style={{ display:'flex', gap:'.75rem' }}>
-            <div className="ap-search-wrap" style={{ flex:1, maxWidth:'100%' }}>
+        <div className="ap-panel-hd">
+          <div><div className="ap-panel-title">Transactions</div><div className="ap-panel-sub">{!loading && `${filtered.length} records`}</div></div>
+          <div className="ap-toolbar" style={{ margin:0 }}>
+            <div className="ap-search-wrap">
               <span className="ap-search-ico"><Search size={13}/></span>
-              <input className="ap-search" style={{ maxWidth:'100%' }}
-                placeholder="Search by name, email or phone…"
-                value={query}
-                onChange={e => setQuery(e.target.value)}
-                onKeyDown={e => e.key==='Enter' && search()}/>
+              <input className="ap-search" placeholder="Search by description, email or ref…" value={search}
+                onChange={e => { setSearch(e.target.value); setPage(1); }}/>
             </div>
-            <button className="ap-btn-primary" onClick={search} disabled={loading}>
-              {loading ? <><div className="ap-spin-sm"/>Searching…</> : <><Search size={14}/>Search</>}
-            </button>
+            <select className="ap-select" value={filter} onChange={e => { setFilter(e.target.value); setPage(1); }}>
+              <option value="all">All</option>
+              <option value="PAID">Paid</option>
+              <option value="PENDING">Pending</option>
+              <option value="FAILED">Failed</option>
+              <option value="REFUNDED">Refunded</option>
+            </select>
           </div>
         </div>
+
+        {loading ? (
+          <div style={{ padding:'2.5rem', textAlign:'center', display:'flex', flexDirection:'column', alignItems:'center', gap:'.65rem' }}><Spinner/></div>
+        ) : filtered.length === 0 ? (
+          <div className="ap-empty">
+            <div style={{ display:'flex', justifyContent:'center', opacity:.25, marginBottom:'.65rem' }}><Receipt size={44} strokeWidth={1}/></div>
+            <div className="ap-empty-title">No payments found</div>
+          </div>
+        ) : (
+          <>
+            <div style={{ overflowX:'auto' }}>
+              <table className="ap-tbl">
+                <thead>
+                  <tr><th>Description</th><th>Booking Ref</th><th>Guest</th><th>Type</th><th>Amount</th><th>Date</th><th>Status</th></tr>
+                </thead>
+                <tbody>
+                  {visible.map(p => {
+                    const refund = isRefund(p);
+                    return (
+                      <tr key={p.id}>
+                        <td style={{ maxWidth:200, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', fontSize:'.8rem', color: refund?'var(--red)':'var(--text)', fontWeight:600 }}>
+                          {p.description || 'Payment'}
+                        </td>
+                        <td style={{ fontFamily:'monospace', fontSize:'.72rem', color:'var(--gold-dark)', fontWeight:700, whiteSpace:'nowrap' }}>
+                          {p.bookingReference || p.bookingId || '—'}
+                        </td>
+                        <td style={{ fontSize:'.78rem', color:'var(--text-muted)' }}>{p.guestEmail || p.email || '—'}</td>
+                        <td style={{ fontSize:'.75rem' }}>{refund ? 'REFUND' : (p.type||'—').replace(/_/g,' ')}</td>
+                        <td style={{ fontWeight:700, fontSize:'.82rem', color: refund?'var(--red)':'var(--text)', whiteSpace:'nowrap' }}>
+                          {refund ? '−' : ''}{fmt(p.amount)}
+                        </td>
+                        <td style={{ fontSize:'.75rem', color:'var(--text-muted)', whiteSpace:'nowrap' }}>{fmtDate(p.createdAt || p.paidAt)}</td>
+                        <td>
+                          <span className={`ap-pill ${refund?'PAID':p.status}`} style={refund?{background:'var(--red-bg)',color:'var(--red)',borderColor:'rgba(220,53,69,0.25)'}:{}}>
+                            <span className="ap-pill-dot"/>
+                            {refund ? 'Refunded' : p.status}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <Pager page={page} total={filtered.length} size={PAGE_SIZE} setPage={setPage}/>
+          </>
+        )}
       </div>
 
-      <div style={{ display:'grid', gridTemplateColumns:'300px 1fr', gap:'1rem', alignItems:'start' }}>
-        {/* Results list */}
-        <div className="ap-panel" style={{ marginBottom:0 }}>
-          <div className="ap-panel-hd">
-            <div className="ap-panel-title">Results {searched && `(${guests.length})`}</div>
+      {/* ── Record Cash Payment Modal ── */}
+      <Modal show={showCash} onHide={() => setShowCash(false)} centered className="ap-modal">
+        <Modal.Header closeButton>
+          <Modal.Title style={{ display:'flex', alignItems:'center', gap:'.5rem' }}>
+            <Banknote size={17} color="var(--green)"/>Record Cash Payment
+          </Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <div style={{ background:'rgba(45,155,111,0.06)', border:'1px solid rgba(45,155,111,0.2)', borderRadius:9, padding:'.7rem .9rem', marginBottom:'1rem', fontSize:'.79rem', color:'var(--green)' }}>
+            Use this to record cash payments for walk-in guests or balance settlements.
+            You cannot modify payment amounts — enter the exact amount received.
           </div>
-          {!searched ? (
-            <div style={{ padding:'2.5rem 1.5rem', textAlign:'center', color:'var(--text-muted)', fontSize:'.82rem' }}>
-              <div style={{ display:'flex', justifyContent:'center', opacity:.25, marginBottom:'.65rem' }}><Search size={36} strokeWidth={1}/></div>
-              Search for a guest to get started
+
+          {/* Booking search */}
+          <div className="ap-field" style={{ marginBottom:'.85rem' }}>
+            <label className="ap-label">Booking Reference <span className="req">*</span></label>
+            <div style={{ display:'flex', gap:'.5rem' }}>
+              <input className="ap-input" placeholder="e.g. CGH-XXXXXXXX" value={bookRef}
+                onChange={e => { setBookRef(e.target.value); setCashBook(null); }}
+                onKeyDown={e => e.key==='Enter' && searchBooking()}
+                style={{ flex:1 }}/>
+              <button className="ap-btn-ghost" onClick={searchBooking} disabled={bSearching}>
+                {bSearching ? <div className="ap-spin-sm" style={{ borderTopColor:'var(--gold)' }}/> : <Search size={14}/>}
+              </button>
             </div>
-          ) : loading ? (
-            <div style={{ padding:'2rem', display:'flex', justifyContent:'center' }}><Spinner/></div>
-          ) : guests.length === 0 ? (
-            <div style={{ padding:'2rem', textAlign:'center', color:'var(--text-muted)', fontSize:'.82rem' }}>No guests found</div>
-          ) : (
-            <div>
-              {guests.map(g => (
-                <div key={g.id} onClick={() => selectGuest(g)}
-                  style={{
-                    display:'flex', alignItems:'center', gap:'.7rem',
-                    padding:'.75rem 1.25rem', cursor:'pointer', transition:'background .15s',
-                    background: selected?.id===g.id ? 'rgba(201,168,76,0.06)' : 'transparent',
-                    borderBottom:'1px solid #f8f9fb',
-                    borderLeft: selected?.id===g.id ? '3px solid var(--gold)' : '3px solid transparent',
-                  }}>
-                  <div style={{ width:36, height:36, borderRadius:10, background:'linear-gradient(135deg,#9a7a2e,#C9A84C)', display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', fontFamily:"'Cormorant Garamond',serif", fontSize:'.95rem', fontWeight:600, flexShrink:0 }}>
-                    {(g.username||g.email||'G').slice(0,2).toUpperCase()}
-                  </div>
-                  <div style={{ flex:1, minWidth:0 }}>
-                    <div style={{ fontWeight:600, fontSize:'.83rem', color:'var(--text)' }}>{g.username||g.email?.split('@')[0]}</div>
-                    <div style={{ fontSize:'.72rem', color:'var(--text-muted)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{g.email}</div>
-                  </div>
-                  <span style={{ fontSize:'.65rem', padding:'.15rem .5rem', borderRadius:99, background:g.is_active?'var(--green-bg)':'var(--red-bg)', color:g.is_active?'var(--green)':'var(--red)', fontWeight:700, border:`1px solid ${g.is_active?'rgba(45,155,111,0.25)':'rgba(220,53,69,0.25)'}`, flexShrink:0 }}>
-                    {g.is_active?'Active':'Inactive'}
-                  </span>
+          </div>
+
+          {/* Booking info */}
+          {cashBook && (
+            <div style={{ background:'var(--surface2)', border:'1px solid var(--border)', borderRadius:9, padding:'.75rem .9rem', marginBottom:'.85rem' }}>
+              {[
+                ['Guest',     cashBook.guestUsername || cashBook.guestEmail],
+                ['Room',      `${cashBook.roomType} #${cashBook.roomNumber}`],
+                ['Check-Out', fmtDate(cashBook.checkOutDate)],
+                ['Total',     fmt(cashBook.totalAmount)],
+                ['Deposit Paid', fmt(cashBook.depositAmount)],
+                ['Balance Due',  fmt(cashBook.remainingAmount||0)],
+              ].map(([k,v]) => (
+                <div key={k} style={{ display:'flex', justifyContent:'space-between', fontSize:'.8rem', marginBottom:'.25rem' }}>
+                  <span style={{ color:'var(--text-muted)' }}>{k}</span>
+                  <span style={{ fontWeight:600 }}>{v}</span>
                 </div>
               ))}
             </div>
           )}
-        </div>
 
-        {/* Guest detail */}
-        <div className="ap-panel" style={{ marginBottom:0 }}>
-          <div className="ap-panel-hd">
-            <div className="ap-panel-title">
-              {selected ? `${selected.username||selected.email?.split('@')[0]}'s Profile` : 'Guest Profile'}
-            </div>
-            {selected && (
-              <button className="ap-btn-ghost" onClick={openEdit}>
-                <Edit3 size={14}/>Edit Contact
-              </button>
-            )}
-          </div>
-
-          {!selected ? (
-            <div style={{ padding:'2.5rem 1.5rem', textAlign:'center', color:'var(--text-muted)', fontSize:'.82rem' }}>
-              <div style={{ display:'flex', justifyContent:'center', opacity:.25, marginBottom:'.65rem' }}><User size={36} strokeWidth={1}/></div>
-              Select a guest to view their profile
-            </div>
-          ) : (
-            <div className="ap-panel-body">
-              {/* Profile card */}
-              <div style={{ display:'flex', alignItems:'center', gap:'1rem', marginBottom:'1.1rem', padding:'.9rem', background:'var(--surface2)', borderRadius:12, border:'1px solid var(--border)' }}>
-                <div style={{ width:52, height:52, borderRadius:14, background:'linear-gradient(135deg,#9a7a2e,#C9A84C)', display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', fontFamily:"'Cormorant Garamond',serif", fontSize:'1.25rem', fontWeight:600, flexShrink:0 }}>
-                  {(selected.username||selected.email||'G').slice(0,2).toUpperCase()}
-                </div>
-                <div style={{ flex:1 }}>
-                  <div style={{ fontFamily:"'Cormorant Garamond',serif", fontSize:'1.2rem', fontWeight:600, color:'var(--text)', marginBottom:'.25rem' }}>
-                    {selected.username||'—'}
-                  </div>
-                  <div style={{ display:'flex', flexDirection:'column', gap:'.18rem' }}>
-                    <div style={{ fontSize:'.78rem', color:'var(--text-muted)', display:'flex', alignItems:'center', gap:'.35rem' }}>
-                      <Mail size={12}/>{selected.email}
-                    </div>
-                    {(selected.phone||selected.profile?.phone) && (
-                      <div style={{ fontSize:'.78rem', color:'var(--text-muted)', display:'flex', alignItems:'center', gap:'.35rem' }}>
-                        <Phone size={12}/>{selected.phone||selected.profile?.phone}
-                      </div>
-                    )}
-                  </div>
-                </div>
-                <span style={{ fontSize:'.7rem', padding:'.25rem .7rem', borderRadius:99, background:selected.is_active?'var(--green-bg)':'var(--red-bg)', color:selected.is_active?'var(--green)':'var(--red)', fontWeight:700, border:`1px solid ${selected.is_active?'rgba(45,155,111,0.25)':'rgba(220,53,69,0.25)'}` }}>
-                  {selected.is_active?'Active':'Inactive'}
-                </span>
-              </div>
-
-              {/* Booking history */}
-              <div style={{ fontSize:'.68rem', textTransform:'uppercase', letterSpacing:'.08em', color:'var(--text-muted)', fontWeight:700, marginBottom:'.5rem', display:'flex', alignItems:'center', gap:'.4rem' }}>
-                <BedDouble size={12}/>Booking History ({bookings.length})
-              </div>
-
-              {bLoading ? (
-                <div style={{ display:'flex', justifyContent:'center', padding:'1.5rem' }}><Spinner/></div>
-              ) : bookings.length === 0 ? (
-                <div style={{ textAlign:'center', padding:'1.5rem', color:'var(--text-muted)', fontSize:'.8rem' }}>No bookings on record</div>
-              ) : (
-                <div style={{ overflowX:'auto' }}>
-                  <table className="ap-tbl">
-                    <thead><tr><th>Reference</th><th>Room</th><th>Check-In</th><th>Check-Out</th><th>Total</th><th>Status</th></tr></thead>
-                    <tbody>
-                      {bookings.slice(0,10).map(b => (
-                        <tr key={b.id}>
-                          <td style={{ fontFamily:'monospace', fontSize:'.72rem', color:'var(--gold-dark)', fontWeight:700 }}>{b.bookingReference}</td>
-                          <td style={{ fontSize:'.78rem', whiteSpace:'nowrap' }}>{b.roomType} #{b.roomNumber}</td>
-                          <td style={{ fontSize:'.75rem', color:'var(--text-muted)', whiteSpace:'nowrap' }}>{fmtDate(b.checkInDate)}</td>
-                          <td style={{ fontSize:'.75rem', color:'var(--text-muted)', whiteSpace:'nowrap' }}>{fmtDate(b.checkOutDate)}</td>
-                          <td style={{ fontSize:'.78rem', fontWeight:700 }}>{fmt(b.totalAmount)}</td>
-                          <td><Pill status={b.status}/></td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Edit Contact Modal */}
-      <Modal show={editOpen} onHide={() => setEditOpen(false)} centered className="ap-modal">
-        <Modal.Header closeButton>
-          <Modal.Title style={{ display:'flex', alignItems:'center', gap:'.5rem' }}>
-            <Edit3 size={16}/>Edit Contact Details
-          </Modal.Title>
-        </Modal.Header>
-        <Modal.Body>
-          <div style={{ background:'rgba(245,158,11,0.07)', border:'1px solid rgba(245,158,11,0.2)', borderRadius:9, padding:'.65rem .9rem', marginBottom:'1rem', fontSize:'.79rem', color:'var(--orange)', display:'flex', gap:'.5rem' }}>
-            <AlertTriangle size={14} style={{ flexShrink:0, marginTop:1 }}/>
-            You can edit name and phone number. Email and account settings can only be changed by admin.
-          </div>
+          {/* Amount */}
           <div className="ap-form-grid">
             <div className="ap-field">
-              <label className="ap-label">Full Name</label>
-              <input className="ap-input" value={editData.username||''} onChange={e => setEditData(d=>({...d,username:e.target.value}))}/>
-            </div>
-            <div className="ap-field">
-              <label className="ap-label">Email <span style={{ color:'var(--text-muted)', fontWeight:400, textTransform:'none' }}>(read-only)</span></label>
-              <input className="ap-input" value={editData.email||''} disabled style={{ background:'var(--surface2)', color:'var(--text-muted)' }}/>
-            </div>
-            <div className="ap-field">
-              <label className="ap-label">Phone</label>
-              <input className="ap-input" value={editData.phone||''} onChange={e => setEditData(d=>({...d,phone:e.target.value}))} placeholder="+63 9XX XXX XXXX"/>
+              <label className="ap-label">Amount Received (₱) <span className="req">*</span></label>
+              <input className="ap-input" type="number" step="0.01" min="0"
+                placeholder="0.00" value={cashAmt} onChange={e => setCashAmt(e.target.value)}/>
             </div>
           </div>
+          <div className="ap-field" style={{ marginBottom:'.85rem' }}>
+            <label className="ap-label">Note (optional)</label>
+            <input className="ap-input" placeholder="e.g. Cash payment at front desk" value={cashNote}
+              onChange={e => setCashNote(e.target.value)}/>
+          </div>
+
+          {cashBook && parseFloat(cashAmt||0) > 0 && (
+            <div style={{ display:'flex', justifyContent:'space-between', background:'var(--green-bg)', border:'1px solid rgba(45,155,111,0.22)', borderRadius:8, padding:'.6rem .9rem', fontSize:'.82rem', color:'var(--green)', fontWeight:600 }}>
+              <span>Recording cash payment of</span>
+              <span>{fmt(cashAmt)}</span>
+            </div>
+          )}
         </Modal.Body>
         <Modal.Footer>
-          <button className="ap-btn-ghost" onClick={() => setEditOpen(false)}>Cancel</button>
-          <button className="ap-btn-primary" disabled={saving} onClick={saveContact}>
-            {saving ? <><div className="ap-spin-sm"/>Saving…</> : <><Save size={14}/>Save Changes</>}
+          <button className="ap-btn-ghost" onClick={() => setShowCash(false)}>Cancel</button>
+          <button className="ap-btn-primary" disabled={recording || !cashBook || !cashAmt}
+            style={{ background:'linear-gradient(135deg,#059669,#34d399)', boxShadow:'0 2px 8px rgba(5,150,105,0.25)' }}
+            onClick={recordCash}>
+            {recording ? <><div className="ap-spin-sm"/>Recording…</> : <><CheckCircle2 size={14}/>Record Payment</>}
           </button>
         </Modal.Footer>
       </Modal>
