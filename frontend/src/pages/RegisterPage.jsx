@@ -1,330 +1,201 @@
-// RegisterPage.jsx – Enhanced UI v2 (Google/Facebook + scrollbar + text visibility)
+// RegisterPage.jsx — Light theme matching admin/guest portal style
 import { useState, useRef, useCallback } from 'react';
 import { Modal } from 'react-bootstrap';
-import { Icons } from '../components/ui/Icons';
 import { registerUser, verifyOtp, resendOtp } from '../services/api';
 import { calcPasswordStrength } from '../utils/format';
 import { useOtpTimer } from '../hooks/useOtpTimer';
 import jsPDF from 'jspdf';
-
-/* ─── SVG Icons for Social Providers ────────────────────────────────────── */
-const GoogleIcon = () => (
-  <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-    <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.874 2.684-6.615z" fill="#4285F4"/>
-    <path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z" fill="#34A853"/>
-    <path d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05"/>
-    <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z" fill="#EA4335"/>
-  </svg>
-);
-
-const FacebookIcon = () => (
-  <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-    <path d="M18 9.056C18 4.053 13.97 0 9 0S0 4.053 0 9.056c0 4.522 3.291 8.267 7.594 8.944v-6.327H5.309V9.056h2.285V7.063c0-2.27 1.343-3.523 3.4-3.523.984 0 2.014.177 2.014.177v2.228h-1.135c-1.118 0-1.467.698-1.467 1.414v1.697h2.496l-.399 2.617h-2.097V18C14.709 17.323 18 13.578 18 9.056z" fill="#1877F2"/>
-  </svg>
-);
+import {
+  Eye, EyeOff, Hotel, Star, BedDouble, Users, Headphones,
+  Mail, AlertTriangle, CheckCircle2, Download, ArrowRight,
+  RefreshCw, Shield,
+} from 'lucide-react';
 
 /* ─── Terms Data ─────────────────────────────────────────────────────────── */
 const TERMS_SECTIONS = [
-  {
-    heading: '1. User Responsibilities',
-    body: "By registering and using Cebu Grand Hotel's guest portal, you agree to provide accurate, complete, and current information. You are responsible for maintaining the confidentiality of your account credentials and for all activities that occur under your account. You agree not to engage in any unlawful, fraudulent, or unauthorized use of the platform.",
-  },
-  {
-    heading: '2. Data Usage & Privacy',
-    body: 'We collect personal data including name, email, contact details, and booking history to facilitate reservations and improve your experience. Your data is processed in accordance with the Philippine Data Privacy Act of 2012 (RA 10173) and international GDPR standards. We do not sell your personal information to third parties.',
-  },
-  {
-    heading: '3. Booking & Payment Policies',
-    body: 'All room bookings are subject to availability and confirmation. A 50% deposit is required at the time of booking to secure your reservation. Final payment is due upon check-in. Room rates are quoted in Philippine Peso (\u20B1) and are inclusive of applicable taxes unless stated otherwise.',
-  },
-  {
-    heading: '4. Cancellation & Refund Policy',
-    body: 'Cancellations made 72 hours or more before the check-in date are eligible for a full refund of the deposit. Cancellations made within 48\u201372 hours will incur a 50% cancellation fee. Cancellations made less than 48 hours before check-in are non-refundable. No-shows will be charged the full reservation amount.',
-  },
-  {
-    heading: '5. Security & Account Protection',
-    body: 'Your account is protected by industry-standard encryption (AES-256). We implement two-factor authentication (2FA) and monitor for suspicious login activity. You are responsible for immediately notifying us of any unauthorized use of your account. We will never request your password via email or phone.',
-  },
-  {
-    heading: '6. Limitation of Liability',
-    body: 'Cebu Grand Hotel shall not be liable for any indirect, incidental, special, or consequential damages arising from your use of this platform. Our total liability to you for any claim shall not exceed the amount paid for the specific service giving rise to the claim. Force majeure events exemption applies.',
-  },
+  { heading:'1. User Responsibilities', body:"By registering and using Cebu Grand Hotel's guest portal, you agree to provide accurate, complete, and current information. You are responsible for maintaining the confidentiality of your account credentials and for all activities that occur under your account. You agree not to engage in any unlawful, fraudulent, or unauthorized use of the platform." },
+  { heading:'2. Data Usage & Privacy', body:'We collect personal data including name, email, contact details, and booking history to facilitate reservations and improve your experience. Your data is processed in accordance with the Philippine Data Privacy Act of 2012 (RA 10173) and international GDPR standards. We do not sell your personal information to third parties.' },
+  { heading:'3. Booking & Payment Policies', body:'All room bookings are subject to availability and confirmation. A 50% deposit is required at the time of booking to secure your reservation. Final payment is due upon check-in. Room rates are quoted in Philippine Peso (₱) and are inclusive of applicable taxes unless stated otherwise.' },
+  { heading:'4. Cancellation & Refund Policy', body:'Cancellations made 72 hours or more before the check-in date are eligible for a full refund of the deposit. Cancellations made within 48–72 hours will incur a 50% cancellation fee. Cancellations made less than 48 hours before check-in are non-refundable. No-shows will be charged the full reservation amount.' },
+  { heading:'5. Security & Account Protection', body:'Your account is protected by industry-standard encryption (AES-256). We implement two-factor authentication (2FA) and monitor for suspicious login activity. You are responsible for immediately notifying us of any unauthorized use of your account. We will never request your password via email or phone.' },
+  { heading:'6. Limitation of Liability', body:'Cebu Grand Hotel shall not be liable for any indirect, incidental, special, or consequential damages arising from your use of this platform. Our total liability to you for any claim shall not exceed the amount paid for the specific service giving rise to the claim. Force majeure events exemption applies.' },
 ];
 
-/* ─── CSS ────────────────────────────────────────────────────────────────── */
+/* ─── CSS ──────────────────────────────────────────────────────────────────*/
 const css = `
   @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap');
 
   :root {
-    --gold:        #C9A84C;
-    --gold-bright: #dfc06e;
-    --gold-dim:    rgba(201,168,76,0.65);
-    --gold-faint:  rgba(201,168,76,0.12);
-    --bg:          #070b13;
-    --surface:     #0d1422;
-    --surface2:    #131d2e;
-    --text:        #f0ece3;
-    --text-sub:    rgba(240,236,227,0.78);
-    --text-muted:  rgba(240,236,227,0.5);
-    --border:      rgba(201,168,76,0.18);
-    --border-soft: rgba(255,255,255,0.09);
-    --red:         #e05252;
-    --green:       #52c98a;
+    --gold:#C9A84C; --gold-dark:#9a7a2e; --gold-bg:rgba(201,168,76,0.1);
+    --bg:#f4f6f8; --surface:#fff; --surface2:#f8f9fb;
+    --text:#1a1f2e; --text-sub:#4a5568; --text-muted:#8a96a8; --border:#e2e8f0;
+    --green:#2d9b6f; --green-bg:rgba(45,155,111,0.1);
+    --red:#dc3545; --red-bg:rgba(220,53,69,0.1);
+    --blue:#3b82f6; --blue-bg:rgba(59,130,246,0.1);
   }
 
-  /* ══ Custom Scrollbars (global) ══ */
-  * { scrollbar-width: thin; scrollbar-color: rgba(201,168,76,0.4) rgba(255,255,255,0.04); }
-  *::-webkit-scrollbar { width: 6px; height: 6px; }
-  *::-webkit-scrollbar-track { background: rgba(255,255,255,0.03); border-radius: 99px; margin: 4px 0; }
-  *::-webkit-scrollbar-thumb {
-    background: linear-gradient(to bottom, rgba(201,168,76,0.65), rgba(201,168,76,0.25));
-    border-radius: 99px;
+  .rp-root { min-height:100vh; display:flex; font-family:'DM Sans',sans-serif; color:var(--text); background:var(--bg); -webkit-font-smoothing:antialiased; }
+  .rp-root * { box-sizing:border-box; }
+
+  /* ── Left Panel ── */
+  .rp-left {
+    width:420px; min-width:420px; display:none; flex-direction:column;
+    background:#fff; border-right:1px solid var(--border);
+    padding:3rem 2.5rem; position:relative; overflow:hidden;
   }
-  *::-webkit-scrollbar-thumb:hover { background: linear-gradient(to bottom, #C9A84C, rgba(201,168,76,0.55)); }
-  *::-webkit-scrollbar-corner { background: transparent; }
-
-  .cgh-root * { box-sizing: border-box; }
-
-  /* ══ Animations ══ */
-  @keyframes fadeUp    { from { opacity:0; transform:translateY(24px) } to { opacity:1; transform:translateY(0) } }
-  @keyframes shimmer   { 0%,100% { opacity:.3 } 50% { opacity:.75 } }
-  @keyframes pulseRing { 0% { box-shadow:0 0 0 0 rgba(201,168,76,.45) } 70% { box-shadow:0 0 0 10px rgba(201,168,76,0) } 100% { box-shadow:0 0 0 0 rgba(201,168,76,0) } }
-  @keyframes spin      { to { transform:rotate(360deg) } }
-  @keyframes slideDown { from { opacity:0; transform:translateY(-10px) } to { opacity:1; transform:translateY(0) } }
-
-  /* ══ Root Layout ══ */
-  .cgh-root {
-    min-height: 100vh; display: flex;
-    background: var(--bg); font-family: 'DM Sans', sans-serif;
-    color: var(--text); -webkit-font-smoothing: antialiased;
+  @media(min-width:1024px){ .rp-left { display:flex } }
+  .rp-left-grid {
+    position:absolute; inset:0; pointer-events:none; opacity:.025;
+    background-image:linear-gradient(rgba(201,168,76,1) 1px,transparent 1px),linear-gradient(90deg,rgba(201,168,76,1) 1px,transparent 1px);
+    background-size:40px 40px;
+  }
+  .rp-left-accent {
+    position:absolute; bottom:-120px; left:-80px; width:360px; height:360px;
+    border-radius:50%; background:radial-gradient(circle,rgba(201,168,76,0.08) 0%,transparent 70%);
+    pointer-events:none;
   }
 
-  /* ══════════════════════════════════
-     LEFT PANEL
-  ══════════════════════════════════ */
-  .cgh-left {
-    flex: 1; display: none; flex-direction: column; align-items: center;
-    justify-content: center; padding: 3.5rem; position: relative; overflow: hidden;
-    border-right: 1px solid var(--border);
-    background:
-      radial-gradient(ellipse at 28% 55%, rgba(201,168,76,0.11) 0%, transparent 58%),
-      radial-gradient(ellipse at 78% 15%, rgba(201,168,76,0.06) 0%, transparent 45%),
-      var(--bg);
+  .rp-brand { display:flex; align-items:center; gap:.65rem; margin-bottom:3rem; position:relative; z-index:2; }
+  .rp-brand-mark { width:38px; height:38px; border-radius:11px; background:linear-gradient(135deg,#9a7a2e,#C9A84C); display:flex; align-items:center; justify-content:center; color:#fff; box-shadow:0 4px 14px rgba(201,168,76,0.3); flex-shrink:0; }
+  .rp-brand-name { font-family:'Cormorant Garamond',serif; font-size:1.15rem; font-weight:600; color:var(--text); line-height:1.2; }
+  .rp-brand-sub  { font-size:.62rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:.1em; }
+
+  .rp-left-body { flex:1; display:flex; flex-direction:column; justify-content:center; position:relative; z-index:2; }
+  .rp-left-title { font-family:'Cormorant Garamond',serif; font-size:2.6rem; font-weight:300; color:var(--text); line-height:1.2; margin-bottom:.75rem; }
+  .rp-left-title span { color:var(--gold-dark); }
+  .rp-left-sub { font-size:.85rem; color:var(--text-muted); line-height:1.65; margin-bottom:2.25rem; }
+
+  .rp-features { display:flex; flex-direction:column; gap:.85rem; }
+  .rp-feature { display:flex; align-items:center; gap:.8rem; }
+  .rp-feature-ico { width:36px; height:36px; border-radius:10px; background:var(--gold-bg); border:1px solid rgba(201,168,76,0.2); display:flex; align-items:center; justify-content:center; color:var(--gold-dark); flex-shrink:0; }
+  .rp-feature-text { font-size:.83rem; color:var(--text-sub); }
+  .rp-feature-title { font-weight:600; color:var(--text); font-size:.85rem; }
+
+  .rp-left-footer { position:relative; z-index:2; margin-top:2.5rem; padding-top:1.5rem; border-top:1px solid var(--border); font-size:.68rem; color:var(--text-muted); letter-spacing:.08em; text-transform:uppercase; }
+
+  /* ── Right Panel ── */
+  .rp-right { flex:1; display:flex; align-items:center; justify-content:center; padding:2rem 1.5rem; overflow-y:auto; }
+  .rp-card { width:100%; max-width:440px; animation:rp-fadeUp .5s cubic-bezier(.22,1,.36,1) both; }
+  @keyframes rp-fadeUp { from{opacity:0;transform:translateY(18px)} to{opacity:1;transform:translateY(0)} }
+
+  .rp-card-head { text-align:center; margin-bottom:1.75rem; }
+  .rp-card-icon { width:52px; height:52px; border-radius:14px; background:linear-gradient(135deg,#9a7a2e,#C9A84C); display:flex; align-items:center; justify-content:center; color:#fff; margin:0 auto .85rem; box-shadow:0 6px 20px rgba(201,168,76,0.28); }
+  .rp-card-title { font-family:'Cormorant Garamond',serif; font-size:2rem; font-weight:600; color:var(--text); margin-bottom:.2rem; }
+  .rp-card-sub   { font-size:.82rem; color:var(--text-muted); }
+
+  /* ── Steps ── */
+  .rp-steps { display:flex; align-items:center; margin-bottom:1.75rem; }
+  .rp-step  { display:flex; align-items:center; gap:.4rem; }
+  .rp-step-dot {
+    width:26px; height:26px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+    font-size:.7rem; font-weight:600; flex-shrink:0; border:1.5px solid var(--border);
+    color:var(--text-muted); background:#fff; transition:all .3s;
   }
-  @media(min-width:1024px){ .cgh-left { display:flex } }
+  .rp-step-dot.active { background:linear-gradient(135deg,#9a7a2e,#C9A84C); color:#fff; border-color:var(--gold); box-shadow:0 2px 10px rgba(201,168,76,0.3); }
+  .rp-step-dot.done   { background:var(--gold-bg); color:var(--gold-dark); border-color:rgba(201,168,76,0.4); }
+  .rp-step-label { font-size:.68rem; color:var(--text-muted); letter-spacing:.04em; white-space:nowrap; }
+  .rp-step-label.active { color:var(--gold-dark); font-weight:600; }
+  .rp-step-label.done   { color:var(--text-sub); }
+  .rp-step-line { flex:1; height:1px; background:var(--border); margin:0 .45rem; min-width:14px; }
 
-  .cgh-left-grid {
-    position: absolute; inset: 0; pointer-events: none; opacity: .025;
-    background-image:
-      linear-gradient(rgba(201,168,76,1) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(201,168,76,1) 1px, transparent 1px);
-    background-size: 44px 44px;
+  /* ── Alert ── */
+  .rp-alert { display:flex; align-items:flex-start; gap:.6rem; padding:.75rem 1rem; border-radius:9px; font-size:.82rem; margin-bottom:1.1rem; line-height:1.55; }
+  .rp-alert.error   { background:var(--red-bg); border:1px solid rgba(220,53,69,0.22); color:var(--red); }
+  .rp-alert.success { background:var(--green-bg); border:1px solid rgba(45,155,111,0.22); color:var(--green); }
+
+  /* ── Fields ── */
+  .rp-field { margin-bottom:1rem; }
+  .rp-label { display:block; font-size:.68rem; text-transform:uppercase; letter-spacing:.08em; color:var(--text-muted); font-weight:700; margin-bottom:.4rem; }
+  .rp-input-wrap { position:relative; }
+  .rp-input {
+    width:100%; background:var(--surface2); border:1px solid var(--border); color:var(--text);
+    border-radius:9px; padding:.7rem 1rem; font-size:.875rem; font-family:'DM Sans',sans-serif;
+    outline:none; transition:border-color .2s,box-shadow .2s,background .2s;
   }
-  .cgh-left-vline {
-    position: absolute; left: 50%; top: 0; bottom: 0; width: 1px;
-    background: linear-gradient(to bottom, transparent, rgba(201,168,76,0.22) 25%, rgba(201,168,76,0.22) 75%, transparent);
-  }
-  .cgh-left-content { position: relative; z-index: 2; text-align: center; }
+  .rp-input::placeholder { color:var(--text-muted); }
+  .rp-input:focus { border-color:var(--gold); background:#fff; box-shadow:0 0 0 3px rgba(201,168,76,0.12); }
+  .rp-input.has-icon  { padding-right:2.75rem; }
+  .rp-input.error { border-color:rgba(220,53,69,0.5); }
+  .rp-input.valid { border-color:rgba(45,155,111,0.5); }
+  .rp-input-btn { position:absolute; right:.75rem; top:50%; transform:translateY(-50%); background:none; border:none; color:var(--text-muted); cursor:pointer; display:flex; align-items:center; padding:0; transition:color .18s; }
+  .rp-input-btn:hover { color:var(--gold-dark); }
 
-  .cgh-crest {
-    width: 96px; height: 96px; border-radius: 50%;
-    border: 1px solid rgba(201,168,76,0.35);
-    display: flex; align-items: center; justify-content: center; margin: 0 auto 2.75rem;
-    background: radial-gradient(circle, rgba(201,168,76,0.12) 0%, transparent 70%);
-    box-shadow: 0 0 50px rgba(201,168,76,0.13), 0 0 0 10px rgba(201,168,76,0.04);
-    animation: shimmer 3.5s ease-in-out infinite;
-  }
+  /* ── Strength bars ── */
+  .rp-strength { display:flex; gap:5px; margin-top:.55rem; }
+  .rp-strength-bar { flex:1; height:3px; border-radius:99px; background:var(--border); transition:background .3s; }
+  .rp-field-note { font-size:.73rem; margin-top:.38rem; }
+  .rp-field-note.warn { color:var(--red); }
+  .rp-field-note.ok   { color:var(--green); }
 
-  .cgh-left-title {
-    font-family: 'Cormorant Garamond', serif; font-size: 3.1rem; font-weight: 300;
-    color: var(--text); line-height: 1.18; letter-spacing: .015em; margin-bottom: 1.6rem;
-  }
-  .cgh-left-title em { color: var(--gold); font-style: normal; }
+  /* ── Buttons ── */
+  .rp-btn { width:100%; padding:.78rem 1rem; border:none; border-radius:10px; font-size:.875rem; font-family:'DM Sans',sans-serif; font-weight:600; cursor:pointer; transition:all .22s; display:flex; align-items:center; justify-content:center; gap:.45rem; }
+  .rp-btn-primary { background:linear-gradient(135deg,#9a7a2e,#C9A84C); color:#fff; box-shadow:0 3px 12px rgba(201,168,76,0.28); }
+  .rp-btn-primary:hover:not(:disabled) { background:linear-gradient(135deg,#b09038,#dfc06e); transform:translateY(-1px); box-shadow:0 5px 18px rgba(201,168,76,0.32); }
+  .rp-btn-primary:disabled { opacity:.5; cursor:not-allowed; }
+  .rp-btn-ghost { background:#fff; border:1.5px solid var(--border); color:var(--text-sub); }
+  .rp-btn-ghost:hover { border-color:var(--gold); color:var(--gold-dark); background:var(--gold-bg); }
 
-  .cgh-divider { width: 52px; height: 1px; background: var(--gold-dim); margin: 0 auto 1.85rem; opacity: .35; }
+  @keyframes rp-spin { to { transform:rotate(360deg) } }
+  .rp-spinner { width:15px; height:15px; border:2px solid rgba(255,255,255,.3); border-top-color:#fff; border-radius:50%; animation:rp-spin .7s linear infinite; flex-shrink:0; }
 
-  .cgh-feature-list { list-style: none; padding: 0; margin: 0; display: inline-flex; flex-direction: column; gap: 1.05rem; text-align: left; }
-  .cgh-feature-list li { display: flex; align-items: center; gap: .75rem; font-size: .83rem; color: var(--text-sub); letter-spacing: .025em; }
-  .cgh-feature-icon {
-    width: 30px; height: 30px; border-radius: 9px; flex-shrink: 0; display: flex;
-    align-items: center; justify-content: center; font-size: .88rem;
-    background: var(--gold-faint); border: 1px solid var(--border);
-  }
-  .cgh-tagline { margin-top: 2.75rem; font-size: .68rem; letter-spacing: .18em; text-transform: uppercase; color: rgba(201,168,76,0.42); }
+  .rp-divider { display:flex; align-items:center; gap:.65rem; margin:1.15rem 0; font-size:.72rem; color:var(--text-muted); letter-spacing:.05em; text-transform:uppercase; }
+  .rp-divider::before,.rp-divider::after { content:''; flex:1; height:1px; background:var(--border); }
 
-  /* ══════════════════════════════════
-     RIGHT PANEL
-  ══════════════════════════════════ */
-  .cgh-right {
-    flex: 1; display: flex; align-items: center; justify-content: center;
-    padding: 2.5rem 1.5rem; overflow-y: auto;
-  }
-  .cgh-card { width: 100%; max-width: 432px; animation: fadeUp .6s cubic-bezier(.22,1,.36,1) both; }
+  .rp-signin { text-align:center; font-size:.82rem; color:var(--text-muted); margin-top:1.35rem; }
+  .rp-signin button { background:none; border:none; color:var(--gold-dark); font-weight:600; cursor:pointer; font-size:inherit; font-family:inherit; transition:color .18s; padding:0; }
+  .rp-signin button:hover { color:var(--gold); text-decoration:underline; }
 
-  .cgh-logo {
-    font-family: 'Cormorant Garamond', serif; font-size: 1.45rem; font-weight: 600;
-    color: var(--gold); letter-spacing: .12em; text-align: center; margin-bottom: 2.25rem;
-  }
-  .cgh-logo-sub { opacity: .5; font-size: .88rem; font-weight: 400; margin-left: .3rem; letter-spacing: .06em; }
+  /* ── Terms Modal ── */
+  .rp-terms-modal .modal-content { background:#fff; border:1px solid var(--border); border-radius:16px; overflow:hidden; box-shadow:0 20px 60px rgba(0,0,0,.12); }
+  .rp-terms-modal .modal-header  { background:var(--surface2); border-bottom:1px solid var(--border); padding:1.2rem 1.5rem; }
+  .rp-terms-modal .modal-body    { background:#fff; padding:1.5rem; overflow-y:auto; max-height:50vh; scrollbar-width:thin; scrollbar-color:rgba(201,168,76,0.35) #f0f0f0; }
+  .rp-terms-modal .modal-body::-webkit-scrollbar { width:5px; }
+  .rp-terms-modal .modal-body::-webkit-scrollbar-thumb { background:rgba(201,168,76,0.4); border-radius:99px; }
+  .rp-terms-modal .modal-footer  { background:var(--surface2); border-top:1px solid var(--border); padding:1rem 1.5rem; flex-direction:column; gap:.75rem; align-items:stretch; }
 
-  .cgh-heading     { font-family: 'Cormorant Garamond', serif; font-size: 2.15rem; font-weight: 300; color: var(--text); margin-bottom: .3rem; line-height: 1.2; }
-  .cgh-subheading  { font-size: .83rem; color: var(--text-muted); margin-bottom: 1.6rem; }
+  .rp-terms-progress { height:3px; background:var(--border); border-radius:99px; overflow:hidden; margin-top:.6rem; }
+  .rp-terms-fill     { height:100%; background:linear-gradient(to right,#9a7a2e,#C9A84C); transition:width .2s; }
 
-  /* ══ Step Indicator ══ */
-  .cgh-steps { display: flex; align-items: center; margin-bottom: 1.75rem; }
-  .cgh-step  { display: flex; align-items: center; gap: .45rem; }
-  .cgh-step-dot {
-    width: 27px; height: 27px; border-radius: 50%; display: flex; align-items: center;
-    justify-content: center; font-size: .7rem; font-weight: 600; flex-shrink: 0;
-    border: 1.5px solid var(--border); transition: all .35s ease; color: var(--text-muted);
-  }
-  .cgh-step-dot.active  { background: var(--gold); color: #070b13; border-color: var(--gold); animation: pulseRing 2s ease infinite; }
-  .cgh-step-dot.done    { background: rgba(201,168,76,0.15); color: var(--gold); border-color: rgba(201,168,76,0.45); }
-  .cgh-step-label { font-size: .68rem; letter-spacing: .05em; color: var(--text-muted); white-space: nowrap; }
-  .cgh-step-label.active { color: var(--gold); font-weight: 500; }
-  .cgh-step-label.done   { color: var(--text-sub); }
-  .cgh-step-line { flex: 1; height: 1px; background: var(--border); margin: 0 .5rem; min-width: 16px; }
+  .rp-terms-section { margin-bottom:1.75rem; }
+  .rp-terms-sec-hd  { display:flex; align-items:center; gap:.6rem; margin-bottom:.6rem; }
+  .rp-terms-sec-num { width:26px; height:26px; border-radius:7px; background:var(--gold-bg); border:1px solid rgba(201,168,76,0.2); display:flex; align-items:center; justify-content:center; font-size:.7rem; font-weight:700; color:var(--gold-dark); flex-shrink:0; }
+  .rp-terms-sec-title { font-family:'Cormorant Garamond',serif; font-size:1.05rem; color:var(--text); font-weight:600; }
+  .rp-terms-sec-body  { font-size:.82rem; color:var(--text-sub); line-height:1.82; padding-left:calc(26px + .6rem); }
+  .rp-terms-footer-note { font-size:.76rem; color:var(--text-sub); padding:.85rem 1rem; background:var(--gold-bg); border-radius:9px; border:1px solid rgba(201,168,76,0.2); line-height:1.65; }
 
-  /* ══ Social Auth ══ */
-  .cgh-social-row { display: grid; grid-template-columns: 1fr 1fr; gap: .65rem; margin-bottom: .6rem; }
-  .cgh-social-btn {
-    display: flex; align-items: center; justify-content: center; gap: .55rem;
-    padding: .72rem .8rem; border-radius: 11px; border: 1px solid var(--border-soft);
-    background: rgba(255,255,255,0.04); cursor: pointer; font-family: 'DM Sans', sans-serif;
-    font-size: .83rem; font-weight: 500; color: var(--text-sub);
-    transition: all .22s ease; position: relative; overflow: hidden;
-  }
-  .cgh-social-btn:hover { color: var(--text); transform: translateY(-2px); }
-  .cgh-social-btn.google:hover   { border-color: rgba(66,133,244,0.45); box-shadow: 0 6px 20px rgba(66,133,244,0.14), 0 0 0 1px rgba(66,133,244,0.15); }
-  .cgh-social-btn.facebook:hover { border-color: rgba(24,119,242,0.45); box-shadow: 0 6px 20px rgba(24,119,242,0.14), 0 0 0 1px rgba(24,119,242,0.15); }
-  .cgh-social-btn:active { transform: translateY(0); }
+  .rp-check-row   { display:flex; align-items:flex-start; gap:.6rem; }
+  .rp-check-box   { width:19px; height:19px; border-radius:6px; border:1.5px solid var(--border); display:flex; align-items:center; justify-content:center; flex-shrink:0; margin-top:2px; cursor:pointer; transition:all .18s; background:#fff; }
+  .rp-check-box.on  { border-color:var(--gold); background:var(--gold-bg); }
+  .rp-check-box.off { cursor:not-allowed; opacity:.45; }
+  .rp-check-label   { font-size:.82rem; color:var(--text-sub); line-height:1.5; cursor:pointer; }
+  .rp-check-label.off { cursor:not-allowed; opacity:.5; }
+  .rp-scroll-hint { font-size:.73rem; color:var(--text-muted); text-align:center; }
+  .rp-dl-btn { background:none; border:1px solid rgba(201,168,76,0.35); color:var(--gold-dark); border-radius:7px; padding:.28rem .75rem; font-size:.72rem; cursor:pointer; font-family:'DM Sans',sans-serif; transition:all .18s; }
+  .rp-dl-btn:hover { background:var(--gold-bg); border-color:var(--gold); }
 
-  .cgh-social-note { font-size: .72rem; color: var(--text-muted); text-align: center; margin-bottom: .25rem; line-height: 1.55; }
+  /* ── OTP Modal ── */
+  .rp-otp-modal .modal-content { background:#fff; border:1px solid var(--border); border-radius:16px; box-shadow:0 20px 60px rgba(0,0,0,.12); }
+  .rp-otp-modal .modal-body    { background:#fff; padding:2.5rem 2rem 2rem; }
 
-  /* ══ Divider ══ */
-  .cgh-or { display: flex; align-items: center; gap: .75rem; margin: 1.25rem 0; font-size: .72rem; color: var(--text-muted); letter-spacing: .06em; text-transform: uppercase; }
-  .cgh-or::before, .cgh-or::after { content: ''; flex: 1; height: 1px; background: var(--border-soft); }
+  .rp-otp-icon { width:62px; height:62px; border-radius:50%; background:var(--gold-bg); border:1px solid rgba(201,168,76,0.25); display:flex; align-items:center; justify-content:center; margin:0 auto 1.25rem; color:var(--gold-dark); }
+  .rp-otp-inputs { display:flex; justify-content:center; gap:.5rem; margin:1.65rem 0 1.2rem; }
+  .rp-otp-box { width:48px; height:58px; text-align:center; font-size:1.45rem; font-weight:700; border:1.5px solid var(--border); border-radius:10px; outline:none; background:var(--surface2); color:var(--text); font-family:'DM Sans',sans-serif; transition:all .2s; }
+  .rp-otp-box:focus  { border-color:var(--gold); background:#fff; box-shadow:0 0 0 3px rgba(201,168,76,0.12); }
+  .rp-otp-box.filled { border-color:rgba(201,168,76,0.55); background:var(--gold-bg); }
 
-  /* ══ Fields ══ */
-  .cgh-field { margin-bottom: 1.15rem; }
-  .cgh-label { display: block; font-size: .7rem; letter-spacing: .09em; text-transform: uppercase; color: var(--gold-dim); font-weight: 500; margin-bottom: .5rem; }
-
-  .cgh-input-wrap { position: relative; }
-  .cgh-input {
-    width: 100%; background: rgba(255,255,255,0.04); border: 1px solid var(--border);
-    color: var(--text); border-radius: 10px; padding: .74rem 1rem; font-size: .875rem;
-    font-family: 'DM Sans', sans-serif; font-weight: 400;
-    transition: border-color .2s, background .2s, box-shadow .2s; outline: none;
-    -webkit-font-smoothing: antialiased;
-  }
-  .cgh-input::placeholder { color: rgba(240,236,227,0.24); }
-  .cgh-input:focus { border-color: rgba(201,168,76,0.6); background: rgba(201,168,76,0.04); box-shadow: 0 0 0 3px rgba(201,168,76,0.1); }
-  .cgh-input.has-icon { padding-right: 3rem; }
-  .cgh-input.error { border-color: rgba(224,82,82,0.6); box-shadow: 0 0 0 3px rgba(224,82,82,0.08); }
-  .cgh-input.valid { border-color: rgba(82,201,138,0.5); }
-
-  .cgh-input-icon { position: absolute; right: .9rem; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; color: rgba(201,168,76,0.5); display: flex; align-items: center; padding: 0; transition: color .2s; }
-  .cgh-input-icon:hover { color: var(--gold); }
-
-  /* ══ Strength ══ */
-  .cgh-strength-bars { display: flex; gap: 5px; margin-top: .6rem; }
-  .cgh-strength-bar  { flex: 1; height: 3px; border-radius: 99px; transition: background .35s; background: rgba(255,255,255,0.07); }
-
-  /* ══ Field Notes ══ */
-  .cgh-field-note      { font-size: .73rem; margin-top: .4rem; font-weight: 400; }
-  .cgh-field-note.warn { color: #f08080; }
-  .cgh-field-note.ok   { color: #52c98a; }
-  .cgh-field-note.info { color: var(--text-muted); }
-
-  /* ══ Alert ══ */
-  .cgh-alert { border-radius: 10px; padding: .78rem 1rem; margin-bottom: 1.2rem; font-size: .82rem; display: flex; align-items: flex-start; gap: .65rem; animation: slideDown .25s ease; line-height: 1.55; }
-  .cgh-alert.error   { background: rgba(224,82,82,0.09); border: 1px solid rgba(224,82,82,0.28); color: #f08080; }
-  .cgh-alert.success { background: rgba(82,201,138,0.09); border: 1px solid rgba(82,201,138,0.28); color: #52c98a; }
-
-  /* ══ Buttons ══ */
-  .cgh-btn {
-    width: 100%; padding: .84rem 1rem; border: none; border-radius: 11px; font-size: .875rem;
-    font-family: 'DM Sans', sans-serif; font-weight: 500; letter-spacing: .025em; cursor: pointer;
-    transition: all .25s cubic-bezier(.22,1,.36,1); display: flex; align-items: center;
-    justify-content: center; gap: .5rem; -webkit-font-smoothing: antialiased;
-  }
-  .cgh-btn-primary { background: linear-gradient(135deg, #9a7a2e, #C9A84C); color: #070b13; }
-  .cgh-btn-primary:hover:not(:disabled) { background: linear-gradient(135deg, #b09038, #dfc06e); box-shadow: 0 6px 28px rgba(201,168,76,0.32); transform: translateY(-1px); }
-  .cgh-btn-primary:active:not(:disabled) { transform: translateY(0); }
-  .cgh-btn-primary:disabled { opacity: .48; cursor: not-allowed; }
-
-  .cgh-btn-ghost { background: transparent; border: 1px solid rgba(240,236,227,0.15); color: var(--text-muted); font-size: .83rem; }
-  .cgh-btn-ghost:hover { background: rgba(255,255,255,0.04); color: var(--text); }
-
-  .cgh-spinner { width: 16px; height: 16px; border: 2px solid rgba(7,11,19,.3); border-top-color: #070b13; border-radius: 50%; animation: spin .7s linear infinite; flex-shrink: 0; }
-
-  .cgh-signin { text-align: center; font-size: .81rem; color: var(--text-muted); margin-top: 1.5rem; }
-  .cgh-signin button { background: none; border: none; color: var(--gold); font-weight: 500; cursor: pointer; padding: 0; font-size: inherit; font-family: inherit; transition: color .2s; }
-  .cgh-signin button:hover { color: var(--gold-bright); text-decoration: underline; }
-
-  /* ══════════════════════════════════
-     TERMS MODAL
-  ══════════════════════════════════ */
-  .terms-modal .modal-content { background: var(--surface); border: 1px solid var(--border); border-radius: 18px; overflow: hidden; box-shadow: 0 32px 80px rgba(0,0,0,0.65); }
-  .terms-modal .modal-header  { background: var(--surface); border-bottom: 1px solid var(--border); padding: 1.4rem 1.6rem; }
-  .terms-modal .modal-body    { background: var(--surface); padding: 1.6rem; overflow-y: auto; max-height: 50vh;
-    scrollbar-width: thin; scrollbar-color: rgba(201,168,76,0.45) rgba(255,255,255,0.04);
-  }
-  .terms-modal .modal-body::-webkit-scrollbar       { width: 5px; }
-  .terms-modal .modal-body::-webkit-scrollbar-track { background: rgba(255,255,255,0.03); border-radius: 99px; margin: 6px 0; }
-  .terms-modal .modal-body::-webkit-scrollbar-thumb { background: linear-gradient(to bottom, rgba(201,168,76,.7), rgba(201,168,76,.25)); border-radius: 99px; }
-  .terms-modal .modal-footer  { background: var(--surface); border-top: 1px solid var(--border); padding: 1.1rem 1.6rem; flex-direction: column; gap: .85rem; align-items: stretch; }
-  .terms-modal .btn-close     { filter: invert(1) brightness(.65); }
-
-  .terms-progress      { height: 3px; border-radius: 99px; background: rgba(255,255,255,0.07); overflow: hidden; margin-top: .7rem; }
-  .terms-progress-fill { height: 100%; border-radius: 99px; background: linear-gradient(to right, #9a7a2e, #C9A84C); transition: width .25s ease; }
-
-  .terms-section       { margin-bottom: 1.9rem; }
-  .terms-section-head  { display: flex; align-items: center; gap: .65rem; margin-bottom: .65rem; }
-  .terms-section-num   { width: 26px; height: 26px; border-radius: 8px; background: var(--gold-faint); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; font-size: .7rem; font-weight: 700; color: var(--gold); flex-shrink: 0; }
-  .terms-section-title { font-family: 'Cormorant Garamond', serif; font-size: 1.08rem; color: var(--gold-bright); font-weight: 600; line-height: 1.3; }
-  .terms-section-body  { font-size: .83rem; color: var(--text-sub); line-height: 1.88; padding-left: calc(26px + .65rem); }
-
-  .terms-footer-note { font-size: .76rem; color: var(--text-sub); padding: .9rem 1rem; background: var(--gold-faint); border-radius: 10px; border: 1px solid var(--border); line-height: 1.65; }
-  .terms-footer-note strong { color: var(--gold-bright); font-weight: 600; }
-
-  .cgh-checkbox-row { display: flex; align-items: flex-start; gap: .65rem; }
-  .cgh-custom-check { width: 19px; height: 19px; border-radius: 6px; border: 1.5px solid rgba(201,168,76,0.38); display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px; transition: all .2s; background: transparent; cursor: pointer; }
-  .cgh-custom-check.checked  { border-color: var(--gold); background: rgba(201,168,76,0.2); }
-  .cgh-custom-check.disabled { cursor: not-allowed; opacity: .4; }
-  .cgh-check-label           { font-size: .83rem; color: var(--text-sub); line-height: 1.5; cursor: pointer; }
-  .cgh-check-label.disabled  { cursor: not-allowed; opacity: .5; }
-
-  .terms-scroll-hint { font-size: .73rem; color: rgba(201,168,76,0.65); text-align: center; }
-  .terms-dl-btn { background: none; border: 1px solid rgba(201,168,76,0.38); color: var(--gold); border-radius: 8px; padding: .3rem .8rem; font-size: .73rem; cursor: pointer; font-family: 'DM Sans', sans-serif; transition: all .2s; white-space: nowrap; }
-  .terms-dl-btn:hover { background: var(--gold); color: #070b13; }
-
-  /* ══════════════════════════════════
-     OTP MODAL
-  ══════════════════════════════════ */
-  .otp-modal .modal-content { background: var(--surface); border: 1px solid var(--border); border-radius: 18px; box-shadow: 0 32px 80px rgba(0,0,0,0.65); }
-  .otp-modal .modal-body    { background: var(--surface); padding: 2.75rem 2rem 2.25rem; }
-
-  .otp-envelope { width: 66px; height: 66px; border-radius: 50%; background: rgba(201,168,76,0.1); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; font-size: 1.8rem; margin: 0 auto 1.35rem; animation: shimmer 2.5s ease-in-out infinite; }
-
-  .otp-inputs { display: flex; justify-content: center; gap: .5rem; margin: 1.75rem 0 1.35rem; }
-  .otp-box { width: 49px; height: 59px; text-align: center; font-size: 1.5rem; font-weight: 700; border: 1.5px solid rgba(201,168,76,0.25); border-radius: 11px; outline: none; background: rgba(255,255,255,0.035); color: var(--text); font-family: 'DM Sans', sans-serif; transition: all .2s; caret-color: var(--gold); }
-  .otp-box:focus  { border-color: var(--gold); background: rgba(201,168,76,0.07); box-shadow: 0 0 0 3px rgba(201,168,76,0.13); }
-  .otp-box.filled { border-color: rgba(201,168,76,0.65); background: rgba(201,168,76,0.09); }
-
-  .otp-resend { background: none; border: none; color: var(--gold); font-size: .83rem; cursor: pointer; font-family: 'DM Sans', sans-serif; padding: 0; transition: color .2s; }
-  .otp-resend:hover { color: var(--gold-bright); text-decoration: underline; }
-  .otp-timer  { font-size: .83rem; color: var(--text-muted); }
+  .rp-otp-resend { background:none; border:none; color:var(--gold-dark); font-size:.83rem; cursor:pointer; font-family:'DM Sans',sans-serif; padding:0; font-weight:600; transition:color .18s; }
+  .rp-otp-resend:hover { color:var(--gold); text-decoration:underline; }
+  .rp-otp-timer  { font-size:.83rem; color:var(--text-muted); }
 `;
 
-/* ─── PDF Util ───────────────────────────────────────────────────────────── */
+/* ─── PDF ─────────────────────────────────────────────────────────────────*/
 function downloadTermsPDF() {
   const doc = new jsPDF();
   let y = 12;
   doc.setFontSize(17);
-  doc.text('Terms & Conditions \u2014 Cebu Grand Hotel', 105, y, { align: 'center' });
+  doc.text('Terms & Conditions — Cebu Grand Hotel', 105, y, { align:'center' });
   y += 13;
-  TERMS_SECTIONS.forEach((s) => {
+  TERMS_SECTIONS.forEach(s => {
     if (y > 265) { doc.addPage(); y = 12; }
     doc.setFontSize(12); doc.text(s.heading, 10, y); y += 7;
     doc.setFontSize(10);
@@ -334,14 +205,14 @@ function downloadTermsPDF() {
   doc.save('CGH_Terms_Conditions.pdf');
 }
 
-/* ─── TermsModal ─────────────────────────────────────────────────────────── */
+/* ─── Terms Modal ────────────────────────────────────────────────────────*/
 function TermsModal({ show, onAccept, onDecline }) {
   const [scrollPct, setScrollPct] = useState(0);
   const [scrolled,  setScrolled]  = useState(false);
   const [agree1,    setAgree1]    = useState(false);
   const [agree2,    setAgree2]    = useState(false);
 
-  const handleScroll = (e) => {
+  const handleScroll = e => {
     const { scrollTop, scrollHeight, clientHeight } = e.target;
     const pct = scrollTop / (scrollHeight - clientHeight);
     setScrollPct(Math.round(pct * 100));
@@ -349,77 +220,61 @@ function TermsModal({ show, onAccept, onDecline }) {
   };
 
   return (
-    <Modal show={show} onHide={onDecline} size="lg" centered className="terms-modal">
-      <Modal.Header closeButton closeVariant="white">
-        <div style={{ width: '100%' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '.35rem' }}>
-            <span style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: '1.28rem', color: 'var(--text)', fontWeight: 400 }}>
+    <Modal show={show} onHide={onDecline} size="lg" centered className="rp-terms-modal">
+      <Modal.Header closeButton>
+        <div style={{ width:'100%' }}>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'.3rem' }}>
+            <span style={{ fontFamily:"'Cormorant Garamond',serif", fontSize:'1.2rem', color:'var(--text)', fontWeight:600 }}>
               Terms &amp; Conditions
             </span>
-            <button className="terms-dl-btn" onClick={downloadTermsPDF}>📄 Download PDF</button>
+            <button className="rp-dl-btn" onClick={downloadTermsPDF}>
+              <Download size={12} style={{ display:'inline', marginRight:'.3rem' }}/>PDF
+            </button>
           </div>
-          <p style={{ fontSize: '.74rem', color: 'var(--text-muted)', marginBottom: '.7rem', lineHeight: 1.55 }}>
+          <p style={{ fontSize:'.73rem', color:'var(--text-muted)', marginBottom:'.6rem' }}>
             Please scroll through all sections before accepting
           </p>
-          <div className="terms-progress">
-            <div className="terms-progress-fill" style={{ width: `${scrollPct}%` }} />
+          <div className="rp-terms-progress">
+            <div className="rp-terms-fill" style={{ width:`${scrollPct}%` }}/>
           </div>
-          <p style={{ fontSize: '.7rem', color: 'rgba(201,168,76,0.55)', marginTop: '.35rem' }}>
-            {scrollPct}% read
-          </p>
+          <p style={{ fontSize:'.7rem', color:'var(--gold-dark)', marginTop:'.3rem', fontWeight:600 }}>{scrollPct}% read</p>
         </div>
       </Modal.Header>
 
       <Modal.Body onScroll={handleScroll}>
         {TERMS_SECTIONS.map((s, i) => (
-          <div key={i} className="terms-section">
-            <div className="terms-section-head">
-              <div className="terms-section-num">{i + 1}</div>
-              <div className="terms-section-title">{s.heading.replace(/^\d+\.\s/, '')}</div>
+          <div key={i} className="rp-terms-section">
+            <div className="rp-terms-sec-hd">
+              <div className="rp-terms-sec-num">{i+1}</div>
+              <div className="rp-terms-sec-title">{s.heading.replace(/^\d+\.\s/,'')}</div>
             </div>
-            <p className="terms-section-body">{s.body}</p>
+            <p className="rp-terms-sec-body">{s.body}</p>
           </div>
         ))}
-        <div className="terms-footer-note">
-          These Terms &amp; Conditions were last updated on{' '}
-          <strong>February 25, 2026</strong>. By using our services, you acknowledge
-          that you have read, understood, and agree to be bound by these terms.
+        <div className="rp-terms-footer-note">
+          These Terms &amp; Conditions were last updated on <strong style={{ color:'var(--gold-dark)' }}>February 25, 2026</strong>. By using our services, you acknowledge that you have read, understood, and agree to be bound by these terms.
         </div>
       </Modal.Body>
 
       <Modal.Footer>
-        {!scrolled && (
-          <p className="terms-scroll-hint">↓ Scroll to the bottom to unlock the checkboxes</p>
-        )}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '.72rem' }}>
+        {!scrolled && <p className="rp-scroll-hint">↓ Scroll to the bottom to unlock the checkboxes</p>}
+        <div style={{ display:'flex', flexDirection:'column', gap:'.6rem' }}>
           {[
             [agree1, setAgree1, 'I have read and agree to the Terms & Conditions'],
             [agree2, setAgree2, 'I agree to the Privacy Policy and Data Usage terms'],
           ].map(([val, set, label], i) => (
-            <div key={i} className="cgh-checkbox-row">
-              <div
-                className={`cgh-custom-check ${val ? 'checked' : ''} ${!scrolled ? 'disabled' : ''}`}
-                onClick={() => scrolled && set(!val)}
-              >
-                {val && <span style={{ color: 'var(--gold)', fontSize: '.72rem', fontWeight: 800, lineHeight: 1 }}>✓</span>}
+            <div key={i} className="rp-check-row">
+              <div className={`rp-check-box ${val?'on':''} ${!scrolled?'off':''}`} onClick={() => scrolled && set(!val)}>
+                {val && <CheckCircle2 size={13} color="var(--gold-dark)"/>}
               </div>
-              <span className={`cgh-check-label ${!scrolled ? 'disabled' : ''}`} onClick={() => scrolled && set(!val)}>
-                {label}
-              </span>
+              <span className={`rp-check-label ${!scrolled?'off':''}`} onClick={() => scrolled && set(!val)}>{label}</span>
             </div>
           ))}
         </div>
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '.6rem', paddingTop: '.15rem' }}>
-          <button className="cgh-btn cgh-btn-ghost" style={{ width: 'auto', padding: '.6rem 1.35rem' }} onClick={onDecline}>
-            Decline
-          </button>
-          <button
-            className="cgh-btn cgh-btn-primary"
-            style={{ width: 'auto', padding: '.6rem 1.6rem' }}
-            disabled={!agree1 || !agree2}
-            onClick={onAccept}
-          >
-            Accept &amp; Continue
+        <div style={{ display:'flex', justifyContent:'flex-end', gap:'.55rem' }}>
+          <button className="rp-btn rp-btn-ghost" style={{ width:'auto', padding:'.58rem 1.25rem' }} onClick={onDecline}>Decline</button>
+          <button className="rp-btn rp-btn-primary" style={{ width:'auto', padding:'.58rem 1.5rem' }} disabled={!agree1||!agree2} onClick={onAccept}>
+            <CheckCircle2 size={15}/>Accept &amp; Continue
           </button>
         </div>
       </Modal.Footer>
@@ -427,18 +282,18 @@ function TermsModal({ show, onAccept, onDecline }) {
   );
 }
 
-/* ─── Steps Component ────────────────────────────────────────────────────── */
+/* ─── Steps ──────────────────────────────────────────────────────────────*/
 function Steps({ current }) {
-  const steps = [{ label: 'Details', id: 1 }, { label: 'Terms', id: 2 }, { label: 'Verify', id: 3 }];
+  const steps = [{ label:'Details', id:1 }, { label:'Terms', id:2 }, { label:'Verify', id:3 }];
   return (
-    <div className="cgh-steps">
+    <div className="rp-steps">
       {steps.map((s, i) => {
-        const status = current > s.id ? 'done' : current === s.id ? 'active' : 'pending';
+        const st = current > s.id ? 'done' : current === s.id ? 'active' : 'pending';
         return (
-          <div key={s.id} className="cgh-step" style={{ flex: i < steps.length - 1 ? 1 : 'none' }}>
-            <div className={`cgh-step-dot ${status}`}>{status === 'done' ? '✓' : s.id}</div>
-            <span className={`cgh-step-label ${status}`}>{s.label}</span>
-            {i < steps.length - 1 && <div className="cgh-step-line" />}
+          <div key={s.id} className="rp-step" style={{ flex: i < steps.length-1 ? 1 : 'none' }}>
+            <div className={`rp-step-dot ${st}`}>{st==='done' ? <CheckCircle2 size={13}/> : s.id}</div>
+            <span className={`rp-step-label ${st}`}>{s.label}</span>
+            {i < steps.length-1 && <div className="rp-step-line"/>}
           </div>
         );
       })}
@@ -446,28 +301,28 @@ function Steps({ current }) {
   );
 }
 
-/* ─── RegisterPage ────────────────────────────────────────────────────────── */
+/* ─── RegisterPage ───────────────────────────────────────────────────────*/
 export function RegisterPage({ onGoLogin }) {
-  const [form, setForm]           = useState({ username: '', email: '', password: '', confirmPassword: '' });
+  const [form, setForm]           = useState({ username:'', email:'', password:'', confirmPassword:'' });
   const [showPw, setShowPw]       = useState(false);
-  const [strength, setStrength]   = useState({ level: 0, color: '#eee', text: '' });
+  const [strength, setStrength]   = useState({ level:0, color:'#eee', text:'' });
   const [loading, setLoading]     = useState(false);
   const [error, setError]         = useState('');
   const [termsOpen, setTermsOpen] = useState(false);
   const [otpOpen, setOtpOpen]     = useState(false);
-  const [otp, setOtp]             = useState(['', '', '', '', '', '']);
+  const [otp, setOtp]             = useState(['','','','','','']);
   const [otpError, setOtpError]   = useState('');
   const [otpLoading, setOtpLoading] = useState(false);
   const [step, setStep]           = useState(1);
   const otpRefs = useRef([]);
-  const { timer, start: startTimer, isRunning } = useOtpTimer(60);
+  const { timer, start:startTimer, isRunning } = useOtpTimer(60);
 
-  const handlePasswordChange = (val) => {
-    setForm(f => ({ ...f, password: val }));
+  const handlePasswordChange = val => {
+    setForm(f => ({ ...f, password:val }));
     setStrength(calcPasswordStrength(val));
   };
 
-  const handleRegister = async (e) => {
+  const handleRegister = async e => {
     e.preventDefault();
     if (form.password !== form.confirmPassword) { setError('Passwords do not match.'); return; }
     setError(''); setStep(2); setTermsOpen(true);
@@ -476,52 +331,45 @@ export function RegisterPage({ onGoLogin }) {
   const handleTermsAccepted = async () => {
     setTermsOpen(false); setLoading(true); setStep(3);
     try {
-      await registerUser({ username: form.username, email: form.email, password: form.password });
+      await registerUser({ username:form.username, email:form.email, password:form.password });
       setOtpOpen(true); startTimer();
     } catch (err) {
       if (err.message?.includes('fetch') || err.message?.includes('Failed to fetch')) {
         setOtpOpen(true); startTimer();
-      } else {
-        setError(err.message); setStep(1);
-      }
+      } else { setError(err.message); setStep(1); }
     } finally { setLoading(false); }
   };
 
-  const handleSocialSignup = (provider) => {
-    // Connect to your OAuth redirect here
-    console.log(`Sign up with ${provider}`);
-  };
-
   const handleOtpChange = useCallback((i, val) => {
-    const v = val.replace(/\D/, '').slice(0, 1);
+    const v = val.replace(/\D/,'').slice(0,1);
     const next = [...otp]; next[i] = v; setOtp(next);
-    if (v && i < 5) otpRefs.current[i + 1]?.focus();
+    if (v && i < 5) otpRefs.current[i+1]?.focus();
     if (next.every(d => d)) setTimeout(() => submitOtp(next.join('')), 300);
   }, [otp]);
 
   const handleOtpKey = useCallback((i, e) => {
     if (e.key === 'Backspace' && !otp[i] && i > 0) {
-      const next = [...otp]; next[i - 1] = ''; setOtp(next);
-      otpRefs.current[i - 1]?.focus();
+      const next = [...otp]; next[i-1] = ''; setOtp(next);
+      otpRefs.current[i-1]?.focus();
     }
   }, [otp]);
 
-  const submitOtp = async (code) => {
+  const submitOtp = async code => {
     setOtpLoading(true); setOtpError('');
     try {
       await verifyOtp(form.email, code);
-      sessionStorage.setItem('regSuccess', 'true');
+      sessionStorage.setItem('regSuccess','true');
       onGoLogin();
     } catch {
       setOtpError('Invalid or expired code. Please try again.');
-      setOtp(['', '', '', '', '', '']);
+      setOtp(['','','','','','']);
       setTimeout(() => otpRefs.current[0]?.focus(), 50);
     } finally { setOtpLoading(false); }
   };
 
   const handleResend = async () => {
     try { await resendOtp(form.email); } catch { /* silent */ }
-    setOtp(['', '', '', '', '', '']); startTimer();
+    setOtp(['','','','','','']); startTimer();
     setTimeout(() => otpRefs.current[0]?.focus(), 50);
   };
 
@@ -529,213 +377,183 @@ export function RegisterPage({ onGoLogin }) {
   const pwMismatch = form.confirmPassword && form.password !== form.confirmPassword;
 
   return (
-    <div className="cgh-root">
+    <div className="rp-root">
       <style>{css}</style>
 
-      {/* ══ Left Decorative Panel ══ */}
-      <div className="cgh-left">
-        <div className="cgh-left-grid" />
-        <div className="cgh-left-vline" />
-        <div className="cgh-left-content">
-          <div className="cgh-crest">
-            <svg width="38" height="38" viewBox="0 0 38 38" fill="none">
-              <path d="M19 4L22.5 14H33L24.5 20.5L27.5 31L19 24.5L10.5 31L13.5 20.5L5 14H15.5Z"
-                stroke="#C9A84C" strokeWidth="1.3" fill="rgba(201,168,76,0.1)" strokeLinejoin="round"/>
-            </svg>
+      {/* ── Left Panel ── */}
+      <div className="rp-left">
+        <div className="rp-left-grid"/>
+        <div className="rp-left-accent"/>
+
+        <div className="rp-brand">
+          <div className="rp-brand-mark"><Hotel size={18}/></div>
+          <div>
+            <div className="rp-brand-name">Cebu Grand Hotel</div>
+            <div className="rp-brand-sub">Guest Portal</div>
           </div>
-          <div className="cgh-left-title">
-            Discover<br /><em>Grand</em><br />Living
-          </div>
-          <div className="cgh-divider" />
-          <ul className="cgh-feature-list">
-            {[
-              ['🏨', 'Instant booking confirmation'],
-              ['💎', 'Exclusive member-only rates'],
-              ['⬆️', 'Priority room upgrades'],
-              ['🤝', '24/7 concierge access'],
-            ].map(([icon, text]) => (
-              <li key={text}>
-                <div className="cgh-feature-icon">{icon}</div>
-                {text}
-              </li>
-            ))}
-          </ul>
-          <p className="cgh-tagline">Cebu Grand Hotel · Est. 1987</p>
         </div>
+
+        <div className="rp-left-body">
+          <h2 className="rp-left-title">
+            Your <span>Grand</span><br/>Stay Begins<br/>Here
+          </h2>
+          <p className="rp-left-sub">
+            Create your account to unlock exclusive rates, manage your bookings, and enjoy a seamless stay experience.
+          </p>
+          <div className="rp-features">
+            {[
+              { Icon:BedDouble,   title:'Instant Booking',      text:'Real-time room availability' },
+              { Icon:Star,        title:'Exclusive Rates',       text:'Member-only prices & rewards' },
+              { Icon:Shield,      title:'Secure & Private',      text:'Your data is fully protected' },
+              { Icon:Headphones,  title:'24/7 Concierge',        text:'Always here when you need us' },
+            ].map((f, i) => (
+              <div key={i} className="rp-feature">
+                <div className="rp-feature-ico"><f.Icon size={16}/></div>
+                <div>
+                  <div className="rp-feature-title">{f.title}</div>
+                  <div className="rp-feature-text">{f.text}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="rp-left-footer">© 2026 Cebu Grand Hotel · Est. 1987</div>
       </div>
 
-      {/* ══ Right Form Panel ══ */}
-      <div className="cgh-right">
-        <div className="cgh-card">
+      {/* ── Right Panel ── */}
+      <div className="rp-right">
+        <div className="rp-card">
 
-          {/* Logo */}
-          <div className="cgh-logo">
-            ✦ CGH<span className="cgh-logo-sub">GUEST PORTAL</span>
+          <div className="rp-card-head">
+            <div className="rp-card-icon"><Hotel size={22}/></div>
+            <h2 className="rp-card-title">Create Account</h2>
+            <p className="rp-card-sub">Begin your luxury stay experience</p>
           </div>
 
-          {/* Heading */}
-          <h2 className="cgh-heading">Create Account</h2>
-          <p className="cgh-subheading">Begin your luxury stay experience</p>
+          <Steps current={step}/>
 
-          {/* Steps */}
-          <Steps current={step} />
-
-          {/* Error */}
           {error && (
-            <div className="cgh-alert error">
-              <span style={{ fontSize: '1rem', flexShrink: 0, lineHeight: 1.55 }}>⚠</span>
+            <div className="rp-alert error">
+              <AlertTriangle size={15} style={{ flexShrink:0, marginTop:1 }}/>
               <span>{error}</span>
             </div>
           )}
 
-          {/* ── Social Sign-Up ── */}
-          <div className="cgh-social-row">
-            <button type="button" className="cgh-social-btn google" onClick={() => handleSocialSignup('google')}>
-              <GoogleIcon />
-              <span>Google</span>
-            </button>
-            <button type="button" className="cgh-social-btn facebook" onClick={() => handleSocialSignup('facebook')}>
-              <FacebookIcon />
-              <span>Facebook</span>
-            </button>
-          </div>
-          <p className="cgh-social-note">Quick sign-up using your existing account — no password needed.</p>
-
-          {/* ── Divider ── */}
-          <div className="cgh-or">or register with email</div>
-
-          {/* ── Form ── */}
           <form onSubmit={handleRegister}>
-
-            <div className="cgh-field">
-              <label className="cgh-label">Username</label>
-              <div className="cgh-input-wrap">
-                <input className="cgh-input" type="text" required autoComplete="username"
+            <div className="rp-field">
+              <label className="rp-label">Username</label>
+              <div className="rp-input-wrap">
+                <input className="rp-input" type="text" required autoComplete="username"
                   value={form.username} placeholder="e.g. johndoe"
-                  onChange={e => setForm({ ...form, username: e.target.value })} />
+                  onChange={e => setForm({ ...form, username:e.target.value })}/>
               </div>
             </div>
 
-            <div className="cgh-field">
-              <label className="cgh-label">Email Address</label>
-              <div className="cgh-input-wrap">
-                <input className="cgh-input" type="email" required autoComplete="email"
+            <div className="rp-field">
+              <label className="rp-label">Email Address</label>
+              <div className="rp-input-wrap">
+                <input className="rp-input" type="email" required autoComplete="email"
                   value={form.email} placeholder="you@example.com"
-                  onChange={e => setForm({ ...form, email: e.target.value })} />
+                  onChange={e => setForm({ ...form, email:e.target.value })}/>
               </div>
             </div>
 
-            <div className="cgh-field">
-              <label className="cgh-label">Password</label>
-              <div className="cgh-input-wrap">
-                <input
-                  className="cgh-input has-icon" autoComplete="new-password"
-                  type={showPw ? 'text' : 'password'} required
+            <div className="rp-field">
+              <label className="rp-label">Password</label>
+              <div className="rp-input-wrap">
+                <input className={`rp-input has-icon`} type={showPw?'text':'password'} required autoComplete="new-password"
                   value={form.password} placeholder="Min. 8 characters"
-                  onChange={e => handlePasswordChange(e.target.value)}
-                />
-                <button type="button" className="cgh-input-icon" onClick={() => setShowPw(v => !v)}>
-                  {showPw ? <Icons.EyeOff size={17} /> : <Icons.Eye size={17} />}
+                  onChange={e => handlePasswordChange(e.target.value)}/>
+                <button type="button" className="rp-input-btn" onClick={() => setShowPw(v => !v)}>
+                  {showPw ? <EyeOff size={16}/> : <Eye size={16}/>}
                 </button>
               </div>
               {form.password && (
                 <>
-                  <div className="cgh-strength-bars">
-                    {[1, 2, 3, 4].map(i => (
-                      <div key={i} className="cgh-strength-bar"
-                        style={{ background: i <= (strength.level || 0) ? strength.color : undefined }} />
+                  <div className="rp-strength">
+                    {[1,2,3,4].map(i => (
+                      <div key={i} className="rp-strength-bar" style={{ background: i<=(strength.level||0) ? strength.color : undefined }}/>
                     ))}
                   </div>
-                  <p className="cgh-field-note" style={{ color: strength.color }}>{strength.text}</p>
+                  <p className="rp-field-note" style={{ color:strength.color }}>{strength.text}</p>
                 </>
               )}
             </div>
 
-            <div className="cgh-field">
-              <label className="cgh-label">Confirm Password</label>
-              <div className="cgh-input-wrap">
-                <input
-                  className={`cgh-input ${pwMismatch ? 'error' : pwMatch ? 'valid' : ''}`}
+            <div className="rp-field">
+              <label className="rp-label">Confirm Password</label>
+              <div className="rp-input-wrap">
+                <input className={`rp-input ${pwMismatch?'error':pwMatch?'valid':''}`}
                   type="password" required autoComplete="new-password"
                   value={form.confirmPassword} placeholder="Repeat your password"
-                  onChange={e => setForm({ ...form, confirmPassword: e.target.value })}
-                />
+                  onChange={e => setForm({ ...form, confirmPassword:e.target.value })}/>
               </div>
-              {pwMismatch && <p className="cgh-field-note warn">✗ Passwords do not match</p>}
-              {pwMatch    && <p className="cgh-field-note ok">✓ Passwords match</p>}
+              {pwMismatch && <p className="rp-field-note warn">✗ Passwords do not match</p>}
+              {pwMatch    && <p className="rp-field-note ok">✓ Passwords match</p>}
             </div>
 
-            <button type="submit" className="cgh-btn cgh-btn-primary" disabled={loading || !!pwMismatch}
-              style={{ marginTop: '.65rem' }}>
+            <button type="submit" className="rp-btn rp-btn-primary" disabled={loading||!!pwMismatch} style={{ marginTop:'.65rem' }}>
               {loading
-                ? <><div className="cgh-spinner" />Creating account…</>
-                : 'Continue to Terms & Conditions →'}
+                ? <><div className="rp-spinner"/>Creating account…</>
+                : <>Continue to Terms <ArrowRight size={15}/></>}
             </button>
           </form>
 
-          <p className="cgh-signin">
-            Already have an account?{' '}
-            <button onClick={onGoLogin}>Sign in</button>
+          <div className="rp-divider">or</div>
+
+          <p className="rp-signin">
+            Already have an account? <button onClick={onGoLogin}>Sign in</button>
           </p>
         </div>
       </div>
 
-      {/* ══ Terms Modal ══ */}
-      <TermsModal
-        show={termsOpen}
-        onAccept={handleTermsAccepted}
-        onDecline={() => { setTermsOpen(false); setStep(1); }}
-      />
+      {/* ── Terms Modal ── */}
+      <TermsModal show={termsOpen} onAccept={handleTermsAccepted} onDecline={() => { setTermsOpen(false); setStep(1); }}/>
 
-      {/* ══ OTP Modal ══ */}
-      <Modal show={otpOpen} onHide={() => setOtpOpen(false)} centered className="otp-modal">
+      {/* ── OTP Modal ── */}
+      <Modal show={otpOpen} onHide={() => setOtpOpen(false)} centered className="rp-otp-modal">
         <Modal.Body>
-          <div style={{ textAlign: 'center' }}>
-            <div className="otp-envelope">📧</div>
-
-            <h5 style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: '1.65rem', color: 'var(--text)', fontWeight: 300, marginBottom: '.4rem', lineHeight: 1.25 }}>
+          <div style={{ textAlign:'center' }}>
+            <div className="rp-otp-icon"><Mail size={26}/></div>
+            <h5 style={{ fontFamily:"'Cormorant Garamond',serif", fontSize:'1.65rem', color:'var(--text)', fontWeight:600, marginBottom:'.35rem' }}>
               Verify Your Email
             </h5>
-            <p style={{ fontSize: '.83rem', color: 'var(--text-muted)', marginBottom: '.3rem', lineHeight: 1.6 }}>
+            <p style={{ fontSize:'.83rem', color:'var(--text-muted)', lineHeight:1.6, marginBottom:'.25rem' }}>
               We sent a 6-digit code to
             </p>
-            <p style={{ fontSize: '.87rem', color: 'var(--text)', fontWeight: 600, marginBottom: 0 }}>
-              {form.email}
-            </p>
+            <p style={{ fontSize:'.87rem', color:'var(--text)', fontWeight:700, marginBottom:0 }}>{form.email}</p>
 
             {otpError && (
-              <div className="cgh-alert error" style={{ textAlign: 'left', marginTop: '1rem', marginBottom: 0 }}>
-                <span style={{ fontSize: '1rem', flexShrink: 0 }}>⚠</span>
-                <span>{otpError}</span>
+              <div className="rp-alert error" style={{ textAlign:'left', marginTop:'1rem', marginBottom:0 }}>
+                <AlertTriangle size={14} style={{ flexShrink:0 }}/><span>{otpError}</span>
               </div>
             )}
 
-            <div className="otp-inputs">
+            <div className="rp-otp-inputs">
               {otp.map((v, i) => (
-                <input key={i} ref={el => (otpRefs.current[i] = el)}
-                  className={`otp-box ${v ? 'filled' : ''}`}
+                <input key={i} ref={el => (otpRefs.current[i]=el)}
+                  className={`rp-otp-box ${v?'filled':''}`}
                   type="text" inputMode="numeric" maxLength={1} value={v}
                   onChange={e => handleOtpChange(i, e.target.value)}
-                  onKeyDown={e => handleOtpKey(i, e)} />
+                  onKeyDown={e => handleOtpKey(i, e)}/>
               ))}
             </div>
 
-            <div style={{ marginBottom: '1.6rem' }}>
+            <div style={{ marginBottom:'1.5rem' }}>
               {isRunning
-                ? <p className="otp-timer">Resend available in <strong style={{ color: 'var(--gold)' }}>{timer}s</strong></p>
-                : <button className="otp-resend" onClick={handleResend}>↺ Resend Code</button>
+                ? <p className="rp-otp-timer">Resend available in <strong style={{ color:'var(--gold-dark)' }}>{timer}s</strong></p>
+                : <button className="rp-otp-resend" onClick={handleResend}><RefreshCw size={13} style={{ display:'inline', marginRight:'.3rem' }}/>Resend Code</button>
               }
             </div>
 
-            <button className="cgh-btn cgh-btn-primary"
-              disabled={otpLoading || otp.join('').length < 6}
-              onClick={() => submitOtp(otp.join(''))}>
+            <button className="rp-btn rp-btn-primary" disabled={otpLoading||otp.join('').length<6} onClick={() => submitOtp(otp.join(''))}>
               {otpLoading
-                ? <><div className="cgh-spinner" />Verifying…</>
-                : 'Verify & Complete Registration'}
+                ? <><div className="rp-spinner"/>Verifying…</>
+                : <><CheckCircle2 size={15}/>Verify &amp; Complete Registration</>}
             </button>
 
-            <p style={{ fontSize: '.74rem', color: 'var(--text-muted)', marginTop: '1rem', lineHeight: 1.65 }}>
+            <p style={{ fontSize:'.74rem', color:'var(--text-muted)', marginTop:'1rem', lineHeight:1.65 }}>
               Didn't receive the email? Check your spam folder or use the resend option above.
             </p>
           </div>

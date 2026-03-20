@@ -23,7 +23,7 @@ import { AdminSupport }         from './AdminSupport';
 import { AdminSettings }        from './AdminSettings';
 import { AdminChangeRequests }  from './AdminChangeRequests';
 
-const BASE = '/api/v1';
+import { API_BASE as BASE } from '../constants/config';
 const LAYOUT_CSS = `
   @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&display=swap');
   *{box-sizing:border-box}

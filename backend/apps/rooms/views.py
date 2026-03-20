@@ -6,6 +6,7 @@ GET /api/v1/rooms/available?checkIn=YYYY-MM-DD&checkOut=YYYY-MM-DD
 import logging
 from datetime import date
 
+from django.core.cache import cache
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -22,7 +23,12 @@ class AvailableRoomsView(APIView):
         check_in_str  = request.query_params.get("checkIn")
         check_out_str = request.query_params.get("checkOut")
 
-        # Filter only available rooms (Spring Boot uses Boolean available)
+        # Cache key includes dates so different date combos cache separately
+        cache_key = f"available_rooms_{check_in_str or 'all'}_{check_out_str or 'all'}"
+        cached    = cache.get(cache_key)
+        if cached:
+            return Response(cached)
+
         qs = Room.objects.filter(available=True)
 
         if check_in_str and check_out_str:
@@ -32,7 +38,6 @@ class AvailableRoomsView(APIView):
             except ValueError:
                 return Response({"message": "Invalid date format. Use YYYY-MM-DD."}, status=400)
 
-            # Exclude rooms with overlapping confirmed bookings
             conflicting_room_ids = (
                 Booking.objects.filter(
                     status__in=[
@@ -47,4 +52,9 @@ class AvailableRoomsView(APIView):
             qs = qs.exclude(id__in=conflicting_room_ids)
 
         rooms = qs.order_by("room_number")
-        return Response(RoomSerializer(rooms, many=True).data)
+        data  = RoomSerializer(rooms, many=True).data
+
+        # Cache for 60 seconds — rooms change infrequently
+        cache.set(cache_key, data, timeout=60)
+
+        return Response(data)

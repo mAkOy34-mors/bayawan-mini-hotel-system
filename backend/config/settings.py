@@ -114,7 +114,7 @@ DATABASES = {
             "keepalives_interval":  5,
             "keepalives_count":     3,
         },
-        "CONN_MAX_AGE":      0,
+        "CONN_MAX_AGE":      60,
         "CONN_HEALTH_CHECKS": True,
     }
 }
@@ -160,6 +160,7 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:5173",
     "http://127.0.0.1:3000",
+    "https://yamaha-milk-balanced-coaching.trycloudflare.com ",
 ]
 
 CORS_ALLOW_ALL_ORIGINS = True   # ← allows all origins including ngrok
@@ -175,6 +176,12 @@ SPECTACULAR_SETTINGS = {
     "COMPONENT_SPLIT_REQUEST": True,
 }
 
+CACHES = {
+    "default": {
+        "BACKEND":  "django.core.cache.backends.locmem.LocMemCache",
+        "TIMEOUT":  30,
+    }
+}
 # ─────────────────────────────────────────────────────────────────────────────
 # Internationalisation
 # ─────────────────────────────────────────────────────────────────────────────

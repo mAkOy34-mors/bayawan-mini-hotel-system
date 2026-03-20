@@ -20,7 +20,7 @@ import { ReceptionistRoomBoard }   from './ReceptionistRoomBoard';
 import { ReceptionistGuests }      from './ReceptionistGuests';
 import { ReceptionistPayments }    from './ReceptionistPayments';
 
-const BASE = '/api/v1';
+import { API_BASE as BASE } from '../constants/config';
 
 const LAYOUT_CSS = `
   @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&display=swap');
@@ -128,7 +128,7 @@ function SidebarInner({ page, setPage, user, onLogout }) {
       <div className="rc-sb-logo-row">
         <div className="rc-sb-mark"><Hotel size={16}/></div>
         <div>
-          <div className="rc-sb-name">Cebu Grand Hotel</div>
+          <div className="rc-sb-name">Bayawan Mini Hotel</div>
           <div style={{ fontSize:'.6rem', color:'#8a96a8', textTransform:'uppercase', letterSpacing:'.1em' }}>Reception Desk</div>
         </div>
       </div>
@@ -152,7 +152,7 @@ function SidebarInner({ page, setPage, user, onLogout }) {
         <span className="rc-sb-out-ico"><LogOut size={14}/></span>Sign Out
       </button>
     </nav>
-    <div className="rc-sb-foot">© 2026 Cebu Grand Hotel</div>
+    <div className="rc-sb-foot">© 2026 Bayawan Mini Hotel</div>
   </>;
 }
 
@@ -275,14 +275,6 @@ export function ReceptionistApp({ user: propUser, token: propToken, onLogout: pr
   useEffect(() => { if (propUser)  setUser(propUser);  }, [propUser]);
   useEffect(() => { if (propToken) setToken(propToken); }, [propToken]);
 
-  useEffect(() => {
-    if (!propUser) {
-      const u = sessionStorage.getItem('rc_user');
-      const t = sessionStorage.getItem('rc_token');
-      if (u && t) { setUser(JSON.parse(u)); setToken(t); }
-    }
-  }, []);
-
   const handleLogin = (u, t) => {
     setUser(u); setToken(t);
     sessionStorage.setItem('rc_user',  JSON.stringify(u));
@@ -305,6 +297,7 @@ export function ReceptionistApp({ user: propUser, token: propToken, onLogout: pr
       }
     </>
   );
+
 }
 
 export default ReceptionistApp;

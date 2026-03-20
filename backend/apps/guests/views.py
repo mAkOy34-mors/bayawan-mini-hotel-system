@@ -9,6 +9,7 @@ DELETE /api/v1/guests/my-profile       → delete profile
 
 import logging
 
+from django.core.cache import cache
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -19,16 +20,27 @@ from .serializers import GuestInformationSerializer
 logger = logging.getLogger(__name__)
 
 
+def _profile_cache_key(user_id):
+    return f"guest_profile_{user_id}"
+
+
 class MyProfileView(APIView):
     """GET / DELETE for the authenticated user's profile."""
 
     def get(self, request):
+        cache_key = _profile_cache_key(request.user.id)
+        cached    = cache.get(cache_key)
+        if cached:
+            return Response(cached)
+
         try:
             profile = GuestInformation.objects.get(user=request.user)
         except GuestInformation.DoesNotExist:
             return Response(None, status=status.HTTP_404_NOT_FOUND)
 
-        return Response(GuestInformationSerializer(profile).data)
+        data = GuestInformationSerializer(profile).data
+        cache.set(cache_key, data, timeout=300)  # 5 minutes
+        return Response(data)
 
     def delete(self, request):
         try:
@@ -37,6 +49,7 @@ class MyProfileView(APIView):
         except GuestInformation.DoesNotExist:
             pass
 
+        cache.delete(_profile_cache_key(request.user.id))
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
@@ -53,8 +66,12 @@ class CompleteProfileView(APIView):
         ser = GuestInformationSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
         profile = ser.save(user=request.user)
+
+        data = GuestInformationSerializer(profile).data
+        cache.set(_profile_cache_key(request.user.id), data, timeout=300)
+
         logger.info("Guest profile created for user %s", request.user.id)
-        return Response(GuestInformationSerializer(profile).data, status=status.HTTP_201_CREATED)
+        return Response(data, status=status.HTTP_201_CREATED)
 
     def put(self, request):
         try:
@@ -68,4 +85,9 @@ class CompleteProfileView(APIView):
         ser = GuestInformationSerializer(profile, data=request.data, partial=True)
         ser.is_valid(raise_exception=True)
         profile = ser.save()
-        return Response(GuestInformationSerializer(profile).data)
+
+        data = GuestInformationSerializer(profile).data
+        cache.set(_profile_cache_key(request.user.id), data, timeout=300)
+
+        logger.info("Guest profile updated for user %s", request.user.id)
+        return Response(data)

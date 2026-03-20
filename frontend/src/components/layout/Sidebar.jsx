@@ -149,7 +149,7 @@ function SidebarContent({ page, setPage, user, onLogout }) {
             <Hotel size={16} />
           </div>
           <div>
-            <div className="sb-logo-name">Cebu Grand Hotel</div>
+            <div className="sb-logo-name">Bayawan Mini hotel</div>
             <div className="sb-logo-sub">Guest Portal</div>
           </div>
         </div>
@@ -186,7 +186,7 @@ function SidebarContent({ page, setPage, user, onLogout }) {
         </button>
       </nav>
 
-      <div className="sb-foot">© 2026 Cebu Grand Hotel</div>
+      <div className="sb-foot">© 2026 Bayawan Mini Hotel</div>
     </>
   );
 }
@@ -204,7 +204,7 @@ export function Sidebar({ page, setPage, user, onLogout, open, onClose }) {
             <div style={{ width:24, height:24, borderRadius:7, background:'linear-gradient(135deg,#9a7a2e,#C9A84C)', display:'flex', alignItems:'center', justifyContent:'center', color:'#fff' }}>
               <Hotel size={13} />
             </div>
-            Cebu Grand Hotel
+            Guest Panel
           </div>
         </Offcanvas.Header>
         <Offcanvas.Body>

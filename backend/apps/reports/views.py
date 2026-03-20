@@ -12,9 +12,9 @@ GET  /api/v1/reports/checkins/     → today's check-ins and check-outs
 GET  /api/v1/reports/settings/     → hotel settings
 PUT  /api/v1/reports/settings/     → update hotel settings
 """
-import json
 from datetime import date, timedelta
 
+from django.core.cache import cache
 from django.db.models import Count, Q, Sum
 from django.db.models.functions import TruncDate, TruncWeek, TruncMonth
 from rest_framework.response import Response
@@ -32,6 +32,10 @@ def is_admin(user):
     return getattr(user, "role", None) == "ADMIN" or user.is_staff
 
 
+def _fmt_period(p):
+    return str(p.date()) if hasattr(p, "date") else str(p)
+
+
 # ── Dashboard KPIs ────────────────────────────────────────────────────────────
 
 class DashboardView(APIView):
@@ -40,6 +44,11 @@ class DashboardView(APIView):
     def get(self, request):
         if not is_admin(request.user):
             return Response({"message": "Forbidden."}, status=403)
+
+        cache_key = "admin_dashboard"
+        cached    = cache.get(cache_key)
+        if cached:
+            return Response(cached)
 
         today    = date.today()
         week_ago = today - timedelta(days=7)
@@ -52,7 +61,6 @@ class DashboardView(APIView):
         todays_checkouts = Booking.objects.filter(check_out_date=today).count()
         pending_bookings = Booking.objects.filter(status="PENDING_DEPOSIT").count()
 
-        # Week-over-week booking change
         this_week = Booking.objects.filter(created_at__date__gte=week_ago).count()
         prev_week = Booking.objects.filter(
             created_at__date__gte=today - timedelta(days=14),
@@ -63,7 +71,7 @@ class DashboardView(APIView):
             if prev_week > 0 else 0
         )
 
-        return Response({
+        data = {
             "totalBookings":    total_bookings,
             "totalGuests":      total_guests,
             "totalRevenue":     float(total_revenue),
@@ -72,7 +80,10 @@ class DashboardView(APIView):
             "todaysCheckouts":  todays_checkouts,
             "pendingBookings":  pending_bookings,
             "bookingChangePct": booking_change_pct,
-        })
+        }
+
+        cache.set(cache_key, data, timeout=60)
+        return Response(data)
 
 
 # ── Revenue Chart ─────────────────────────────────────────────────────────────
@@ -84,8 +95,13 @@ class RevenueReportView(APIView):
         if not is_admin(request.user):
             return Response({"message": "Forbidden."}, status=403)
 
-        period = request.query_params.get("period", "monthly")
-        today  = date.today()
+        period    = request.query_params.get("period", "monthly")
+        cache_key = f"admin_revenue_{period}"
+        cached    = cache.get(cache_key)
+        if cached:
+            return Response(cached)
+
+        today = date.today()
 
         if period == "daily":
             start = today - timedelta(days=30)
@@ -97,7 +113,7 @@ class RevenueReportView(APIView):
             start = today - timedelta(days=365)
             trunc = TruncMonth
 
-        qs = (
+        qs = list(
             Payment.objects.filter(status="PAID", created_at__date__gte=start)
             .annotate(period=trunc("created_at"))
             .values("period")
@@ -105,21 +121,21 @@ class RevenueReportView(APIView):
             .order_by("period")
         )
 
-        def fmt(p):
-            return str(p.date()) if hasattr(p, "date") else str(p)
-
-        return Response({
+        data = {
             "period": period,
             "data": [
                 {
-                    "period": fmt(r["period"]),
+                    "period": _fmt_period(r["period"]),
                     "total":  float(r["total"]),
                     "count":  r["count"],
                 }
                 for r in qs
             ],
             "totalRevenue": float(sum(r["total"] for r in qs)),
-        })
+        }
+
+        cache.set(cache_key, data, timeout=120)  # 2 minutes
+        return Response(data)
 
 
 # ── Booking Chart ─────────────────────────────────────────────────────────────
@@ -131,8 +147,13 @@ class BookingReportView(APIView):
         if not is_admin(request.user):
             return Response({"message": "Forbidden."}, status=403)
 
-        period = request.query_params.get("period", "monthly")
-        today  = date.today()
+        period    = request.query_params.get("period", "monthly")
+        cache_key = f"admin_booking_report_{period}"
+        cached    = cache.get(cache_key)
+        if cached:
+            return Response(cached)
+
+        today = date.today()
 
         if period == "daily":
             start = today - timedelta(days=30)
@@ -144,7 +165,7 @@ class BookingReportView(APIView):
             start = today - timedelta(days=365)
             trunc = TruncMonth
 
-        qs = (
+        qs = list(
             Booking.objects.filter(created_at__date__gte=start)
             .annotate(period=trunc("created_at"))
             .values("period")
@@ -152,14 +173,14 @@ class BookingReportView(APIView):
             .order_by("period")
         )
 
-        def fmt(p):
-            return str(p.date()) if hasattr(p, "date") else str(p)
-
-        return Response({
-            "period": period,
-            "data": [{"period": fmt(r["period"]), "count": r["count"]} for r in qs],
+        data = {
+            "period":        period,
+            "data":          [{"period": _fmt_period(r["period"]), "count": r["count"]} for r in qs],
             "totalBookings": sum(r["count"] for r in qs),
-        })
+        }
+
+        cache.set(cache_key, data, timeout=120)
+        return Response(data)
 
 
 # ── Room Occupancy ────────────────────────────────────────────────────────────
@@ -171,7 +192,12 @@ class OccupancyReportView(APIView):
         if not is_admin(request.user):
             return Response({"message": "Forbidden."}, status=403)
 
-        rooms = Room.objects.annotate(
+        cache_key = "admin_occupancy"
+        cached    = cache.get(cache_key)
+        if cached:
+            return Response(cached)
+
+        rooms = list(Room.objects.annotate(
             confirmed_bookings=Count(
                 "bookings",
                 filter=Q(bookings__status__in=["CONFIRMED", "CHECKED_IN", "COMPLETED"])
@@ -179,9 +205,10 @@ class OccupancyReportView(APIView):
         ).values(
             "id", "room_number", "room_type",
             "price_per_night", "available", "confirmed_bookings"
-        ).order_by("-confirmed_bookings")
+        ).order_by("-confirmed_bookings"))
 
-        return Response(list(rooms))
+        cache.set(cache_key, rooms, timeout=120)
+        return Response(rooms)
 
 
 # ── Today's Check-ins / Check-outs ────────────────────────────────────────────
@@ -193,38 +220,45 @@ class TodayCheckinsView(APIView):
         if not is_admin(request.user):
             return Response({"message": "Forbidden."}, status=403)
 
-        today = date.today()
+        today     = date.today()
+        cache_key = f"admin_checkins_{today}"
+        cached    = cache.get(cache_key)
+        if cached:
+            return Response(cached)
 
-        checkins = Booking.objects.filter(
+        checkins = list(Booking.objects.filter(
             check_in_date=today
         ).select_related("user", "room").values(
             "id", "booking_reference",
             "user__email", "user__username",
             "room__room_number", "room__room_type",
             "number_of_guests", "status",
-        )
+        ))
 
-        checkouts = Booking.objects.filter(
+        checkouts = list(Booking.objects.filter(
             check_out_date=today
         ).select_related("user", "room").values(
             "id", "booking_reference",
             "user__email", "user__username",
             "room__room_number", "room__room_type",
             "status",
-        )
+        ))
 
-        return Response({
+        data = {
             "date":      str(today),
-            "checkins":  list(checkins),
-            "checkouts": list(checkouts),
-        })
+            "checkins":  checkins,
+            "checkouts": checkouts,
+        }
+
+        cache.set(cache_key, data, timeout=60)
+        return Response(data)
 
 
 # ── Hotel Settings ────────────────────────────────────────────────────────────
 
 class HotelSettingsView(APIView):
     """
-    GET /api/v1/reports/settings/  → public (used by frontend)
+    GET /api/v1/reports/settings/  → public
     PUT /api/v1/reports/settings/  → admin only
     """
 
@@ -235,8 +269,14 @@ class HotelSettingsView(APIView):
         return [IsAuthenticated()]
 
     def get(self, request):
+        cached = cache.get("hotel_settings")
+        if cached:
+            return Response(cached)
+
         settings = HotelSettings.get_settings()
-        return Response(HotelSettingsSerializer(settings).data)
+        data     = HotelSettingsSerializer(settings).data
+        cache.set("hotel_settings", data, timeout=300)  # 5 minutes
+        return Response(data)
 
     def put(self, request):
         if not is_admin(request.user):
@@ -246,4 +286,8 @@ class HotelSettingsView(APIView):
         ser = HotelSettingsSerializer(settings, data=request.data, partial=True)
         ser.is_valid(raise_exception=True)
         ser.save()
+
+        # Clear settings cache after update
+        cache.delete("hotel_settings")
+
         return Response(ser.data)

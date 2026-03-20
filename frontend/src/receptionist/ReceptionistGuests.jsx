@@ -7,7 +7,7 @@ import {
   Edit3, Save, X, CheckCircle2, AlertTriangle,
 } from 'lucide-react';
 
-const BASE = '/api/v1';
+const BASE = 'http://127.0.0.1:8000/api/v1';
 const h  = (t) => ({ Authorization:`Bearer ${t}`,'ngrok-skip-browser-warning':'true' });
 const hj = (t) => ({ ...h(t),'Content-Type':'application/json' });
 
@@ -147,8 +147,8 @@ export function ReceptionistGuests({ token }) {
                     <div style={{ fontWeight:600, fontSize:'.83rem', color:'var(--text)' }}>{g.username||g.email?.split('@')[0]}</div>
                     <div style={{ fontSize:'.72rem', color:'var(--text-muted)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{g.email}</div>
                   </div>
-                  <span style={{ fontSize:'.65rem', padding:'.15rem .5rem', borderRadius:99, background:g.is_active?'var(--green-bg)':'var(--red-bg)', color:g.is_active?'var(--green)':'var(--red)', fontWeight:700, border:`1px solid ${g.is_active?'rgba(45,155,111,0.25)':'rgba(220,53,69,0.25)'}`, flexShrink:0 }}>
-                    {g.is_active?'Active':'Inactive'}
+                  <span style={{ fontSize:'.65rem', padding:'.15rem .5rem', borderRadius:99, background:g.isActive ?? g.is_active?'var(--green-bg)':'var(--red-bg)', color:g.isActive ?? g.is_active?'var(--green)':'var(--red)', fontWeight:700, border:`1px solid ${g.isActive ?? g.is_active?'rgba(45,155,111,0.25)':'rgba(220,53,69,0.25)'}`, flexShrink:0 }}>
+                    {g.isActive ?? g.is_active?'Active':'Inactive'}
                   </span>
                 </div>
               ))}
@@ -196,8 +196,8 @@ export function ReceptionistGuests({ token }) {
                     )}
                   </div>
                 </div>
-                <span style={{ fontSize:'.7rem', padding:'.25rem .7rem', borderRadius:99, background:selected.is_active?'var(--green-bg)':'var(--red-bg)', color:selected.is_active?'var(--green)':'var(--red)', fontWeight:700, border:`1px solid ${selected.is_active?'rgba(45,155,111,0.25)':'rgba(220,53,69,0.25)'}` }}>
-                  {selected.is_active?'Active':'Inactive'}
+                <span style={{ fontSize:'.7rem', padding:'.25rem .7rem', borderRadius:99, background:selected.isActive ?? selected.is_active?'var(--green-bg)':'var(--red-bg)', color:selected.isActive ?? selected.is_active?'var(--green)':'var(--red)', fontWeight:700, border:`1px solid ${selected.isActive ?? selected.is_active?'rgba(45,155,111,0.25)':'rgba(220,53,69,0.25)'}` }}>
+                  {selected.isActive ?? selected.is_active?'Active':'Inactive'}
                 </span>
               </div>
 

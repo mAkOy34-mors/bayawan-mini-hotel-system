@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Modal } from 'react-bootstrap';
 import { adminGetPayments, adminGetPayment, adminVerifyPayment } from './adminApi';
+import { DollarSign, CheckCircle2, Clock, XCircle, Search, RefreshCw } from 'lucide-react';
 import { SHARED_CSS, fmt, fmtDate, fmtDT, Pill, Skel, Spinner, Pager, Toast, useToast } from './adminShared';
 
 const PAGE_SIZE = 12;
@@ -65,13 +66,13 @@ export function AdminPayments({ token }) {
       {/* Stats */}
       <div className="ap-stats">
         {[
-          { icon:'💰', label:'Total Revenue',    value: fmt(total),         color:'green' },
-          { icon:'✅', label:'Paid',              value: paid.length,        color:'blue' },
-          { icon:'⏳', label:'Pending Verification', value: pending.length,  color:'orange' },
-          { icon:'❌', label:'Failed',            value: failed.length,      color:'red' },
+          { Icon:DollarSign, label:'Total Revenue',    value: fmt(total),         color:'green' },
+          { Icon:CheckCircle2, label:'Paid',              value: paid.length,        color:'blue' },
+          { Icon:Clock, label:'Pending Verification', value: pending.length,  color:'orange' },
+          { Icon:XCircle, label:'Failed',            value: failed.length,      color:'red' },
         ].map((s,i) => (
           <div key={i} className={`ap-stat ${s.color}`} style={{animationDelay:`${i*0.06}s`}}>
-            <span className="ap-stat-icon">{s.icon}</span>
+            <div className="ap-stat-icon" style={{background:'rgba(255,255,255,.15)',borderRadius:9}}><s.Icon size={16}/></div>
             <div className="ap-stat-lbl">{s.label}</div>
             <div className="ap-stat-val">{loading ? <Skel h={24} w="55%"/> : s.value}</div>
           </div>

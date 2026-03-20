@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Modal } from 'react-bootstrap';
 import { adminGetGuests, adminGetGuest, adminToggleGuest } from './adminApi';
+import { Users, CheckCircle2, XCircle, Search, Eye, UserX, UserCheck } from 'lucide-react';
 import { SHARED_CSS, fmtDate, fmtDT, Pill, Skel, Spinner, Pager, Toast, useToast } from './adminShared';
 
 const PAGE_SIZE = 10;
@@ -56,12 +57,12 @@ export function AdminGuests({ token }) {
       {/* Stats */}
       <div className="ap-stats" style={{ gridTemplateColumns:'repeat(3,1fr)', maxWidth:600 }}>
         {[
-          { icon:'👥', label:'Total Guests', value: guests.length, color:'blue' },
-          { icon:'✅', label:'Active',        value: active,        color:'green' },
-          { icon:'🚫', label:'Inactive',      value: guests.length - active, color:'red' },
+          { Icon:Users, label:'Total Guests', value: guests.length, color:'blue' },
+          { Icon:CheckCircle2, label:'Active',        value: active,        color:'green' },
+          { Icon:XCircle, label:'Inactive',      value: guests.length - active, color:'red' },
         ].map((s,i) => (
           <div key={i} className={`ap-stat ${s.color}`} style={{animationDelay:`${i*0.06}s`}}>
-            <span className="ap-stat-icon">{s.icon}</span>
+            <div className="ap-stat-icon" style={{background:'rgba(255,255,255,.15)',borderRadius:9}}><s.Icon size={16}/></div>
             <div className="ap-stat-lbl">{s.label}</div>
             <div className="ap-stat-val">{loading ? <Skel h={24} w={30}/> : s.value}</div>
           </div>
@@ -76,11 +77,11 @@ export function AdminGuests({ token }) {
           </div>
           <div className="ap-toolbar" style={{ margin:0 }}>
             <div className="ap-search-wrap">
-              <span className="ap-search-ico">🔍</span>
+              <span className="ap-search-ico"><Search size={13}/></span>
               <input className="ap-search" placeholder="Search email or username…" value={search}
                 onChange={e=>setSearch(e.target.value)} onKeyDown={e=>e.key==='Enter'&&load(search)}/>
             </div>
-            <button className="ap-btn-primary" onClick={()=>load(search)} style={{ padding:'.58rem .9rem' }}>🔍</button>
+            <button className="ap-btn-primary" onClick={()=>load(search)} style={{ padding:'.58rem .9rem' }}><Search size={14}/></button>
           </div>
         </div>
 
@@ -114,7 +115,7 @@ export function AdminGuests({ token }) {
                             <div style={{ display:'flex', gap:'.38rem' }}>
                               <button className="ap-btn-ghost" style={{ fontSize:'.72rem', padding:'.28rem .65rem' }} onClick={()=>openDetail(g.id)}>View</button>
                               <button className={g.isActive ? 'ap-btn-red' : 'ap-btn-green'} style={{ fontSize:'.72rem', padding:'.28rem .65rem' }} onClick={()=>toggle(g)}>
-                                {g.isActive ? '🚫 Disable' : '✅ Enable'}
+                                {g.isActive ? <><UserX size={13}/>Disable</> : <><UserCheck size={13}/>Enable</>}
                               </button>
                             </div>
                           </td>
@@ -150,7 +151,7 @@ export function AdminGuests({ token }) {
                   </div>
                   <div style={{ marginLeft:'auto' }}>
                     <button className={detail.isActive ? 'ap-btn-red' : 'ap-btn-green'} style={{ fontSize:'.78rem' }} onClick={()=>toggle(detail)}>
-                      {detail.isActive ? '🚫 Disable' : '✅ Enable'}
+                      {detail.isActive ? <><UserX size={13}/>Disable</> : <><UserCheck size={13}/>Enable</>}
                     </button>
                   </div>
                 </div>

@@ -1,6 +1,7 @@
 // AdminSettings.jsx
 import { useState, useEffect } from 'react';
 import { getHotelSettings, saveHotelSettings } from './adminApi';
+import { Hotel, Calendar, Star, Info, Save } from 'lucide-react';
 import { SHARED_CSS, Spinner, Toast, useToast } from './adminShared';
 
 export function AdminSettings({ token }) {
@@ -47,7 +48,7 @@ export function AdminSettings({ token }) {
       <div className="ap-hd">
         <div><h1 className="ap-title">Settings</h1><p className="ap-sub">Configure hotel system preferences</p></div>
         <button className="ap-btn-primary" disabled={saving || !form} onClick={save}>
-          {saving ? <><div className="ap-spin-sm" />Saving…</> : '💾 Save Changes'}
+          {saving ? <><div className="ap-spin-sm" />Saving…</> : <><Save size={14}/>Save Changes</>}
         </button>
       </div>
 
@@ -179,7 +180,7 @@ export function AdminSettings({ token }) {
               {/* Save button at bottom */}
               <div style={{ marginTop: '1.1rem', paddingTop: '1rem', borderTop: '1px solid var(--border)' }}>
                 <button className="ap-btn-primary" disabled={saving} onClick={save} style={{ width: '100%', justifyContent: 'center' }}>
-                  {saving ? <><div className="ap-spin-sm" />Saving…</> : '💾 Save All Changes'}
+                  {saving ? <><div className="ap-spin-sm" />Saving…</> : <><Save size={14}/>Save All Changes</>}
                 </button>
               </div>
             </div>

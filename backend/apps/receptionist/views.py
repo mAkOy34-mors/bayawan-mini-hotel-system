@@ -23,7 +23,8 @@ import logging
 import uuid
 from datetime import date
 
-from django.db.models import Q, Sum
+from django.core.cache import cache
+from django.db.models import Q
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.response import Response
@@ -36,7 +37,26 @@ from apps.rooms.models import Room
 from apps.users.models import User
 
 logger = logging.getLogger(__name__)
+from django.db.models import Count, Case, When, IntegerField
 
+# ── Cache helpers ─────────────────────────────────────────────────────────────
+
+def _clear_booking_cache():
+    """Clear all booking-related caches."""
+    today = date.today()
+    cache.delete(f"receptionist_dashboard_{today}")
+    cache.delete(f"receptionist_arrivals_{today}")
+    cache.delete(f"receptionist_departures_{today}")
+    cache.delete("receptionist_bookings_all")
+
+
+def _clear_room_cache():
+    """Increment room cache version to invalidate all room caches."""
+    version = cache.get("rooms_cache_version", 0) + 1
+    cache.set("rooms_cache_version", version, timeout=None)
+
+
+# ── Auth ──────────────────────────────────────────────────────────────────────
 
 def is_receptionist(user):
     """Allow RECEPTIONIST and ADMIN roles."""
@@ -65,20 +85,38 @@ class ReceptionistDashboardView(APIView):
         if err:
             return err
 
-        today = date.today()
+        today     = date.today()
+        cache_key = f"receptionist_dashboard_{today}"
+        cached    = cache.get(cache_key)
+        if cached:
+            return Response(cached)
 
-        arrivals_today   = Booking.objects.filter(check_in_date=today, status=Booking.BookingStatus.CONFIRMED).count()
-        departures_today = Booking.objects.filter(check_out_date=today, status=Booking.BookingStatus.CHECKED_IN).count()
-        checked_in_now   = Booking.objects.filter(status=Booking.BookingStatus.CHECKED_IN).count()
-        available_rooms  = Room.objects.filter(available=True).count()
-        total_rooms      = Room.objects.count()
-        pending_payments = Booking.objects.filter(
-            payment_status=Booking.PaymentStatus.UNPAID,
-            status=Booking.BookingStatus.CONFIRMED,
-        ).count()
+        booking_counts = Booking.objects.aggregate(
+            arrivals_today=Count(Case(When(check_in_date=today, status=Booking.BookingStatus.CONFIRMED, then=1),
+                                      output_field=IntegerField())),
+            departures_today=Count(Case(When(check_out_date=today, status=Booking.BookingStatus.CHECKED_IN, then=1),
+                                        output_field=IntegerField())),
+            checked_in_now=Count(
+                Case(When(status=Booking.BookingStatus.CHECKED_IN, then=1), output_field=IntegerField())),
+            pending_payments=Count(
+                Case(When(payment_status=Booking.PaymentStatus.UNPAID, status=Booking.BookingStatus.CONFIRMED, then=1),
+                     output_field=IntegerField())),
+        )
 
-        # Today's expected arrivals list
-        arrivals = Booking.objects.filter(
+        # 1 query — both room counts at once
+        room_counts = Room.objects.aggregate(
+            total=Count("id"),
+            available=Count(Case(When(available=True, then=1), output_field=IntegerField())),
+        )
+
+        arrivals_today = booking_counts["arrivals_today"]
+        departures_today = booking_counts["departures_today"]
+        checked_in_now = booking_counts["checked_in_now"]
+        pending_payments = booking_counts["pending_payments"]
+        available_rooms = room_counts["available"]
+        total_rooms = room_counts["total"]
+
+        arrivals = list(Booking.objects.filter(
             check_in_date=today,
             status__in=[Booking.BookingStatus.CONFIRMED, Booking.BookingStatus.PENDING_DEPOSIT],
         ).select_related("room", "user").values(
@@ -87,10 +125,9 @@ class ReceptionistDashboardView(APIView):
             "room__room_number", "room__room_type",
             "number_of_guests", "status", "payment_status",
             "check_in_date", "check_out_date",
-        )
+        ))
 
-        # Today's expected departures list
-        departures = Booking.objects.filter(
+        departures = list(Booking.objects.filter(
             check_out_date=today,
             status=Booking.BookingStatus.CHECKED_IN,
         ).select_related("room", "user").values(
@@ -99,9 +136,9 @@ class ReceptionistDashboardView(APIView):
             "room__room_number", "room__room_type",
             "status", "payment_status", "remaining_amount",
             "check_in_date", "check_out_date",
-        )
+        ))
 
-        return Response({
+        data = {
             "date":             str(today),
             "arrivalsToday":    arrivals_today,
             "departuresToday":  departures_today,
@@ -109,9 +146,12 @@ class ReceptionistDashboardView(APIView):
             "availableRooms":   available_rooms,
             "totalRooms":       total_rooms,
             "pendingPayments":  pending_payments,
-            "arrivals":         list(arrivals),
-            "departures":       list(departures),
-        })
+            "arrivals":         arrivals,
+            "departures":       departures,
+        }
+
+        cache.set(cache_key, data, timeout=30)
+        return Response(data)
 
 
 # ── Arrivals & Departures ─────────────────────────────────────────────────────
@@ -124,11 +164,16 @@ class ArrivalsView(APIView):
         if err:
             return err
 
-        date_str  = request.query_params.get("date", str(date.today()))
+        date_str = request.query_params.get("date", str(date.today()))
         try:
             target_date = date.fromisoformat(date_str)
         except ValueError:
             return Response({"message": "Invalid date format."}, status=400)
+
+        cache_key = f"receptionist_arrivals_{target_date}"
+        cached    = cache.get(cache_key)
+        if cached:
+            return Response(cached)
 
         bookings = Booking.objects.filter(
             check_in_date=target_date,
@@ -138,8 +183,14 @@ class ArrivalsView(APIView):
             ],
         ).select_related("room", "user", "guest_information").order_by("created_at")
 
-        data = [_booking_detail(b) for b in bookings]
-        return Response({"date": str(target_date), "count": len(data), "arrivals": data})
+        data = {
+            "date":     str(target_date),
+            "count":    bookings.count(),
+            "arrivals": [_booking_detail(b) for b in bookings],
+        }
+
+        cache.set(cache_key, data, timeout=30)
+        return Response(data)
 
 
 class DeparturesView(APIView):
@@ -156,13 +207,24 @@ class DeparturesView(APIView):
         except ValueError:
             return Response({"message": "Invalid date format."}, status=400)
 
+        cache_key = f"receptionist_departures_{target_date}"
+        cached    = cache.get(cache_key)
+        if cached:
+            return Response(cached)
+
         bookings = Booking.objects.filter(
             check_out_date=target_date,
             status=Booking.BookingStatus.CHECKED_IN,
         ).select_related("room", "user", "guest_information").order_by("created_at")
 
-        data = [_booking_detail(b) for b in bookings]
-        return Response({"date": str(target_date), "count": len(data), "departures": data})
+        data = {
+            "date":       str(target_date),
+            "count":      bookings.count(),
+            "departures": [_booking_detail(b) for b in bookings],
+        }
+
+        cache.set(cache_key, data, timeout=30)
+        return Response(data)
 
 
 # ── Bookings ──────────────────────────────────────────────────────────────────
@@ -175,12 +237,17 @@ class ReceptionistBookingsView(APIView):
         if err:
             return err
 
+        status_filter = request.query_params.get("status", "")
+        search        = request.query_params.get("search", "")
+
+        if not status_filter and not search:
+            cached = cache.get("receptionist_bookings_all")
+            if cached:
+                return Response(cached)
+
         qs = Booking.objects.select_related(
             "room", "user", "guest_information"
         ).order_by("-created_at")
-
-        status_filter = request.query_params.get("status")
-        search        = request.query_params.get("search", "")
 
         if status_filter:
             qs = qs.filter(status=status_filter)
@@ -191,7 +258,12 @@ class ReceptionistBookingsView(APIView):
                 Q(user__username__icontains=search)
             )
 
-        return Response([_booking_detail(b) for b in qs[:100]])
+        data = [_booking_detail(b) for b in qs[:100]]
+
+        if not status_filter and not search:
+            cache.set("receptionist_bookings_all", data, timeout=30)
+
+        return Response(data)
 
 
 class ReceptionistBookingDetailView(APIView):
@@ -202,6 +274,11 @@ class ReceptionistBookingDetailView(APIView):
         if err:
             return err
 
+        cache_key = f"receptionist_booking_{pk}"
+        cached    = cache.get(cache_key)
+        if cached:
+            return Response(cached)
+
         try:
             booking = Booking.objects.select_related(
                 "room", "user", "guest_information"
@@ -209,10 +286,9 @@ class ReceptionistBookingDetailView(APIView):
         except Booking.DoesNotExist:
             return Response({"message": "Booking not found."}, status=404)
 
-        data = _booking_detail(booking)
-
-        # Include payments for this booking
+        data     = _booking_detail(booking)
         payments = Payment.objects.filter(booking_id=booking.id).order_by("-created_at")
+
         data["payments"] = [
             {
                 "id":          p.id,
@@ -226,14 +302,12 @@ class ReceptionistBookingDetailView(APIView):
             for p in payments
         ]
 
+        cache.set(cache_key, data, timeout=30)
         return Response(data)
 
 
 class CheckInView(APIView):
-    """
-    POST /api/v1/receptionist/bookings/<pk>/checkin/
-    Marks a confirmed booking as checked in.
-    """
+    """POST /api/v1/receptionist/bookings/<pk>/checkin/"""
 
     def post(self, request, pk):
         err = receptionist_check(request)
@@ -254,15 +328,16 @@ class CheckInView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        notes = request.data.get("notes", "")
-
         booking.status = Booking.BookingStatus.CHECKED_IN
         booking.save(update_fields=["status"])
 
-        # Mark room as unavailable
-        room = booking.room
+        room           = booking.room
         room.available = False
         room.save(update_fields=["available"])
+
+        _clear_booking_cache()
+        _clear_room_cache()
+        cache.delete(f"receptionist_booking_{pk}")
 
         logger.info(
             "Guest checked in: booking %s, room %s, by receptionist %s",
@@ -280,10 +355,7 @@ class CheckInView(APIView):
 
 
 class CheckOutView(APIView):
-    """
-    POST /api/v1/receptionist/bookings/<pk>/checkout/
-    Marks a checked-in booking as completed.
-    """
+    """POST /api/v1/receptionist/bookings/<pk>/checkout/"""
 
     def post(self, request, pk):
         err = receptionist_check(request)
@@ -301,19 +373,23 @@ class CheckOutView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        remaining = float(booking.remaining_amount or 0)
-
+        remaining      = float(booking.remaining_amount or 0)
         booking.status = Booking.BookingStatus.COMPLETED
+
         if booking.payment_status != Booking.PaymentStatus.FULLY_PAID:
-            booking.payment_status = Booking.PaymentStatus.FULLY_PAID
+            booking.payment_status   = Booking.PaymentStatus.FULLY_PAID
             booking.remaining_amount = 0
             booking.balance_paid_at  = timezone.now()
+
         booking.save()
 
-        # Mark room as available again
-        room = booking.room
+        room           = booking.room
         room.available = True
         room.save(update_fields=["available"])
+
+        _clear_booking_cache()
+        _clear_room_cache()
+        cache.delete(f"receptionist_booking_{pk}")
 
         logger.info(
             "Guest checked out: booking %s, room %s, by receptionist %s",
@@ -330,32 +406,14 @@ class CheckOutView(APIView):
 
 
 class WalkInBookingView(APIView):
-    """
-    POST /api/v1/receptionist/bookings/walkin/
-    Create an on-the-spot booking for walk-in guests.
-
-    Body:
-    {
-        "roomId": 1,
-        "guestEmail": "guest@example.com",
-        "guestName": "Juan Dela Cruz",
-        "checkInDate": "2026-03-16",
-        "checkOutDate": "2026-03-18",
-        "numberOfGuests": 2,
-        "paymentMethod": "CASH",
-        "amountPaid": 2800.00,
-        "specialRequests": ""
-    }
-    """
+    """POST /api/v1/receptionist/bookings/walkin/"""
 
     def post(self, request):
         err = receptionist_check(request)
         if err:
             return err
 
-        data = request.data
-
-        # Validate required fields
+        data     = request.data
         required = ["roomId", "guestEmail", "checkInDate", "checkOutDate"]
         for field in required:
             if not data.get(field):
@@ -364,26 +422,19 @@ class WalkInBookingView(APIView):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-        # Get room
         try:
             room = Room.objects.get(id=data["roomId"], available=True)
         except Room.DoesNotExist:
             return Response({"message": "Room not found or not available."}, status=404)
 
-        # Get or create user by email
         email = data["guestEmail"].lower().strip()
         user  = User.objects.filter(email=email).first()
         if not user:
             username = email.split("@")[0]
-            user = User.objects.create(
-                email    = email,
-                username = username,
-                role     = "USER",
-            )
+            user     = User.objects.create(email=email, username=username, role="USER")
             user.set_unusable_password()
             user.save()
 
-        # Get guest information if exists
         guest_info = GuestInformation.objects.filter(user=user).first()
 
         from datetime import date as date_cls
@@ -394,10 +445,7 @@ class WalkInBookingView(APIView):
         if nights <= 0:
             return Response({"message": "Check-out must be after check-in."}, status=400)
 
-        total_amount   = float(data.get("amountPaid") or room.price_per_night * nights)
-        deposit_amount = total_amount
-        remaining      = 0
-
+        total_amount      = float(data.get("amountPaid") or room.price_per_night * nights)
         booking_reference = f"WALK-{uuid.uuid4().hex[:8].upper()}"
 
         booking = Booking.objects.create(
@@ -410,19 +458,16 @@ class WalkInBookingView(APIView):
             number_of_guests     = int(data.get("numberOfGuests", 1)),
             number_of_nights     = nights,
             total_amount         = total_amount,
-            deposit_amount       = deposit_amount,
-            remaining_amount     = remaining,
+            deposit_amount       = total_amount,
+            remaining_amount     = 0,
             special_requests     = data.get("specialRequests", ""),
             status               = Booking.BookingStatus.CHECKED_IN,
             payment_status       = Booking.PaymentStatus.FULLY_PAID,
         )
 
-        # Mark room as unavailable
         room.available = False
         room.save(update_fields=["available"])
 
-        # Record cash payment
-        payment_method = data.get("paymentMethod", "CASH")
         Payment.objects.create(
             paymongo_link_id = f"CASH-{booking_reference}",
             checkout_url     = "",
@@ -434,6 +479,9 @@ class WalkInBookingView(APIView):
             booking_id       = booking.id,
             paid_at          = timezone.now(),
         )
+
+        _clear_booking_cache()
+        _clear_room_cache()
 
         logger.info(
             "Walk-in booking %s created by receptionist %s for guest %s",
@@ -449,7 +497,7 @@ class WalkInBookingView(APIView):
             "checkOutDate":     str(check_out),
             "nights":           nights,
             "totalAmount":      total_amount,
-            "paymentMethod":    payment_method,
+            "paymentMethod":    data.get("paymentMethod", "CASH"),
         }, status=status.HTTP_201_CREATED)
 
 
@@ -464,8 +512,13 @@ class ReceptionistGuestsView(APIView):
             return err
 
         search = request.query_params.get("search", "")
-        qs     = User.objects.filter(role="USER").order_by("-created_at")
 
+        if not search:
+            cached = cache.get("receptionist_guests_all")
+            if cached:
+                return Response(cached)
+
+        qs = User.objects.filter(role="USER").order_by("-created_at")
         if search:
             qs = qs.filter(
                 Q(email__icontains=search) |
@@ -482,19 +535,28 @@ class ReceptionistGuestsView(APIView):
             }
             for u in qs[:50]
         ]
+
+        if not search:
+            cache.set("receptionist_guests_all", data, timeout=60)
+
         return Response(data)
 
 
 class ReceptionistGuestDetailView(APIView):
     """
-    GET   /api/v1/receptionist/guests/<pk>/  → guest detail + bookings
-    PATCH /api/v1/receptionist/guests/<pk>/  → edit contact info only
+    GET   /api/v1/receptionist/guests/<pk>/
+    PATCH /api/v1/receptionist/guests/<pk>/
     """
 
     def get(self, request, pk):
         err = receptionist_check(request)
         if err:
             return err
+
+        cache_key = f"receptionist_guest_{pk}"
+        cached    = cache.get(cache_key)
+        if cached:
+            return Response(cached)
 
         try:
             guest = User.objects.get(pk=pk)
@@ -504,19 +566,19 @@ class ReceptionistGuestDetailView(APIView):
         profile  = GuestInformation.objects.filter(user=guest).first()
         bookings = Booking.objects.filter(user=guest).select_related("room").order_by("-created_at")
 
-        return Response({
+        data = {
             "id":        guest.id,
             "username":  guest.username,
             "email":     guest.email,
             "isActive":  guest.is_active,
             "createdAt": guest.created_at.isoformat() if guest.created_at else None,
             "profile": {
-                "firstName":     profile.first_name if profile else None,
-                "lastName":      profile.last_name if profile else None,
-                "contactNumber": profile.contact_number if profile else None,
-                "nationality":   profile.nationality if profile else None,
-                "homeAddress":   profile.home_address if profile else None,
-                "idType":        profile.id_type if profile else None,
+                "firstName":     profile.first_name,
+                "lastName":      profile.last_name,
+                "contactNumber": profile.contact_number,
+                "nationality":   profile.nationality,
+                "homeAddress":   profile.home_address,
+                "idType":        profile.id_type,
             } if profile else None,
             "bookings": [
                 {
@@ -532,7 +594,10 @@ class ReceptionistGuestDetailView(APIView):
                 }
                 for b in bookings[:20]
             ],
-        })
+        }
+
+        cache.set(cache_key, data, timeout=60)
+        return Response(data)
 
     def patch(self, request, pk):
         err = receptionist_check(request)
@@ -544,26 +609,23 @@ class ReceptionistGuestDetailView(APIView):
         except User.DoesNotExist:
             return Response({"message": "Guest not found."}, status=404)
 
-        # Receptionist can only edit contact info in guest_information
         profile = GuestInformation.objects.filter(user=guest).first()
         if not profile:
             return Response({"message": "Guest profile not found."}, status=404)
 
-        # Only allow safe fields — no ID changes
-        allowed = ["contact_number", "home_address"]
         updated = []
-        for field in allowed:
-            camel = "contactNumber" if field == "contact_number" else "homeAddress"
-            if camel in request.data:
-                setattr(profile, field, request.data[camel])
-                updated.append(camel)
+        if "contactNumber" in request.data:
+            profile.contact_number = request.data["contactNumber"]
+            updated.append("contact_number")
+        if "homeAddress" in request.data:
+            profile.home_address = request.data["homeAddress"]
+            updated.append("home_address")
 
         if updated:
-            profile.save(update_fields=allowed[:len(updated)])
-            logger.info(
-                "Guest %s contact info updated by receptionist %s",
-                pk, request.user.id,
-            )
+            profile.save(update_fields=updated)
+            cache.delete(f"receptionist_guest_{pk}")
+            cache.delete(f"guest_profile_{guest.id}")
+            logger.info("Guest %s contact info updated by receptionist %s", pk, request.user.id)
 
         return Response({
             "message":       "Guest contact info updated.",
@@ -581,9 +643,13 @@ class ReceptionistRoomsView(APIView):
         if err:
             return err
 
-        rooms = Room.objects.all().order_by("room_number")
+        version   = cache.get("rooms_cache_version", 0)
+        cache_key = f"receptionist_rooms_v{version}"
+        cached    = cache.get(cache_key)
+        if cached:
+            return Response(cached)
 
-        # Get current occupied rooms
+        rooms             = Room.objects.all().order_by("room_number")
         occupied_room_ids = set(
             Booking.objects.filter(
                 status=Booking.BookingStatus.CHECKED_IN
@@ -592,32 +658,30 @@ class ReceptionistRoomsView(APIView):
 
         data = [
             {
-                "id":           r.id,
-                "roomNumber":   r.room_number,
-                "roomType":     r.room_type,
+                "id":            r.id,
+                "roomNumber":    r.room_number,
+                "roomType":      r.room_type,
                 "pricePerNight": float(r.price_per_night),
-                "maxOccupancy": r.max_occupancy,
-                "available":    r.available,
-                "amenities":    r.amenities,
-                "imageUrl":     r.image_url,
-                "isOccupied":   r.id in occupied_room_ids,
+                "maxOccupancy":  r.max_occupancy,
+                "available":     r.available,
+                "amenities":     r.amenities,
+                "imageUrl":      r.image_url,
+                "isOccupied":    r.id in occupied_room_ids,
                 "currentStatus": (
-                    "OCCUPIED"   if r.id in occupied_room_ids else
-                    "AVAILABLE"  if r.available else
+                    "OCCUPIED"    if r.id in occupied_room_ids else
+                    "AVAILABLE"   if r.available else
                     "UNAVAILABLE"
                 ),
             }
             for r in rooms
         ]
+
+        cache.set(cache_key, data, timeout=60)
         return Response(data)
 
 
 class ReceptionistRoomStatusView(APIView):
-    """
-    PATCH /api/v1/receptionist/rooms/<pk>/status/
-    Update room availability (available/unavailable/maintenance).
-    Body: { "available": true/false, "reason": "cleaning" }
-    """
+    """PATCH /api/v1/receptionist/rooms/<pk>/status/"""
 
     def patch(self, request, pk):
         err = receptionist_check(request)
@@ -629,7 +693,6 @@ class ReceptionistRoomStatusView(APIView):
         except Room.DoesNotExist:
             return Response({"message": "Room not found."}, status=404)
 
-        # Cannot change status of an occupied room
         is_occupied = Booking.objects.filter(
             room=room,
             status=Booking.BookingStatus.CHECKED_IN,
@@ -647,9 +710,10 @@ class ReceptionistRoomStatusView(APIView):
 
         room.available = bool(available)
         room.save(update_fields=["available"])
+        _clear_room_cache()
 
         logger.info(
-            "Room %s status changed to %s by receptionist %s",
+            "Room %s set to %s by receptionist %s",
             room.room_number,
             "available" if room.available else "unavailable",
             request.user.id,
@@ -672,10 +736,15 @@ class ReceptionistPaymentsView(APIView):
         if err:
             return err
 
-        qs            = Payment.objects.all().order_by("-created_at")
-        status_filter = request.query_params.get("status")
+        status_filter = request.query_params.get("status", "")
         search        = request.query_params.get("search", "")
 
+        if not status_filter and not search:
+            cached = cache.get("receptionist_payments_all")
+            if cached:
+                return Response(cached)
+
+        qs = Payment.objects.all().order_by("-created_at")
         if status_filter:
             qs = qs.filter(status=status_filter)
         if search:
@@ -686,34 +755,28 @@ class ReceptionistPaymentsView(APIView):
 
         data = [
             {
-                "id":            p.id,
+                "id":             p.id,
                 "paymongoLinkId": p.paymongo_link_id,
-                "email":         p.email,
-                "description":   p.description,
-                "amount":        float(p.amount),
-                "status":        p.status,
-                "type":          p.type,
-                "bookingId":     p.booking_id,
-                "createdAt":     p.created_at.isoformat(),
-                "paidAt":        p.paid_at.isoformat() if p.paid_at else None,
+                "email":          p.email,
+                "description":    p.description,
+                "amount":         float(p.amount),
+                "status":         p.status,
+                "type":           p.type,
+                "bookingId":      p.booking_id,
+                "createdAt":      p.created_at.isoformat(),
+                "paidAt":         p.paid_at.isoformat() if p.paid_at else None,
             }
             for p in qs[:100]
         ]
+
+        if not status_filter and not search:
+            cache.set("receptionist_payments_all", data, timeout=30)
+
         return Response(data)
 
 
 class RecordCashPaymentView(APIView):
-    """
-    POST /api/v1/receptionist/payments/cash/
-    Record a cash payment for a booking balance.
-
-    Body:
-    {
-        "bookingId": 1,
-        "amount": 1400.00,
-        "description": "Balance payment at check-out"
-    }
-    """
+    """POST /api/v1/receptionist/payments/cash/"""
 
     def post(self, request):
         err = receptionist_check(request)
@@ -735,7 +798,6 @@ class RecordCashPaymentView(APIView):
         except Booking.DoesNotExist:
             return Response({"message": "Booking not found."}, status=404)
 
-        # Create cash payment record
         payment = Payment.objects.create(
             paymongo_link_id = f"CASH-{booking.booking_reference}-{uuid.uuid4().hex[:6].upper()}",
             checkout_url     = "",
@@ -748,7 +810,6 @@ class RecordCashPaymentView(APIView):
             paid_at          = timezone.now(),
         )
 
-        # Update booking payment status
         remaining = float(booking.remaining_amount or 0) - float(amount)
         if remaining <= 0:
             booking.payment_status   = Booking.PaymentStatus.FULLY_PAID
@@ -757,6 +818,10 @@ class RecordCashPaymentView(APIView):
         else:
             booking.remaining_amount = remaining
         booking.save()
+
+        cache.delete(f"receptionist_booking_{booking_id}")
+        cache.delete("receptionist_payments_all")
+        _clear_booking_cache()
 
         logger.info(
             "Cash payment ₱%.2f recorded for booking %s by receptionist %s",
@@ -776,7 +841,6 @@ class RecordCashPaymentView(APIView):
 
 def _booking_detail(booking):
     """Serialize a booking to a dict for receptionist views."""
-    profile = booking.guest_information if hasattr(booking, "guest_information") else None
     try:
         profile = booking.guest_information
     except Exception:
@@ -801,11 +865,11 @@ def _booking_detail(booking):
         "specialRequests":  booking.special_requests or "",
         "createdAt":        booking.created_at.isoformat(),
         "guestProfile": {
-            "firstName":     profile.first_name if profile else None,
-            "lastName":      profile.last_name if profile else None,
-            "contactNumber": profile.contact_number if profile else None,
-            "nationality":   profile.nationality if profile else None,
-            "idType":        profile.id_type if profile else None,
-            "idNumber":      profile.id_number if profile else None,
+            "firstName":     profile.first_name,
+            "lastName":      profile.last_name,
+            "contactNumber": profile.contact_number,
+            "nationality":   profile.nationality,
+            "idType":        profile.id_type,
+            "idNumber":      profile.id_number,
         } if profile else None,
     }

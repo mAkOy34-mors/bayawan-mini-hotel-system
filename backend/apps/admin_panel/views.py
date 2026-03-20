@@ -23,9 +23,13 @@ Payments: GET /api/v1/admin/payments/
           GET /api/v1/admin/payments/<pk>/
           POST /api/v1/admin/payments/<pk>/verify/
 """
+import uuid
 from decimal import Decimal
+from datetime import date
 
+from django.core.cache import cache
 from django.db.models import Q
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -41,28 +45,47 @@ from .serializers import (
 )
 
 
+# ── Cache helpers ─────────────────────────────────────────────────────────────
+
+def _clear_admin_booking_cache():
+    cache.delete("admin_bookings_all")
+    cache.delete("receptionist_bookings_all")
+
+
+def _clear_admin_room_cache():
+    version = cache.get("rooms_cache_version", 0) + 1
+    cache.set("rooms_cache_version", version, timeout=None)
+    cache.delete("admin_rooms_all")
+
+
+def _clear_admin_payment_cache():
+    cache.delete("admin_payments_all")
+    cache.delete("receptionist_payments_all")
+
+
+def _clear_admin_guest_cache():
+    cache.delete("admin_guests_all")
+    cache.delete("receptionist_guests_all")
+
+
 # ── Permission helpers ────────────────────────────────────────────────────────
 
 def is_admin(user):
-    """Admin or is_staff only."""
     return user.is_authenticated and (
         getattr(user, "role", None) == "ADMIN" or
-        user.is_staff or
-        user.is_superuser
+        getattr(user, "is_staff", False)
     )
 
 
 def is_admin_or_receptionist(user):
-    """Admin or Receptionist (or is_staff)."""
     return user.is_authenticated and (
         getattr(user, "role", None) in ("ADMIN", "RECEPTIONIST") or
-        user.is_staff or
-        user.is_superuser
+        getattr(user, "is_staff", False)
     )
 
 
 def admin_only(view_func):
-    """Decorator — Admin access only. Receptionist is blocked."""
+    """Decorator — Admin access only."""
     def wrapper(self, request, *args, **kwargs):
         if not is_admin(request.user):
             return Response(
@@ -88,19 +111,26 @@ def staff_only(view_func):
 # ── Rooms ─────────────────────────────────────────────────────────────────────
 
 class AdminRoomsView(APIView):
-    """GET  /api/v1/admin/rooms/  — list all rooms (admin + receptionist)
-       POST /api/v1/admin/rooms/  — create room   (admin only)"""
+    """GET/POST /api/v1/admin/rooms/"""
 
     @staff_only
     def get(self, request):
+        cache_key = "admin_rooms_all"
+        cached    = cache.get(cache_key)
+        if cached:
+            return Response(cached)
+
         rooms = Room.objects.all().order_by("room_number")
-        return Response(AdminRoomSerializer(rooms, many=True).data)
+        data  = AdminRoomSerializer(rooms, many=True).data
+        cache.set(cache_key, data, timeout=60)
+        return Response(data)
 
     @admin_only
     def post(self, request):
         ser = AdminRoomSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
         room = ser.save()
+        _clear_admin_room_cache()
         return Response(AdminRoomSerializer(room).data, status=status.HTTP_201_CREATED)
 
 
@@ -109,11 +139,19 @@ class AdminRoomDetailView(APIView):
 
     @staff_only
     def get(self, request, pk):
+        cache_key = f"admin_room_{pk}"
+        cached    = cache.get(cache_key)
+        if cached:
+            return Response(cached)
+
         try:
             room = Room.objects.get(pk=pk)
         except Room.DoesNotExist:
             return Response({"message": "Room not found."}, status=404)
-        return Response(AdminRoomSerializer(room).data)
+
+        data = AdminRoomSerializer(room).data
+        cache.set(cache_key, data, timeout=60)
+        return Response(data)
 
     @admin_only
     def put(self, request, pk):
@@ -121,9 +159,15 @@ class AdminRoomDetailView(APIView):
             room = Room.objects.get(pk=pk)
         except Room.DoesNotExist:
             return Response({"message": "Room not found."}, status=404)
+
         ser = AdminRoomSerializer(room, data=request.data, partial=True)
         ser.is_valid(raise_exception=True)
         ser.save()
+
+        # Clear room caches
+        _clear_admin_room_cache()
+        cache.delete(f"admin_room_{pk}")
+
         return Response(AdminRoomSerializer(room).data)
 
     @admin_only
@@ -132,26 +176,33 @@ class AdminRoomDetailView(APIView):
             room = Room.objects.get(pk=pk)
         except Room.DoesNotExist:
             return Response({"message": "Room not found."}, status=404)
+
         room.delete()
+        _clear_admin_room_cache()
+        cache.delete(f"admin_room_{pk}")
         return Response({"message": "Room deleted."}, status=status.HTTP_204_NO_CONTENT)
 
 
 # ── Bookings ──────────────────────────────────────────────────────────────────
 
 class AdminBookingsView(APIView):
-    """GET /api/v1/admin/bookings/?status=CONFIRMED&search=ref
-       POST /api/v1/admin/bookings/ — create walk-in booking (admin + receptionist)
-    """
+    """GET/POST /api/v1/admin/bookings/"""
 
     @staff_only
     def get(self, request):
+        status_filter = request.query_params.get("status", "")
+        search        = request.query_params.get("search", "")
+        check_in      = request.query_params.get("checkIn", "")
+
+        # Only cache unfiltered requests
+        if not status_filter and not search and not check_in:
+            cached = cache.get("admin_bookings_all")
+            if cached:
+                return Response(cached)
+
         qs = Booking.objects.select_related(
             "room", "user", "guest_information"
         ).order_by("-created_at")
-
-        status_filter = request.query_params.get("status")
-        search        = request.query_params.get("search")
-        check_in      = request.query_params.get("checkIn")
 
         if status_filter:
             qs = qs.filter(status=status_filter)
@@ -164,15 +215,16 @@ class AdminBookingsView(APIView):
         if check_in:
             qs = qs.filter(check_in_date=check_in)
 
-        return Response(AdminBookingSerializer(qs, many=True).data)
+        data = AdminBookingSerializer(qs, many=True).data
+
+        if not status_filter and not search and not check_in:
+            cache.set("admin_bookings_all", data, timeout=30)
+
+        return Response(data)
 
     @staff_only
     def post(self, request):
-        """Create walk-in booking — receptionist & admin."""
-        from apps.rooms.models import Room as RoomModel
-        from django.utils import timezone
-        import uuid
-
+        """Create walk-in booking."""
         guest_email = request.data.get("guestEmail")
         room_id     = request.data.get("roomId")
 
@@ -185,11 +237,11 @@ class AdminBookingsView(APIView):
         try:
             guest = User.objects.get(email=guest_email)
         except User.DoesNotExist:
-            return Response({"message": f"Guest with email {guest_email} not found."}, status=404)
+            return Response({"message": f"Guest {guest_email} not found."}, status=404)
 
         try:
-            room = RoomModel.objects.get(pk=room_id)
-        except RoomModel.DoesNotExist:
+            room = Room.objects.get(pk=room_id)
+        except Room.DoesNotExist:
             return Response({"message": "Room not found."}, status=404)
 
         check_in_date  = request.data.get("checkInDate")
@@ -197,10 +249,8 @@ class AdminBookingsView(APIView):
         total_amount   = Decimal(str(request.data.get("totalAmount", 0)))
         deposit_amount = Decimal(str(request.data.get("depositAmount", total_amount / 2)))
         num_guests     = request.data.get("numberOfGuests", 1)
-        payment_type   = request.data.get("paymentType", "DEPOSIT")
         special_req    = request.data.get("specialRequests", "Walk-in booking")
 
-        from datetime import date
         nights = (
             date.fromisoformat(check_out_date) - date.fromisoformat(check_in_date)
         ).days
@@ -220,6 +270,9 @@ class AdminBookingsView(APIView):
             booking_reference = f"CGH-WALKIN-{uuid.uuid4().hex[:6].upper()}",
         )
 
+        _clear_admin_booking_cache()
+        cache.delete(f"my_bookings_{guest.id}")
+
         return Response(
             AdminBookingSerializer(booking).data,
             status=status.HTTP_201_CREATED,
@@ -231,21 +284,25 @@ class AdminBookingDetailView(APIView):
 
     @staff_only
     def get(self, request, pk):
+        cache_key = f"admin_booking_{pk}"
+        cached    = cache.get(cache_key)
+        if cached:
+            return Response(cached)
+
         try:
             booking = Booking.objects.select_related(
                 "room", "user", "guest_information"
             ).get(pk=pk)
         except Booking.DoesNotExist:
             return Response({"message": "Booking not found."}, status=404)
-        return Response(AdminBookingSerializer(booking).data)
+
+        data = AdminBookingSerializer(booking).data
+        cache.set(cache_key, data, timeout=30)
+        return Response(data)
 
 
 class AdminBookingStatusView(APIView):
-    """POST /api/v1/admin/bookings/<pk>/status/
-       Body: { "status": "CONFIRMED" }
-       Admin can set any status.
-       Receptionist cannot set CANCELLED.
-    """
+    """POST /api/v1/admin/bookings/<pk>/status/"""
 
     @staff_only
     def post(self, request, pk):
@@ -260,7 +317,6 @@ class AdminBookingStatusView(APIView):
         if new_status not in valid:
             return Response({"message": f"Invalid status. Valid: {valid}"}, status=400)
 
-        # Receptionist cannot cancel bookings
         if new_status == "CANCELLED" and not is_admin(request.user):
             return Response(
                 {"message": "Only admin can cancel bookings."},
@@ -269,6 +325,21 @@ class AdminBookingStatusView(APIView):
 
         booking.status = new_status
         booking.save(update_fields=["status"])
+
+        if booking.room:
+            if new_status in ("CHECKED_IN", "CONFIRMED", "PENDING_DEPOSIT"):
+                booking.room.available = False
+            elif new_status in ("COMPLETED", "CANCELLED", "CHECKED_OUT"):
+                booking.room.available = True
+            booking.room.save(update_fields=["available"])
+            _clear_admin_room_cache()
+
+        # Clear booking caches
+        _clear_admin_booking_cache()
+        cache.delete(f"admin_booking_{pk}")
+        cache.delete(f"receptionist_booking_{pk}")
+        cache.delete(f"my_bookings_{booking.user_id}")
+
         return Response({
             "message": f"Booking status updated to {new_status}.",
             "status":  new_status,
@@ -278,32 +349,49 @@ class AdminBookingStatusView(APIView):
 # ── Guests ────────────────────────────────────────────────────────────────────
 
 class AdminGuestsView(APIView):
-    """GET /api/v1/admin/guests/?search=email"""
+    """GET /api/v1/admin/guests/"""
 
     @staff_only
     def get(self, request):
         search = request.query_params.get("search", "")
+
+        if not search:
+            cache_key = "admin_guests_all"
+            cached    = cache.get(cache_key)
+            if cached:
+                return Response(cached)
+
         qs = User.objects.filter(
             role__in=["USER", "RECEPTIONIST"]
         ).order_by("-created_at")
+
         if search:
             qs = qs.filter(
-                Q(email__icontains=search)    |
+                Q(email__icontains=search) |
                 Q(username__icontains=search)
             )
-        # Receptionist searches all guests (USER role)
+
         if not is_admin(request.user):
             qs = qs.filter(role="USER")
-        return Response(AdminGuestSerializer(qs, many=True).data)
+
+        data = AdminGuestSerializer(qs, many=True).data
+
+        if not search:
+            cache.set("admin_guests_all", data, timeout=60)
+
+        return Response(data)
 
 
 class AdminGuestDetailView(APIView):
-    """GET   /api/v1/admin/guests/<pk>/
-       PATCH /api/v1/admin/guests/<pk>/ — edit contact (receptionist + admin)
-    """
+    """GET/PATCH /api/v1/admin/guests/<pk>/"""
 
     @staff_only
     def get(self, request, pk):
+        cache_key = f"admin_guest_{pk}"
+        cached    = cache.get(cache_key)
+        if cached:
+            return Response(cached)
+
         try:
             guest = User.objects.get(pk=pk)
         except User.DoesNotExist:
@@ -321,23 +409,21 @@ class AdminGuestDetailView(APIView):
             "nationality":   profile.nationality    if profile else None,
         } if profile else None
 
+        cache.set(cache_key, data, timeout=60)
         return Response(data)
 
     @staff_only
     def patch(self, request, pk):
-        """Receptionist can update username and phone only."""
         try:
             guest = User.objects.get(pk=pk)
         except User.DoesNotExist:
             return Response({"message": "Guest not found."}, status=404)
 
-        # Allow updating name and phone only
         allowed_fields = ["username", "phone"]
         for field in allowed_fields:
             if field in request.data:
                 setattr(guest, field, request.data[field])
 
-        # Update profile phone if exists
         if "phone" in request.data:
             profile = GuestInformation.objects.filter(user=guest).first()
             if profile:
@@ -345,11 +431,18 @@ class AdminGuestDetailView(APIView):
                 profile.save(update_fields=["contact_number"])
 
         guest.save(update_fields=["username"] if "username" in request.data else [])
+
+        # Clear guest caches
+        _clear_admin_guest_cache()
+        cache.delete(f"admin_guest_{pk}")
+        cache.delete(f"receptionist_guest_{pk}")
+        cache.delete(f"guest_profile_{pk}")
+
         return Response(AdminGuestSerializer(guest).data)
 
 
 class AdminGuestToggleActiveView(APIView):
-    """POST /api/v1/admin/guests/<pk>/toggle-active/ — admin only"""
+    """POST /api/v1/admin/guests/<pk>/toggle-active/"""
 
     @admin_only
     def post(self, request, pk):
@@ -360,6 +453,12 @@ class AdminGuestToggleActiveView(APIView):
 
         guest.is_active = not guest.is_active
         guest.save(update_fields=["is_active"])
+
+        # Clear guest caches
+        _clear_admin_guest_cache()
+        cache.delete(f"admin_guest_{pk}")
+        cache.delete(f"receptionist_guest_{pk}")
+
         action = "activated" if guest.is_active else "deactivated"
         return Response({"message": f"Guest account {action}.", "isActive": guest.is_active})
 
@@ -367,15 +466,19 @@ class AdminGuestToggleActiveView(APIView):
 # ── Payments ──────────────────────────────────────────────────────────────────
 
 class AdminPaymentsView(APIView):
-    """GET  /api/v1/admin/payments/?status=PAID — view payments (admin + receptionist)
-       POST /api/v1/admin/payments/             — record cash payment (admin + receptionist)
-    """
+    """GET/POST /api/v1/admin/payments/"""
 
     @staff_only
     def get(self, request):
+        status_filter = request.query_params.get("status", "")
+        search        = request.query_params.get("search", "")
+
+        if not status_filter and not search:
+            cached = cache.get("admin_payments_all")
+            if cached:
+                return Response(cached)
+
         qs = Payment.objects.all().order_by("-created_at")
-        status_filter = request.query_params.get("status")
-        search        = request.query_params.get("search")
         if status_filter:
             qs = qs.filter(status=status_filter)
         if search:
@@ -383,14 +486,17 @@ class AdminPaymentsView(APIView):
                 Q(description__icontains=search) |
                 Q(email__icontains=search)
             )
-        return Response(AdminPaymentSerializer(qs, many=True).data)
+
+        data = AdminPaymentSerializer(qs, many=True).data
+
+        if not status_filter and not search:
+            cache.set("admin_payments_all", data, timeout=30)
+
+        return Response(data)
 
     @staff_only
     def post(self, request):
-        """Record a cash payment — receptionist & admin."""
-        from django.utils import timezone
-        import uuid
-
+        """Record a cash payment."""
         booking_id  = request.data.get("bookingId")
         amount      = request.data.get("amount")
         description = request.data.get("description", "Cash payment at front desk")
@@ -407,7 +513,6 @@ class AdminPaymentsView(APIView):
         except Booking.DoesNotExist:
             return Response({"message": "Booking not found."}, status=404)
 
-        # Cannot modify payment amounts — use exact amount provided
         payment = Payment.objects.create(
             booking_id       = booking_id,
             amount           = Decimal(str(amount)),
@@ -419,6 +524,10 @@ class AdminPaymentsView(APIView):
             paymongo_link_id = f"CASH-{booking.booking_reference}-{uuid.uuid4().hex[:6].upper()}",
             checkout_url     = "",
         )
+
+        _clear_admin_payment_cache()
+        cache.delete(f"my_payments_{booking.user.email}")
+
         return Response(AdminPaymentSerializer(payment).data, status=201)
 
 
@@ -427,17 +536,23 @@ class AdminPaymentDetailView(APIView):
 
     @staff_only
     def get(self, request, pk):
+        cache_key = f"admin_payment_{pk}"
+        cached    = cache.get(cache_key)
+        if cached:
+            return Response(cached)
+
         try:
             payment = Payment.objects.get(pk=pk)
         except Payment.DoesNotExist:
             return Response({"message": "Payment not found."}, status=404)
-        return Response(AdminPaymentSerializer(payment).data)
+
+        data = AdminPaymentSerializer(payment).data
+        cache.set(cache_key, data, timeout=30)
+        return Response(data)
 
 
 class AdminPaymentVerifyView(APIView):
-    """POST /api/v1/admin/payments/<pk>/verify/
-       Manually marks a payment as PAID — admin only.
-    """
+    """POST /api/v1/admin/payments/<pk>/verify/ — admin only"""
 
     @admin_only
     def post(self, request, pk):
@@ -449,12 +564,55 @@ class AdminPaymentVerifyView(APIView):
         if payment.status == "PAID":
             return Response({"message": "Payment is already marked as PAID."})
 
-        from django.utils import timezone
         payment.status  = "PAID"
         payment.paid_at = timezone.now()
         payment.save(update_fields=["status", "paid_at"])
+
+        # Clear caches
+        _clear_admin_payment_cache()
+        cache.delete(f"admin_payment_{pk}")
+        cache.delete(f"my_payments_{payment.email}")
 
         return Response({
             "message":   "Payment marked as PAID.",
             "paymentId": payment.pk,
         })
+
+
+# ── Staff Management ──────────────────────────────────────────────────────────
+
+class CreateStaffView(APIView):
+    """POST /api/v1/admin/staff/create/"""
+
+    @admin_only
+    def post(self, request):
+        email    = request.data.get("email")
+        username = request.data.get("username")
+        password = request.data.get("password")
+        role     = request.data.get("role", "RECEPTIONIST")
+
+        if not email or not password:
+            return Response({"message": "email and password are required."}, status=400)
+
+        if role not in ["RECEPTIONIST", "ADMIN"]:
+            return Response({"message": "Role must be RECEPTIONIST or ADMIN."}, status=400)
+
+        if User.objects.filter(email=email).exists():
+            return Response({"message": "Email already registered."}, status=409)
+
+        user = User.objects.create(
+            email    = email,
+            username = username or email.split("@")[0],
+            role     = role,
+        )
+        user.set_password(password)
+        user.save()
+
+        _clear_admin_guest_cache()
+
+        return Response({
+            "message":  f"{role} account created successfully.",
+            "email":    user.email,
+            "username": user.username,
+            "role":     user.role,
+        }, status=201)
