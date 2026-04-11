@@ -21,8 +21,11 @@ POST /api/v1/receptionist/payments/cash/           → record cash payment
 """
 import logging
 import uuid
+import json
+import random
+import string
 from datetime import date
-
+from apps.utils.email import send_walkin_welcome_email
 from django.core.cache import cache
 from django.db.models import Q
 from django.utils import timezone
@@ -193,6 +196,8 @@ class ArrivalsView(APIView):
         return Response(data)
 
 
+# apps/receptionist/views.py
+
 class DeparturesView(APIView):
     """GET /api/v1/receptionist/departures/?date=YYYY-MM-DD"""
 
@@ -207,25 +212,16 @@ class DeparturesView(APIView):
         except ValueError:
             return Response({"message": "Invalid date format."}, status=400)
 
-        cache_key = f"receptionist_departures_{target_date}"
-        cached    = cache.get(cache_key)
-        if cached:
-            return Response(cached)
-
+        # Get bookings checking out today that are checked in
         bookings = Booking.objects.filter(
             check_out_date=target_date,
             status=Booking.BookingStatus.CHECKED_IN,
         ).select_related("room", "user", "guest_information").order_by("created_at")
 
-        data = {
-            "date":       str(target_date),
-            "count":      bookings.count(),
-            "departures": [_booking_detail(b) for b in bookings],
-        }
+        # Return as array directly (not wrapped in an object)
+        data = [_booking_detail(b) for b in bookings]
 
-        cache.set(cache_key, data, timeout=30)
-        return Response(data)
-
+        return Response(data)  # Return array directly
 
 # ── Bookings ──────────────────────────────────────────────────────────────────
 
@@ -404,16 +400,25 @@ class CheckOutView(APIView):
             "remainingPaid":    remaining,
         })
 
+def generate_temp_password(length=8):
+    """Generate a random temporary password"""
+    characters = string.ascii_letters + string.digits
+    return ''.join(random.choices(characters, k=length))
+
 
 class WalkInBookingView(APIView):
     """POST /api/v1/receptionist/bookings/walkin/"""
 
     def post(self, request):
+        # Check authentication
         err = receptionist_check(request)
         if err:
             return err
 
-        data     = request.data
+        data = request.data
+        logger.info(f"Walk-in booking request data: {data}")
+
+        # Validate required fields
         required = ["roomId", "guestEmail", "checkInDate", "checkOutDate"]
         for field in required:
             if not data.get(field):
@@ -422,84 +427,184 @@ class WalkInBookingView(APIView):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
+        # Get room
         try:
             room = Room.objects.get(id=data["roomId"], available=True)
         except Room.DoesNotExist:
-            return Response({"message": "Room not found or not available."}, status=404)
+            return Response(
+                {"message": "Room not found or not available."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
 
         email = data["guestEmail"].lower().strip()
-        user  = User.objects.filter(email=email).first()
-        if not user:
-            username = email.split("@")[0]
-            user     = User.objects.create(email=email, username=username, role="USER")
-            user.set_unusable_password()
-            user.save()
+        phone = data.get("guestPhone", "")
+        is_new_user = False
+        temp_password = None
 
+        # Get or create user
+        user = User.objects.filter(email=email).first()
+
+        if not user:
+            # Create username from email
+            username = email.split("@")[0]
+            base_username = username
+            counter = 1
+            while User.objects.filter(username=username).exists():
+                username = f"{base_username}{counter}"
+                counter += 1
+
+            # Generate temporary password
+            temp_password = generate_temp_password()
+
+            # Create user
+            user = User.objects.create(
+                email=email,
+                username=username,
+                role="USER",
+            )
+            user.set_password(temp_password)
+            user.save()
+            is_new_user = True
+            logger.info(f"Created new user account for {email}")
+
+        # Get or create GuestInformation
         guest_info = GuestInformation.objects.filter(user=user).first()
 
-        from datetime import date as date_cls
-        check_in  = date_cls.fromisoformat(data["checkInDate"])
-        check_out = date_cls.fromisoformat(data["checkOutDate"])
-        nights    = (check_out - check_in).days
+        if not guest_info:
+            # Create GuestInformation with all required fields
+            guest_info = GuestInformation.objects.create(
+                user=user,
+                first_name=data.get("firstName", "Walk-in"),
+                last_name=data.get("lastName", "Guest"),
+                gender=data.get("gender", "Not Specified"),
+                home_address=data.get("address", "Not provided"),
+                nationality=data.get("nationality", "Filipino"),
+                date_of_birth=data.get("dateOfBirth") or date(2000, 1, 1),
+                contact_number=phone or "Not provided",
+                id_type=data.get("idType", "OTHER"),
+                id_number=data.get("idNumber", ""),
+                passport_number=data.get("passportNumber", ""),
+                visa_type=data.get("visaType", ""),
+                visa_expiry_date=data.get("visaExpiryDate") or None,
+            )
+            logger.info(f"Created GuestInformation for {email}")
+        else:
+            # Update existing guest info if needed
+            updated = False
+            if phone and not guest_info.contact_number:
+                guest_info.contact_number = phone
+                updated = True
+            if data.get("firstName") and not guest_info.first_name:
+                guest_info.first_name = data.get("firstName")
+                updated = True
+            if data.get("lastName") and not guest_info.last_name:
+                guest_info.last_name = data.get("lastName")
+                updated = True
+            if data.get("address") and not guest_info.home_address:
+                guest_info.home_address = data.get("address")
+                updated = True
+            if updated:
+                guest_info.save()
+                logger.info(f"Updated GuestInformation for {email}")
+
+        # Parse dates
+        check_in = date.fromisoformat(data["checkInDate"])
+        check_out = date.fromisoformat(data["checkOutDate"])
+        nights = (check_out - check_in).days
 
         if nights <= 0:
-            return Response({"message": "Check-out must be after check-in."}, status=400)
+            return Response(
+                {"message": "Check-out must be after check-in."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
-        total_amount      = float(data.get("amountPaid") or room.price_per_night * nights)
+        # Calculate amounts
+        total_amount = float(data.get("amountPaid") or room.price_per_night * nights)
         booking_reference = f"WALK-{uuid.uuid4().hex[:8].upper()}"
 
+        # Create booking
         booking = Booking.objects.create(
-            booking_reference    = booking_reference,
-            user                 = user,
-            guest_information_id = guest_info.id if guest_info else None,
-            room                 = room,
-            check_in_date        = check_in,
-            check_out_date       = check_out,
-            number_of_guests     = int(data.get("numberOfGuests", 1)),
-            number_of_nights     = nights,
-            total_amount         = total_amount,
-            deposit_amount       = total_amount,
-            remaining_amount     = 0,
-            special_requests     = data.get("specialRequests", ""),
-            status               = Booking.BookingStatus.CHECKED_IN,
-            payment_status       = Booking.PaymentStatus.FULLY_PAID,
+            booking_reference=booking_reference,
+            user=user,
+            guest_information=guest_info,
+            room=room,
+            check_in_date=check_in,
+            check_out_date=check_out,
+            number_of_guests=int(data.get("numberOfGuests", 1)),
+            number_of_nights=nights,
+            total_amount=total_amount,
+            deposit_amount=total_amount,
+            remaining_amount=0,
+            special_requests=data.get("specialRequests", ""),
+            status=Booking.BookingStatus.CHECKED_IN,
+            payment_status=Booking.PaymentStatus.FULLY_PAID,
         )
 
+        # Mark room as unavailable
         room.available = False
         room.save(update_fields=["available"])
 
+        # Create payment record
         Payment.objects.create(
-            paymongo_link_id = f"CASH-{booking_reference}",
-            checkout_url     = "",
-            email            = email,
-            description      = f"Walk-in payment for booking {booking_reference}",
-            amount           = total_amount,
-            status           = "PAID",
-            type             = "ROOM_BOOKING",
-            booking_id       = booking.id,
-            paid_at          = timezone.now(),
+            paymongo_link_id=f"CASH-{booking_reference}",
+            checkout_url="",
+            email=email,
+            description=f"Walk-in payment for booking {booking_reference}",
+            amount=total_amount,
+            status="PAID",
+            type="ROOM_BOOKING",
+            booking_id=booking.id,
+            paid_at=timezone.now(),
         )
 
+        # Clear caches
         _clear_booking_cache()
         _clear_room_cache()
 
+        # ============================================================
+        # SEND EMAIL - ADD THIS SECTION
+        # ============================================================
+        if is_new_user and temp_password:
+            try:
+                # Import the email function
+                from apps.utils.email import send_walkin_welcome_email
+
+                # Send the email
+                email_sent = send_walkin_welcome_email(user, temp_password, booking, guest_info)
+
+                if email_sent:
+                    logger.info(f"✅ Welcome email sent to {email}")
+                else:
+                    logger.warning(f"❌ Failed to send welcome email to {email}")
+            except ImportError as e:
+                logger.error(f"❌ Could not import email module: {e}")
+            except Exception as e:
+                logger.error(f"❌ Email error: {e}")
+
         logger.info(
-            "Walk-in booking %s created by receptionist %s for guest %s",
-            booking_reference, request.user.id, email,
+            f"Walk-in booking {booking_reference} created by {request.user.id} for {email} (new_user={is_new_user})"
         )
 
-        return Response({
-            "message":          "Walk-in booking created and guest checked in.",
+        # Prepare response
+        response_data = {
+            "success": True,
+            "message": "Walk-in booking created and guest checked in.",
             "bookingReference": booking_reference,
-            "roomNumber":       room.room_number,
-            "guestEmail":       email,
-            "checkInDate":      str(check_in),
-            "checkOutDate":     str(check_out),
-            "nights":           nights,
-            "totalAmount":      total_amount,
-            "paymentMethod":    data.get("paymentMethod", "CASH"),
-        }, status=status.HTTP_201_CREATED)
+            "roomNumber": room.room_number,
+            "guestEmail": email,
+            "guestName": f"{guest_info.first_name} {guest_info.last_name}".strip() or user.username,
+            "checkInDate": str(check_in),
+            "checkOutDate": str(check_out),
+            "nights": nights,
+            "totalAmount": total_amount,
+        }
 
+        if is_new_user and temp_password:
+            response_data["tempPassword"] = temp_password
+            response_data["isNewUser"] = True
+            response_data["message"] += f" Temporary password sent to {email}"
+
+        return Response(response_data, status=status.HTTP_201_CREATED)
 
 # ── Guests ────────────────────────────────────────────────────────────────────
 
@@ -873,3 +978,167 @@ def _booking_detail(booking):
             "idNumber":      profile.id_number,
         } if profile else None,
     }
+
+
+class VerifyQRCheckInView(APIView):
+    """
+    POST /api/v1/receptionist/verify-qr-checkin/
+
+    Receptionist scans guest's QR code to check them in.
+
+    Expected QR data format (JSON):
+    {
+        "bookingReference": "CGH-ABC123XYZ",
+        "guestName": "John Doe",
+        "checkInDate": "2026-04-05",
+        "roomType": "DELUXE",
+        "roomNumber": "301"
+    }
+
+    Or just a plain string with the booking reference.
+    """
+
+    def post(self, request):
+        # Check if user is receptionist or admin
+        err = receptionist_check(request)
+        if err:
+            return err
+
+        # Get QR data from request
+        qr_data = request.data.get('qr_data')
+        if not qr_data:
+            return Response(
+                {"error": "QR data is required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Parse QR data - could be JSON string or plain text
+        booking_ref = None
+        try:
+            # Try to parse as JSON first
+            if isinstance(qr_data, str):
+                if qr_data.strip().startswith('{'):
+                    parsed = json.loads(qr_data)
+                    booking_ref = parsed.get('bookingReference')
+                else:
+                    # Plain text - assume it's the booking reference
+                    booking_ref = qr_data
+            else:
+                # Already a dict
+                booking_ref = qr_data.get('bookingReference')
+        except json.JSONDecodeError:
+            # Not JSON, use as is
+            booking_ref = qr_data
+
+        if not booking_ref:
+            return Response(
+                {"error": "Invalid QR code: No booking reference found"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Find the booking by reference
+        try:
+            booking = Booking.objects.select_related('room', 'user', 'guest_information').get(
+                booking_reference=booking_ref
+            )
+        except Booking.DoesNotExist:
+            return Response(
+                {"error": f"Booking {booking_ref} not found"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        # Check if booking can be checked in
+        today = timezone.now().date()
+        check_in_date = booking.check_in_date
+
+        # Validation checks
+        if booking.status == 'CHECKED_IN':
+            return Response({
+                "error": "Already checked in",
+                "booking": {
+                    "reference": booking.booking_reference,
+                    "guestName": booking.user.username,
+                    "status": booking.status
+                }
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        if booking.status == 'CHECKED_OUT':
+            return Response({
+                "error": "Guest has already checked out",
+                "booking": {
+                    "reference": booking.booking_reference,
+                    "status": booking.status
+                }
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        if booking.status == 'CANCELLED':
+            return Response({
+                "error": "Booking has been cancelled",
+                "booking": {
+                    "reference": booking.booking_reference,
+                    "status": booking.status
+                }
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # Check if check-in date is today or past (allow early check-in?)
+        if check_in_date > today:
+            return Response({
+                "error": f"Check-in date is {check_in_date}, not today",
+                "booking": {
+                    "reference": booking.booking_reference,
+                    "checkInDate": str(check_in_date)
+                }
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # For online payments, check if payment is completed
+        if hasattr(booking, 'payment_method') and booking.payment_method == 'ONLINE':
+            if booking.payment_status not in ['DEPOSIT_PAID', 'FULLY_PAID']:
+                return Response({
+                    "error": "Payment not completed yet",
+                    "booking": {
+                        "reference": booking.booking_reference,
+                        "paymentStatus": booking.payment_status
+                    }
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+        # Perform the check-in using your existing logic
+        old_status = booking.status
+
+        # Update booking status
+        booking.status = 'CHECKED_IN'
+        booking.save(update_fields=["status"])
+
+        # Update room availability
+        if booking.room:
+            booking.room.available = False
+            booking.room.save(update_fields=["available"])
+
+        # Clear caches
+        _clear_booking_cache()
+        _clear_room_cache()
+        cache.delete(f"receptionist_booking_{booking.id}")
+
+        logger.info(
+            "QR Check-in: Guest %s checked in to room %s via QR scan by receptionist %s",
+            booking.user.email, booking.room.room_number, request.user.id,
+        )
+
+        # Return success response
+        return Response({
+            "success": True,
+            "message": f"{booking.user.username} checked in successfully",
+            "booking": {
+                "id": booking.id,
+                "reference": booking.booking_reference,
+                "guestName": booking.user.username,
+                "guestEmail": booking.user.email,
+                "roomType": booking.room.room_type if booking.room else None,
+                "roomNumber": booking.room.room_number if booking.room else None,
+                "checkInDate": str(booking.check_in_date),
+                "checkOutDate": str(booking.check_out_date),
+                "status": booking.status,
+                "remainingAmount": float(booking.remaining_amount or 0),
+                "depositAmount": float(booking.deposit_amount or 0),
+                "totalAmount": float(booking.total_amount or 0)
+            }
+        })

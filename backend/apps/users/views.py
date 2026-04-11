@@ -144,6 +144,8 @@ class LoginView(APIView):
             dashboard = "/admin/dashboard"
         elif role == "RECEPTIONIST":
             dashboard = "/receptionist/dashboard"
+        elif role == "STAFF":
+            dashboard = "/staff/dashboard"
         else:
             dashboard = "/guest/dashboard"
 

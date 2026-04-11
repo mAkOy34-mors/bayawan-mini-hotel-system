@@ -1,10 +1,8 @@
 """apps/admin_panel/urls.py"""
 from django.urls import path
 from . import views
-
-
-
-
+from .views import AdminUsersListView, AdminUserCreateView, AdminUserUpdateView, AdminUserDeleteView, \
+    AdminUserToggleStatusView, AdminRoomUploadImageView
 
 urlpatterns = [
     # Rooms
@@ -22,4 +20,11 @@ urlpatterns = [
     path("payments/",                     views.AdminPaymentsView.as_view()),
     path("payments/<int:pk>/",            views.AdminPaymentDetailView.as_view()),
     path("payments/<int:pk>/verify/",     views.AdminPaymentVerifyView.as_view()),
+    path('users/', AdminUsersListView.as_view(), name='admin-users-list'),
+    path('users/create/', AdminUserCreateView.as_view(), name='admin-users-create'),
+    path('users/<int:user_id>/', AdminUserUpdateView.as_view(), name='admin-users-update'),
+    path('users/<int:user_id>/delete/', AdminUserDeleteView.as_view(), name='admin-users-delete'),
+    path('users/<int:user_id>/toggle-status/', AdminUserToggleStatusView.as_view(), name='admin-users-toggle-status'),
+    # apps/admin_panel/urls.py
+    path('rooms/<int:room_id>/upload-image/', AdminRoomUploadImageView.as_view(), name='admin-room-upload-image'),
 ]

@@ -27,10 +27,12 @@ import uuid
 from decimal import Decimal
 from datetime import date
 
+from django.conf import settings
 from django.core.cache import cache
 from django.db.models import Q
 from django.utils import timezone
 from rest_framework import status
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -43,6 +45,18 @@ from .serializers import (
     AdminBookingSerializer, AdminGuestSerializer,
     AdminPaymentSerializer, AdminRoomSerializer,
 )
+
+from rest_framework.parsers import MultiPartParser, FormParser
+from django.core.files.storage import default_storage
+from django.core.files.base import ContentFile
+import os
+
+
+# Add these imports at the top if not already present
+from django.contrib.auth import get_user_model
+from django.db import transaction
+
+User = get_user_model()
 
 
 # ── Cache helpers ─────────────────────────────────────────────────────────────
@@ -115,6 +129,7 @@ class AdminRoomsView(APIView):
 
     @staff_only
     def get(self, request):
+
         cache_key = "admin_rooms_all"
         cached    = cache.get(cache_key)
         if cached:
@@ -616,3 +631,340 @@ class CreateStaffView(APIView):
             "username": user.username,
             "role":     user.role,
         }, status=201)
+
+
+# ── User Management ──────────────────────────────────────────────────────────
+
+# Replace the AdminUsersListView with this corrected version:
+
+# apps/admin_panel/views.py - Updated to include employee information
+
+class AdminUsersListView(APIView):
+    """GET /api/v1/admin/users/ - Get all staff users"""
+
+    @admin_only
+    def get(self, request):
+        cache_key = "admin_users_all"
+        cached = cache.get(cache_key)
+        if cached:
+            return Response(cached)
+
+        from apps.employees.models import EmployeeInformation
+
+        employees = EmployeeInformation.objects.select_related('user').all().order_by('-created_at')
+
+        users_data = []
+        for emp in employees:
+            user = emp.user
+
+            users_data.append({
+                'id': user.id,
+                'username': user.username,
+                'email': user.email,
+                'role': user.role,  # Use actual database role (RECEPTIONIST or ADMIN)
+                'isActive': True,
+                'firstName': emp.first_name,
+                'lastName': emp.last_name,
+                'contactNumber': emp.contact_number,
+                'employeeId': emp.employee_id,
+                'department': emp.department,
+                'position': emp.position,  # Store position separately
+                'hireDate': emp.hire_date,
+                'createdAt': user.created_at,
+                'updatedAt': user.updated_at,
+            })
+
+        cache.set(cache_key, users_data, timeout=60)
+        return Response(users_data)
+
+
+class AdminUserCreateView(APIView):
+    """POST /api/v1/admin/users/create/ - Create a new user"""
+
+    @admin_only
+    @transaction.atomic
+    def post(self, request):
+        username = request.data.get('username')
+        email = request.data.get('email')
+        password = request.data.get('password')
+
+        # Get the role from frontend (can be RECEPTIONIST, HOUSEKEEPER, STAFF, ADMIN)
+        frontend_role = request.data.get('role', 'STAFF')
+
+        # Map frontend roles to database roles
+        # Only RECEPTIONIST and ADMIN exist in the User table
+        valid_roles = ['ADMIN', 'RECEPTIONIST', 'HOUSEKEEPER', 'STAFF']
+        db_role = frontend_role if frontend_role in valid_roles else 'STAFF'
+
+        # Get employee information
+        first_name = request.data.get('firstName', '')
+        last_name = request.data.get('lastName', '')
+        contact_number = request.data.get('contactNumber', '')
+        employee_id = request.data.get('employeeId', '')
+        department = request.data.get('department', '')
+        position = request.data.get('position', frontend_role)  # Store the actual position
+        hire_date = request.data.get('hireDate', timezone.now().date())
+
+        # Validation
+        if not username or not email or not password:
+            return Response(
+                {'error': 'Username, email, and password are required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if User.objects.filter(username=username).exists():
+            return Response(
+                {'error': 'Username already exists'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if User.objects.filter(email=email).exists():
+            return Response(
+                {'error': 'Email already exists'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Create user with the mapped database role
+        user = User.objects.create_user(
+            email=email,
+            username=username,
+            password=password,
+            role=db_role,
+        )
+
+        # Create employee information
+        from apps.employees.models import EmployeeInformation
+
+        if not employee_id:
+            employee_id = f"EMP{user.id:06d}"
+
+        EmployeeInformation.objects.create(
+            user=user,
+            first_name=first_name or username,
+            last_name=last_name,
+            contact_number=contact_number,
+            employee_id=employee_id,
+            department=department,
+            position=position,  # This stores the actual frontend role (Receptionist, Housekeeper, Staff)
+            hire_date=hire_date,
+            home_address='',
+            date_of_birth='2000-01-01',
+        )
+
+        # Clear cache
+        cache.delete("admin_users_all")
+
+        return Response({
+            'id': user.id,
+            'username': user.username,
+            'email': user.email,
+            'role': position,  # Return the position as the role for display
+            'dbRole': db_role,  # Optional: return the actual database role
+            'isActive': True,
+            'firstName': first_name,
+            'lastName': last_name,
+            'employeeId': employee_id,
+            'position': position,
+            'message': 'User created successfully'
+        }, status=status.HTTP_201_CREATED)
+
+
+import logging
+
+logger = logging.getLogger(__name__)
+
+
+class AdminUserUpdateView(APIView):
+    """PUT /api/v1/admin/users/<int:user_id>/ - Update user"""
+
+    @admin_only
+    @transaction.atomic
+    def put(self, request, user_id):
+        logger.info("=" * 50)
+        logger.info(f"UPDATE USER {user_id}")
+        logger.info(f"Request data: {request.data}")
+
+        try:
+            user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        # Update user fields
+        username = request.data.get('username')
+        email = request.data.get('email')
+        frontend_role = request.data.get('role')
+
+        logger.info(f"Current user role: {user.role}")
+        logger.info(f"Frontend role received: {frontend_role}")
+
+        if username and username != user.username:
+            if User.objects.filter(username=username).exists():
+                return Response({'error': 'Username already exists'}, status=400)
+            user.username = username
+
+        if email and email != user.email:
+            if User.objects.filter(email=email).exists():
+                return Response({'error': 'Email already exists'}, status=400)
+            user.email = email
+
+        # Update role in User table
+        if frontend_role:
+            valid_roles = ['ADMIN', 'RECEPTIONIST', 'HOUSEKEEPER', 'STAFF']
+            if frontend_role in valid_roles:
+                user.role = frontend_role
+                logger.info(f"Setting user.role to: {frontend_role}")
+            else:
+                logger.warning(f"Invalid role: {frontend_role}")
+
+        # Update password if provided
+        password = request.data.get('password')
+        if password:
+            user.set_password(password)
+
+        user.save()
+        logger.info(f"User saved. New role: {user.role}")
+
+        # Update employee information
+        from apps.employees.models import EmployeeInformation
+
+        try:
+            employee = EmployeeInformation.objects.get(user=user)
+            logger.info(f"Found existing employee record")
+
+            # Update employee fields
+            employee.first_name = request.data.get('firstName', employee.first_name)
+            employee.last_name = request.data.get('lastName', employee.last_name)
+            employee.contact_number = request.data.get('contactNumber', employee.contact_number)
+            employee.employee_id = request.data.get('employeeId', employee.employee_id)
+            employee.department = request.data.get('department', employee.department)
+            employee.position = request.data.get('position', frontend_role or employee.position)
+            employee.save()
+            logger.info(f"Employee position set to: {employee.position}")
+
+        except EmployeeInformation.DoesNotExist:
+            logger.info(f"Creating new employee record")
+            employee = EmployeeInformation.objects.create(
+                user=user,
+                first_name=request.data.get('firstName', user.username),
+                last_name=request.data.get('lastName', ''),
+                contact_number=request.data.get('contactNumber', ''),
+                employee_id=request.data.get('employeeId', f"EMP{user.id:06d}"),
+                department=request.data.get('department', ''),
+                position=request.data.get('position', frontend_role or 'STAFF'),
+                hire_date=request.data.get('hireDate', timezone.now().date()),
+                home_address='',
+                date_of_birth='2000-01-01',
+            )
+
+        # Clear cache
+        cache.delete("admin_users_all")
+        cache.delete(f"admin_user_{user_id}")
+
+        # Return the position as the role for display
+        display_role = employee.position if employee else (frontend_role or user.role)
+        logger.info(f"Returning role: {display_role}")
+        logger.info("=" * 50)
+
+        return Response({
+            'id': user.id,
+            'username': user.username,
+            'email': user.email,
+            'role': display_role,
+            'isActive': True,
+            'message': 'User updated successfully'
+        })
+
+class AdminUserDeleteView(APIView):
+    """DELETE /api/v1/admin/users/<id>/delete/ - Delete user"""
+
+    @admin_only
+    def delete(self, request, user_id):
+        try:
+            user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        # Prevent admin from deleting themselves
+        if user.id == request.user.id:
+            return Response({'error': 'You cannot delete your own account'}, status=400)
+
+        username = user.username
+        user.delete()
+
+        # Clear cache
+        cache.delete("admin_users_all")
+
+        logger.info(f"Admin {request.user.username} deleted user {username}")
+
+        return Response({'message': 'User deleted successfully'})
+
+
+class AdminUserToggleStatusView(APIView):
+    """PATCH /api/v1/admin/users/<id>/toggle-status/ - Enable/disable user"""
+
+    @admin_only
+    def patch(self, request, user_id):
+        try:
+            user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        # Prevent admin from disabling themselves
+        if user.id == request.user.id:
+            return Response({'error': 'You cannot change your own status'}, status=400)
+
+        is_active = request.data.get('isActive')
+        if is_active is not None:
+            user.is_active = is_active
+            user.save()
+
+        # Clear cache
+        cache.delete("admin_users_all")
+        cache.delete(f"admin_user_{user_id}")
+
+        status_text = "enabled" if user.is_active else "disabled"
+        logger.info(f"Admin {request.user.username} {status_text} user {user.username}")
+
+        return Response({
+            'id': user.id,
+            'username': user.username,
+            'isActive': user.is_active,
+            'message': f'User {status_text} successfully'
+        })
+
+
+# apps/admin_panel/views.py
+
+class AdminRoomUploadImageView(APIView):
+    """POST /api/v1/admin/rooms/<room_id>/upload-image/"""
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+
+    @admin_only
+    def post(self, request, room_id):
+        try:
+            room = Room.objects.get(id=room_id)
+        except Room.DoesNotExist:
+            return Response({"error": "Room not found"}, status=404)
+
+        if 'image' not in request.FILES:
+            return Response({"error": "No image provided"}, status=400)
+
+        image_file = request.FILES['image']
+
+        # Generate unique filename
+        file_extension = os.path.splitext(image_file.name)[1]
+        filename = f"rooms/room_{room.room_number}_{uuid.uuid4().hex[:8]}{file_extension}"
+
+        # Save file
+        saved_path = default_storage.save(filename, ContentFile(image_file.read()))
+
+        # Update room image URL
+        image_url = f"{settings.MEDIA_URL}{saved_path}"
+        room.image_url = image_url
+        room.save()
+
+        return Response({
+            "message": "Image uploaded successfully",
+            "image_url": image_url
+        })

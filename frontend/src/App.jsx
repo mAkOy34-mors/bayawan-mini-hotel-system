@@ -10,12 +10,16 @@ import { BookingPage } from './pages/BookingPage';
 import { PaymentsPage } from './pages/PaymentsPage';
 import { ProfilePage } from './pages/ProfilePage';
 import { MyBookingsPage } from './pages/MyBookingsPage';  
+import { EmergencyPage } from './pages/EmergencyPage'; 
+import { EmergencyProvider } from './context/EmergencyContext';
+import { StaffApp } from './staff/StaffApp';
 import { RewardsPage, SettingsPage, SupportPage } from './pages/OtherPages';
 import { PAGE_TITLES } from './constants/config';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import './styles/main.css';
 import { AdminApp } from './admin/AdminApp';
 import { ReceptionistApp } from './receptionist/ReceptionistApp';
+import { HousekeeperApp } from './housekeeper/HousekeeperApp';
 function AppShell() {
   const { user, token, logout } = useAuth();
   const { lang, setLang, t } = useLang();
@@ -41,6 +45,9 @@ function AppShell() {
         return <SettingsPage {...props} />;
       case 'support':
         return <SupportPage {...props} />;
+      case 'emergency':  // ← Add this case
+        return <EmergencyPage {...props} />;
+      
       default:
         return <DashboardPage {...props} />;
     }
@@ -97,6 +104,12 @@ export default function App() {
   }
   if (user?.role === 'RECEPTIONIST') {
     return <ReceptionistApp user={user} token={token} onLogout={logout} />;
+  }
+  if (user?.role === 'STAFF') {
+    return <StaffApp user={user} token={token} onLogout={logout} />;
+  }
+  if (user?.role === 'HOUSEKEEPER') {
+  return <HousekeeperApp user={user} token={token} onLogout={logout} />;
   }
   
   return <AppShell />;

@@ -68,7 +68,7 @@ export function ReceptionistRoomBoard({ token }) {
   const load = async () => {
     setLoading(true);
     try {
-      const res  = await fetch(`${BASE}/admin/rooms/`, { headers: h(token) });
+      const res  = await fetch(`${BASE}/receptionist/rooms/`, { headers: h(token) });
       const data = await res.json().catch(() => []);
       setRooms(Array.isArray(data) ? data : []);
       // Init housekeeping from localStorage
@@ -89,7 +89,7 @@ export function ReceptionistRoomBoard({ token }) {
     setHkSaving(true);
     try {
       // Try to update via API (if backend supports it)
-      await fetch(`${BASE}/admin/rooms/${hkRoom.id}/`, {
+      await fetch(`${BASE}/receptionist/rooms/${hkRoom.id}/`, {
         method:'PATCH', headers:hj(token),
         body: JSON.stringify({ housekeepingStatus: hkSel }),
       }).catch(() => {});

@@ -1,16 +1,9 @@
 // AdminApp.jsx
 // ─────────────────────────────────────────────────────────────────────────────
-// Admin Panel root.  Drop this anywhere in your React app and render it when
-// the logged-in user has role === 'ADMIN'.
-//
-// Usage in your existing App.jsx / router:
-//   import { AdminApp } from './admin/AdminApp';
-//   { user?.role === 'ADMIN' && <AdminApp user={user} token={token} onLogout={onLogout} /> }
-//
-// Or use the standalone login guard version:
-//   <AdminApp />     (handles its own login state via localStorage)
+// Admin Panel root with Emergency Alerts
 // ─────────────────────────────────────────────────────────────────────────────
 import { useState, useEffect } from 'react';
+import { EmergencyProvider } from '../context/EmergencyContext';
 import { AdminSidebar }         from './AdminSidebar';
 import { AdminTopbar }          from './AdminTopbar';
 import { AdminDashboard }       from './AdminDashboard';
@@ -22,8 +15,10 @@ import { AdminRewards }         from './AdminRewards';
 import { AdminSupport }         from './AdminSupport';
 import { AdminSettings }        from './AdminSettings';
 import { AdminChangeRequests }  from './AdminChangeRequests';
+import { AdminUsers }           from './AdminUsers';
 
 import { API_BASE as BASE } from '../constants/config';
+
 const LAYOUT_CSS = `
   @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&display=swap');
   *{box-sizing:border-box}
@@ -138,6 +133,7 @@ function AdminShell({ user, token, onLogout }) {
     rewards:           <AdminRewards        token={token} />,
     support:           <AdminSupport        token={token} />,
     settings:          <AdminSettings       token={token} />,
+    users:             <AdminUsers          token={token} />,
   };
 
   return (
@@ -158,9 +154,7 @@ function AdminShell({ user, token, onLogout }) {
   );
 }
 
-// ── Public export ──────────────────────────────────────────────────────────
-// Mode A: pass user+token+onLogout directly (from your existing auth)
-// Mode B: standalone with own login form (no props needed)
+// ── Public export with EmergencyProvider ──────────────────────────────────────────
 export function AdminApp({ user: propUser, token: propToken, onLogout: propLogout }) {
   const [user,    setUser]  = useState(propUser  || null);
   const [token,   setToken] = useState(propToken || null);
@@ -192,12 +186,17 @@ export function AdminApp({ user: propUser, token: propToken, onLogout: propLogou
     }
   }, []);
 
+  // Wrap the entire Admin app with EmergencyProvider
   return (
     <>
       <style>{LAYOUT_CSS}</style>
       {(!user || !token)
         ? <AdminLogin onLogin={handleLogin} />
-        : <AdminShell user={user} token={token} onLogout={handleLogout} />
+        : (
+          <EmergencyProvider token={token}>
+            <AdminShell user={user} token={token} onLogout={handleLogout} />
+          </EmergencyProvider>
+        )
       }
     </>
   );

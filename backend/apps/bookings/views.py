@@ -1,9 +1,4 @@
-"""
-apps/bookings/views.py
-
-GET  /api/v1/bookings/my-bookings/ → list authenticated user's bookings
-POST /api/v1/bookings/             → create a booking
-"""
+# apps/bookings/views.py
 import logging
 import uuid
 
@@ -12,6 +7,8 @@ from django.db import transaction
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
+
+from rest_framework.permissions import IsAuthenticated
 
 from apps.rooms.models import Room
 from .models import Booking
@@ -165,6 +162,26 @@ class CreateBookingView(APIView):
             except Exception as e:
                 logger.error("PayMongo error: %s", e)
 
+        # ============================================================
+        # SEND CONFIRMATION EMAIL TO GUEST
+        # ============================================================
+        try:
+            from apps.utils.email import send_booking_confirmation_email
+
+            # Send email with booking details and QR code
+            email_sent = send_booking_confirmation_email(
+                booking=booking,
+                user=request.user,
+                temp_password=None  # Existing user, no temp password needed
+            )
+
+            if email_sent:
+                logger.info(f"✅ Confirmation email sent to {request.user.email}")
+            else:
+                logger.warning(f"❌ Failed to send confirmation email to {request.user.email}")
+        except Exception as e:
+            logger.error(f"❌ Email error: {e}")
+
         return Response(
             {
                 "id":               booking.id,
@@ -175,3 +192,31 @@ class CreateBookingView(APIView):
             },
             status=status.HTTP_201_CREATED,
         )
+
+class BookingStatusView(APIView):
+    """GET /api/v1/bookings/<booking_reference>/status/"""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, booking_reference):
+        try:
+            booking = Booking.objects.select_related('room').get(
+                booking_reference=booking_reference,
+                user=request.user  # Ensure user owns the booking
+            )
+
+            return Response({
+                'id': booking.id,
+                'bookingReference': booking.booking_reference,
+                'status': booking.status,
+                'paymentStatus': booking.payment_status,
+                'roomType': booking.room.room_type,
+                'roomNumber': booking.room.room_number,
+                'checkInDate': booking.check_in_date,
+                'checkOutDate': booking.check_out_date,
+                'totalAmount': float(booking.total_amount),
+                'depositAmount': float(booking.deposit_amount),
+                'paidAmount': float(booking.paid_amount) if hasattr(booking, 'paid_amount') else None,
+            })
+        except Booking.DoesNotExist:
+            return Response({'error': 'Booking not found'}, status=404)
+

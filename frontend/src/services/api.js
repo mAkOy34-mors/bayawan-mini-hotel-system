@@ -62,26 +62,24 @@ export const fetchRecentBookings = async (token) => {
 export const fetchAvailableRooms = async (token, checkIn, checkOut) => {
   try {
     const query = checkIn && checkOut ? `?checkIn=${checkIn}&checkOut=${checkOut}` : '';
-    const res = await fetch(`${API_BASE}/rooms/available${query}`, { headers: headers(token) });
+    const res = await fetch(`${API_BASE}/rooms/available${query}`, { 
+      headers: headers(token) 
+    });
 
     if (!res.ok) {
       console.error('Rooms API error:', res.status);
-      return DEMO_ROOMS;
+      return [];  // Return empty array on error
     }
 
     const data = await res.json();
-    console.log('✅ Rooms from API:', data);  // check this in F12 console
+    console.log('✅ Rooms from API:', data);
 
-    if (!data.length) {
-      console.warn('API returned empty rooms, using DEMO_ROOMS');
-      return DEMO_ROOMS;
-    }
-
-    return data;
+    // Ensure we return an array
+    return Array.isArray(data) ? data : [];
 
   } catch (err) {
     console.error('Rooms fetch error:', err);
-    return DEMO_ROOMS;
+    return [];  // Return empty array on exception
   }
 };
 

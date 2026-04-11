@@ -1,6 +1,8 @@
 """apps/bookings/urls.py"""
 from django.urls import path
-from .views import CreateBookingView, MyBookingsView
+
+from . import otp_views
+from .views import CreateBookingView, MyBookingsView, BookingStatusView
 from .otp_views import RequestBookingOtpView, ConfirmBookingWithOtpView
 from .management_views import (
     BookingDetailView,
@@ -31,4 +33,7 @@ urlpatterns = [
 
     # ── Create booking (empty path always last) ───────────────────────
     path("",                           CreateBookingView.as_view()),
+    path('request-otp/', otp_views.RequestBookingOtpView.as_view(), name='request_otp'),
+    path('confirm/', otp_views.ConfirmBookingWithOtpView.as_view(), name='confirm_booking'),
+    path('<str:booking_reference>/status/', BookingStatusView.as_view(), name='booking-status'),
 ]

@@ -40,6 +40,7 @@ const css = `
 
 const NAV = [
   { key:'dashboard',       label:'Dashboard',        Icon: LayoutDashboard, section:'Management' },
+   { key:'users',          label:'Users',            Icon: Users },
   { key:'bookings',        label:'Bookings',          Icon: BedDouble },
   { key:'change-requests', label:'Change Requests',   Icon: RefreshCw,      badge:'pendingChanges' },
   { key:'rooms',           label:'Rooms',             Icon: Hotel },
@@ -48,6 +49,7 @@ const NAV = [
   { key:'rewards',         label:'Rewards',           Icon: Star,           section:'Operations' },
   { key:'support',         label:'Support',           Icon: MessageCircle,  badge:'pendingTickets' },
   { key:'settings',        label:'Settings',          Icon: Settings },
+ 
 ];
 
 function ini(u) { const n=u?.username||u?.email||'A'; return n.slice(0,2).toUpperCase(); }

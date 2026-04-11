@@ -1,8 +1,5 @@
-"""
-apps/rooms/views.py
+# apps/rooms/views.py
 
-GET /api/v1/rooms/available?checkIn=YYYY-MM-DD&checkOut=YYYY-MM-DD
-"""
 import logging
 from datetime import date
 
@@ -38,9 +35,11 @@ class AvailableRoomsView(APIView):
             except ValueError:
                 return Response({"message": "Invalid date format. Use YYYY-MM-DD."}, status=400)
 
+            # Exclude rooms with ANY booking (including pending) for the selected dates
             conflicting_room_ids = (
                 Booking.objects.filter(
                     status__in=[
+                        Booking.BookingStatus.PENDING_DEPOSIT,  # ← ADD THIS
                         Booking.BookingStatus.CONFIRMED,
                         Booking.BookingStatus.CHECKED_IN,
                     ],

@@ -8,6 +8,7 @@ from datetime import timedelta
 from pathlib import Path
 
 import environ
+import os
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Base
@@ -40,6 +41,7 @@ THIRD_PARTY_APPS = [
     "drf_spectacular",
     "django_filters",
     "rest_framework_simplejwt",
+    "channels",
     "apps.admin_panel",
     "apps.rewards",
     "apps.support",
@@ -53,10 +55,22 @@ LOCAL_APPS = [
     "apps.bookings",
     "apps.payments",
     "apps.receptionist",
+    "apps.emergency",
+    "apps.staff",
+    "apps.employees",
+    "apps.housekeepers",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
 
+ASGI_APPLICATION = "config.asgi.application"
+
+# Channel Layers - Use InMemory for development
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels.layers.InMemoryChannelLayer",
+    },
+}
 # ─────────────────────────────────────────────────────────────────────────────
 # Middleware
 # ─────────────────────────────────────────────────────────────────────────────
@@ -114,7 +128,7 @@ DATABASES = {
             "keepalives_interval":  5,
             "keepalives_count":     3,
         },
-        "CONN_MAX_AGE":      60,
+        "CONN_MAX_AGE":      600,
         "CONN_HEALTH_CHECKS": True,
     }
 }
@@ -235,7 +249,7 @@ SIMPLE_JWT = {
 # ─── PayMongo ────────────────────────────────────────────────────────────────
 PAYMONGO_SECRET_KEY = env("PAYMONGO_SECRET_KEY")
 PAYMONGO_PUBLIC_KEY = env("PAYMONGO_PUBLIC_KEY")
-PAYMONGO_WEBHOOK_SECRET= "whsk_TiatjYWEeZazeMr7koHmPH3v"
+PAYMONGO_WEBHOOK_SECRET= env("PAYMONGO_WEBHOOK_SECRET")
 
 #GMAIL Otp
 EMAIL_BACKEND       = 'django.core.mail.backends.smtp.EmailBackend'
@@ -244,10 +258,13 @@ EMAIL_PORT          = 587
 EMAIL_USE_TLS       = True
 EMAIL_HOST_USER     = env('EMAIL_HOST_USER', default='michomoreno34@gmail.com')
 EMAIL_HOST_PASSWORD = env('EMAIL_HOST_PASSWORD', default='ewha ngym merc fsef')
-DEFAULT_FROM_EMAIL  = f'Cebu Grand Hotel <{EMAIL_HOST_USER}>'
+DEFAULT_FROM_EMAIL  = f'Bayawan Mini Hotel <{EMAIL_HOST_USER}>'
 
 from corsheaders.defaults import default_headers
 
 CORS_ALLOW_HEADERS = list(default_headers) + [
     'ngrok-skip-browser-warning',
 ]
+
+MEDIA_URL = '/media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')

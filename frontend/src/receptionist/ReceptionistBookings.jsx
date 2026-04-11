@@ -32,7 +32,7 @@ export function ReceptionistBookings({ token }) {
 
       // Try admin endpoint first, fall back to regular bookings
       let data = [];
-      const adminRes = await fetch(`${BASE}/admin/bookings/?${params}`, { headers: h(token) });
+      const adminRes = await fetch(`${BASE}/receptionist/bookings/?${params}`, { headers: h(token) });
       if (adminRes.ok) {
         data = await adminRes.json().catch(() => []);
       } else {
@@ -54,7 +54,7 @@ export function ReceptionistBookings({ token }) {
     if (!detail || newStatus === detail.status || newStatus === 'CANCELLED') return;
     setSaving(true);
     try {
-      await fetch(`${BASE}/admin/bookings/${detail.id}/status/`, {
+      await fetch(`${BASE}/receptionist/bookings/${detail.id}/status/`, {
         method:'POST', headers:hj(token), body:JSON.stringify({ status:newStatus }),
       });
       show(`Status updated to ${newStatus}`);

@@ -1,6 +1,7 @@
-// BookingPage.jsx – Card UI matching assignment/activity card layout
+// BookingPage.jsx – Card UI matching assignment/activity card layout with QR Code & Email
 import { useState, useEffect } from 'react';
 import { Modal } from 'react-bootstrap';
+import { QRCodeSVG } from 'qrcode.react';
 import { fetchAvailableRooms, createBooking } from '../services/api';
 import { Alert } from '../components/ui/Alert';
 import { useAlert } from '../hooks/useAlert';
@@ -9,7 +10,8 @@ import { API_BASE } from '../constants/config';
 import {
   Search, BedDouble, Sparkles, Crown, Gem, Home, Hotel,
   Users, Calendar, Lock, ClipboardList, CreditCard,
-  Mail, Phone, CheckCircle2, ShieldCheck,
+  Mail, Phone, CheckCircle2, ShieldCheck, QrCode, Download,
+  Copy, Check,
 } from 'lucide-react';
 
 const css = `
@@ -405,7 +407,7 @@ const css = `
   .pay-modal-cancel { padding:.5rem 1.1rem; border:1px solid var(--border); border-radius:8px; background:#fff; color:var(--text-muted); font-size:.8rem; font-family:'DM Sans',sans-serif; font-weight:600; cursor:pointer; transition:all .18s; }
   .pay-modal-cancel:hover { background:#f8fafc; color:var(--text); border-color:#c8d0dc; }
 
-  /* ══ Success Modal ══ */
+  /* ══ Success Modal with QR Code ══ */
   .bs-modal .modal-content { background:#fff; border:1px solid rgba(45,155,111,0.25); border-radius:18px; box-shadow:0 24px 60px rgba(0,0,0,.15); }
   .bs-modal .modal-header  { background:#fff; border-bottom:none; padding:.75rem 1.25rem .25rem; }
   .bs-modal .modal-body    { background:#fff; padding:1.5rem 2rem 2rem; }
@@ -417,6 +419,77 @@ const css = `
     border-radius:10px; padding:.85rem 1rem; text-align:center; margin-bottom:1.35rem;
     font-size:.83rem; color:var(--green);
   }
+  
+  /* QR Code Styles */
+  .bs-qr-section {
+    text-align: center;
+    margin: 1rem 0 1.5rem;
+    padding: 1rem;
+    background: var(--surface2);
+    border-radius: 12px;
+    border: 1px solid var(--border);
+  }
+  .bs-qr-title {
+    font-size: .75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    color: var(--text-muted);
+    margin-bottom: .75rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: .5rem;
+  }
+  .bs-qr-code {
+    display: flex;
+    justify-content: center;
+    margin-bottom: .75rem;
+    padding: .5rem;
+    background: #fff;
+    border-radius: 12px;
+    display: inline-block;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  .bs-qr-code svg {
+    border-radius: 8px;
+  }
+  .bs-qr-actions {
+    display: flex;
+    gap: .75rem;
+    justify-content: center;
+    margin-top: .5rem;
+  }
+  .bs-qr-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: .4rem;
+    padding: .4rem .9rem;
+    border-radius: 8px;
+    font-size: .72rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all .18s;
+    border: 1px solid var(--border);
+    background: #fff;
+    color: var(--text);
+  }
+  .bs-qr-btn:hover {
+    border-color: var(--gold);
+    color: var(--gold);
+    background: rgba(201,168,76,0.05);
+  }
+  .bs-qr-note {
+    font-size: .68rem;
+    color: var(--text-muted);
+    margin-top: .65rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: .4rem;
+  }
+  
   .bs-close-btn {
     display:block; width:100%; max-width:190px; margin:0 auto; padding:.7rem 1rem;
     border:none; border-radius:10px; font-size:.875rem; font-family:'DM Sans',sans-serif;
@@ -426,7 +499,7 @@ const css = `
   .bs-close-btn:hover { background:linear-gradient(135deg,#b09038,#dfc06e); }
 `;
 
-export function BookingPage({ token }) {
+export function BookingPage({ token, user }) {
   const [rooms, setRooms]         = useState([]);
   const [initialLoading, setInitialLoading] = useState(true);
   const [checkIn, setCheckIn]     = useState(addDays(todayISO(), 1));
@@ -436,16 +509,18 @@ export function BookingPage({ token }) {
   const [selected, setSelected]   = useState(null);
   const [requests, setRequests]   = useState('');
 
-  const [guestName, setGuestName]         = useState('');
-  const [guestEmail, setGuestEmail]       = useState('');
+  const [guestName, setGuestName]         = useState(user?.fullName || user?.username || '');
+  const [guestEmail, setGuestEmail]       = useState(user?.email || '');
   const [guestPhone, setGuestPhone]       = useState('');
   const [paymentMethod, setPaymentMethod] = useState('ONLINE');
   const [paymentType, setPaymentType]     = useState('DEPOSIT'); // 'DEPOSIT' | 'FULL'
 
   const [confirming, setConfirming] = useState(false);
   const [booked, setBooked]         = useState(null);
+  const [bookedData, setBookedData] = useState(null); // Store full booking data for QR
   const [touched, setTouched]       = useState(false);
   const [modalError, setModalError] = useState('');
+  const [copied, setCopied]         = useState(false);
 
   // OTP states
   const [showOtp,    setShowOtp]    = useState(false);
@@ -464,6 +539,15 @@ export function BookingPage({ token }) {
   const [checkingPay,   setCheckingPay]   = useState(false);
 
   const { alert, showAlert } = useAlert();
+
+  // Helper function to get full image URL
+  const getFullImageUrl = (imageUrl) => {
+    if (!imageUrl) return null;
+    if (imageUrl.startsWith('http')) return imageUrl;
+    // Remove /api/v1 from API_BASE to get the base URL
+    const baseUrl = API_BASE.replace('/api/v1', '');
+    return `${baseUrl}${imageUrl}`;
+  };
 
   const getAmenitiesArray = (amenities) => {
     if (!amenities) return ['WiFi', 'AC', 'TV'];
@@ -573,17 +657,16 @@ export function BookingPage({ token }) {
           bk.id == payBookingId || bk.bookingReference === payBookingRef
         );
         if (b && (b.paymentStatus === 'PAID' || b.status === 'CONFIRMED')) {
-          setBooked({ id: payBookingRef || payBookingId, fromRedirect: true });
+          setBooked({ id: payBookingRef || payBookingId, fromRedirect: true, bookingData: b });
+          setBookedData(b);
         } else {
-          // Booking exists but webhook hasn't fired yet — still show success
-          setBooked({ id: payBookingRef || payBookingId, fromRedirect: true });
+          setBooked({ id: payBookingRef || payBookingId, fromRedirect: true, bookingData: b });
+          setBookedData(b);
         }
       } else {
-        // Fallback — show success anyway, booking was already created
         setBooked({ id: payBookingRef || payBookingId, fromRedirect: true });
       }
     } catch {
-      // Fallback — show success anyway
       setBooked({ id: payBookingRef || payBookingId, fromRedirect: true });
     } finally {
       setCheckingPay(false);
@@ -591,7 +674,9 @@ export function BookingPage({ token }) {
   };
 
   const resetGuestForm = () => {
-    setGuestName(''); setGuestEmail(''); setGuestPhone('');
+    setGuestName(user?.fullName || user?.username || '');
+    setGuestEmail(user?.email || '');
+    setGuestPhone('');
     setPaymentMethod('ONLINE'); setPaymentType('DEPOSIT');
     setRequests(''); setTouched(false); setModalError('');
   };
@@ -647,7 +732,6 @@ export function BookingPage({ token }) {
     next[idx]   = clean;
     setOtpDigits(next);
     setOtpError('');
-    // Auto-focus next box
     if (clean && idx < 5) {
       document.getElementById(`otp-${idx + 1}`)?.focus();
     }
@@ -675,7 +759,6 @@ export function BookingPage({ token }) {
     setOtpVerifying(true);
     setOtpError('');
     try {
-      // Single endpoint — verifies OTP AND creates booking
       const res = await fetch(`${API_BASE}/bookings/confirm/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -707,15 +790,16 @@ export function BookingPage({ token }) {
 
       const data = await res.json();
 
-      // Success
+      // Success - store booking data for QR code
+      setBookedData(data);
       setShowOtp(false);
+      
       if (pendingPayload.paymentMethod === 'ONLINE' && data.checkoutUrl) {
         resetGuestForm();
         setSelected(null);
         setPendingPayload(null);
         openPayPopup(data.checkoutUrl, data.id, data.bookingReference);
       } else {
-        // ✅ Use data directly — backend returns booking fields at root level
         setBooked({
           id:            data.id || data.bookingReference,
           depositAmount: data.depositAmount,
@@ -739,14 +823,12 @@ export function BookingPage({ token }) {
     setTouched(true);
     setModalError('');
 
-    // Inline validation
     if (!guestName.trim())  { setModalError('Full name is required.'); return; }
     if (!guestEmail.trim()) { setModalError('Email address is required.'); return; }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(guestEmail.trim())) { setModalError('Please enter a valid email address.'); return; }
     if (!guestPhone.trim()) { setModalError('Phone number is required.'); return; }
     if (!paymentMethod)     { setModalError('Please select a payment method.'); return; }
 
-    // Save payload for after OTP verification
     const payload = {
       roomId:          selected.id,
       pricePerNight:   selected.pricePerNight,
@@ -763,7 +845,6 @@ export function BookingPage({ token }) {
     };
     setPendingPayload(payload);
 
-    // Send OTP to guest email — include full booking data for backend validation
     setOtpSending(true);
     setOtpError('');
     setOtpDigits(['','','','','','']);
@@ -798,6 +879,38 @@ export function BookingPage({ token }) {
     } finally {
       setOtpSending(false);
     }
+  };
+
+  // Download QR code as PNG
+  const downloadQRCode = () => {
+    const svg = document.querySelector('.bs-qr-code svg');
+    if (!svg) return;
+    
+    const canvas = document.createElement('canvas');
+    const svgData = new XMLSerializer().serializeToString(svg);
+    const img = new Image();
+    
+    img.onload = () => {
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      const pngFile = canvas.toDataURL('image/png');
+      const downloadLink = document.createElement('a');
+      downloadLink.download = `booking_${bookedData?.bookingReference || 'qrcode'}.png`;
+      downloadLink.href = pngFile;
+      downloadLink.click();
+    };
+    
+    img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgData)));
+  };
+
+  // Copy QR data to clipboard
+  const copyQRData = () => {
+    const qrData = bookedData?.bookingReference || '';
+    navigator.clipboard.writeText(qrData);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
   return (
@@ -873,22 +986,30 @@ export function BookingPage({ token }) {
         <div className="bp-room-grid">
           {rooms.map((room, idx) => {
             const typeColor = getRoomTypeColor(room.roomType);
+            const imageFullUrl = getFullImageUrl(room.imageUrl);
+            
             return (
               <div
                 key={room.id}
                 className={`bp-room-card type-${room.roomType}`}
                 style={{ animationDelay: `${idx * 0.06}s` }}
               >
-                {/* Image */}
                 <div className="bp-room-img" style={{ background: getRoomGradient(room.roomType) }}>
-                  {room.imageUrl
-                    ? <img src={room.imageUrl} alt={room.roomType} onError={e => { e.target.style.display='none'; }}/>
+                  {imageFullUrl
+                    ? <img 
+                        src={imageFullUrl} 
+                        alt={room.roomType} 
+                        onError={e => { 
+                          e.target.style.display = 'none'; 
+                          e.target.parentElement.innerHTML = '<div class="bp-room-img-fallback">' + 
+                            getRoomIcon(room.roomType).outerHTML + '</div>';
+                        }}
+                      />
                     : <div className="bp-room-img-fallback">{getRoomIcon(room.roomType)}</div>
                   }
                 </div>
 
                 <div className="bp-room-body">
-                  {/* Type row — matches "ACTIVITY | Locked" pattern */}
                   <div className="bp-card-type-row">
                     <span className="bp-card-type-label" style={{ color: typeColor }}>ROOM</span>
                     <span className={`bp-avail-badge ${room.available ? '' : 'unavailable'}`}>
@@ -896,10 +1017,8 @@ export function BookingPage({ token }) {
                     </span>
                   </div>
 
-                  {/* Room name */}
                   <div className="bp-room-type">{room.roomType} Room</div>
 
-                  {/* Meta rows — matching screenshot's icon+text rows */}
                   <div className="bp-meta-list">
                     <div className="bp-meta-row">
                       <span className="bp-meta-icon"><Users size={13}/></span>
@@ -917,14 +1036,12 @@ export function BookingPage({ token }) {
                     )}
                   </div>
 
-                  {/* Amenity tags */}
                   <div className="bp-amenity-row">
                     {getAmenitiesArray(room.amenities).slice(0, 4).map((a, i) => (
                       <span key={i} className="bp-amenity-tag">{a}</span>
                     ))}
                   </div>
 
-                  {/* Status box — matches screenshot's "Returned | SCORE 96" box */}
                   <div className="bp-status-box">
                     <div className="bp-status-left">
                       <span className="bp-status-icon"><Hotel size={16}/></span>
@@ -940,7 +1057,6 @@ export function BookingPage({ token }) {
                   </div>
                 </div>
 
-                {/* Footer — matches "Late submissions disabled | Open" */}
                 <div className="bp-card-footer">
                   <span className="bp-footer-note">
                     <Lock size={12}/>
@@ -971,8 +1087,6 @@ export function BookingPage({ token }) {
         <Modal.Body>
           {selected && (
             <div style={{ animation:'slideUp .3s ease both' }}>
-
-              {/* ── Inline error banner ── */}
               {modalError && (
                 <div className="bm-err">
                   <span className="bm-err-ico"><ShieldCheck size={15}/></span>
@@ -982,10 +1096,12 @@ export function BookingPage({ token }) {
               )}
 
               <div className="bm-room-banner" style={{ background: getRoomGradient(selected.roomType) }}>
-                {selected.imageUrl
-                  ? <img src={selected.imageUrl} alt={selected.roomType} onError={e => e.target.style.display='none'}/>
-                  : <div className="bm-room-banner-icon"><Hotel size={48} strokeWidth={1} opacity={0.4}/></div>
-                }
+                {(() => {
+                  const imageFullUrl = getFullImageUrl(selected.imageUrl);
+                  return imageFullUrl
+                    ? <img src={imageFullUrl} alt={selected.roomType} onError={e => e.target.style.display='none'}/>
+                    : <div className="bm-room-banner-icon"><Hotel size={48} strokeWidth={1} opacity={0.4}/></div>;
+                })()}
               </div>
 
               <p className="bm-desc">{selected.description}</p>
@@ -1029,7 +1145,6 @@ export function BookingPage({ token }) {
 
               <div className="bm-section-label">Payment Options</div>
 
-              {/* ── Payment Method ── */}
               <div style={{ marginBottom:'.75rem' }}>
                 <div className="bm-label" style={{ marginBottom:'.5rem' }}>How would you like to pay? *</div>
                 <div style={{ display:'flex', gap:'.65rem', flexWrap:'wrap' }}>
@@ -1053,7 +1168,6 @@ export function BookingPage({ token }) {
                 </div>
               </div>
 
-              {/* ── Payment Amount Type ── */}
               <div style={{ marginBottom:'.75rem' }}>
                 <div className="bm-label" style={{ marginBottom:'.5rem' }}>How much to pay now? *</div>
                 <div className="bm-pay-options">
@@ -1116,7 +1230,6 @@ export function BookingPage({ token }) {
                 )}
               </div>
 
-              {/* Amount due highlight box */}
               <div className="bm-due-box">
                 <div>
                   <div className="bm-due-label">
@@ -1168,7 +1281,6 @@ export function BookingPage({ token }) {
             Enter it below to confirm your booking.
           </p>
 
-          {/* OTP input boxes */}
           <div className="otp-inputs" onPaste={handleOtpPaste}>
             {otpDigits.map((d, i) => (
               <input
@@ -1186,14 +1298,12 @@ export function BookingPage({ token }) {
             ))}
           </div>
 
-          {/* Error */}
           {otpError && (
             <div style={{ display:'flex', alignItems:'center', gap:'.5rem', background:'var(--red-bg)', border:'1px solid rgba(220,53,69,0.25)', borderRadius:8, padding:'.6rem .9rem', marginBottom:'.9rem', fontSize:'.8rem', color:'var(--red)' }}>
               <ShieldCheck size={14}/> {otpError}
             </div>
           )}
 
-          {/* Resend */}
           <div className="otp-resend">
             {otpTimer > 0
               ? <>Resend code in <span className="otp-timer">{otpTimer}s</span></>
@@ -1201,7 +1311,6 @@ export function BookingPage({ token }) {
             }
           </div>
 
-          {/* Verify button */}
           <button className="otp-verify-btn" disabled={otpVerifying || otpDigits.join('').length < 6} onClick={verifyOtpAndBook}>
             {otpVerifying
               ? <><div className="bp-spinner"/>Verifying…</>
@@ -1246,7 +1355,7 @@ export function BookingPage({ token }) {
         </div>
       </Modal>
 
-      {/* ══ Success Modal ══ */}
+      {/* ══ Success Modal with QR Code ══ */}
       <Modal show={!!booked} onHide={() => setBooked(null)} centered className="bs-modal">
         <Modal.Header closeButton/>
         <Modal.Body>
@@ -1258,18 +1367,58 @@ export function BookingPage({ token }) {
             {booked?.fromRedirect
               ? 'Your payment was received and your booking is confirmed.'
               : 'Your reservation has been successfully placed.'
-            }<br/>A confirmation will be sent to your email.
+            }<br/>A confirmation email has been sent to your inbox.
           </p>
+          
+          {/* QR Code Section */}
+          {bookedData?.bookingReference && (
+            <div className="bs-qr-section">
+              <div className="bs-qr-title">
+                <QrCode size={14}/> YOUR CHECK-IN QR CODE
+              </div>
+              <div className="bs-qr-code">
+                <QRCodeSVG
+                  value={JSON.stringify({
+                    bookingReference: bookedData.bookingReference,
+                    guestName: bookedData.guestUsername || guestName,
+                    checkInDate: checkIn,
+                    roomType: selected?.roomType,
+                    roomNumber: bookedData.roomNumber
+                  })}
+                  size={160}
+                  bgColor="#ffffff"
+                  fgColor="#1a1f2e"
+                  level="H"
+                  includeMargin={true}
+                />
+              </div>
+              <div className="bs-qr-actions">
+                <button className="bs-qr-btn" onClick={downloadQRCode}>
+                  <Download size={12}/> Save QR
+                </button>
+                <button className="bs-qr-btn" onClick={copyQRData}>
+                  {copied ? <Check size={12}/> : <Copy size={12}/>}
+                  {copied ? 'Copied!' : 'Copy Ref'}
+                </button>
+              </div>
+              <div className="bs-qr-note">
+                <ShieldCheck size={11}/>
+                Show this QR code at reception for quick check-in
+              </div>
+            </div>
+          )}
+          
           <div className="bs-detail-box">
             {booked?.fromRedirect
               ? `Booking #${booked?.id} — Payment received ✓`
-              : `Booking #${booked?.id} — ${
+              : `Booking #${bookedData?.bookingReference || booked?.id} — ${
                   paymentType === 'FULL'
                     ? 'Fully paid'
-                    : `Deposit of ${fmt(booked?.depositAmount)} paid`
+                    : `Deposit of ${fmt(booked?.depositAmount || bookedData?.depositAmount)} paid`
                 }${paymentType === 'DEPOSIT' ? ' · Remaining balance due at check-in' : ''}`
             }
           </div>
+          
           <button className="bs-close-btn" onClick={() => setBooked(null)}>Done ✓</button>
         </Modal.Body>
       </Modal>

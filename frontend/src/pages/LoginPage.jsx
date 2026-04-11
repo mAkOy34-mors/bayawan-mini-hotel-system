@@ -146,7 +146,7 @@ export function LoginPage({ onLogin, onGoRegister }) {
       const data    = await loginUser(email, password);
       const apiUser = data.user || data;
       const role    = (data.role || apiUser.role || 'USER').toUpperCase();
-      const validRoles = ['ADMIN', 'RECEPTIONIST', 'USER'];
+      const validRoles = ['ADMIN', 'RECEPTIONIST', 'USER', 'STAFF', 'HOUSEKEEPER'];
       if (!validRoles.includes(role)) throw new Error('Unknown account role. Please contact support.');
       onLogin(data.token || data.accessToken, { id:apiUser.id, username:apiUser.username, email:apiUser.email||email, role }, remember, role);
     } catch (err) {

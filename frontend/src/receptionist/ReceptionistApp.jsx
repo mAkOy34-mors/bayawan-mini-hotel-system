@@ -1,14 +1,13 @@
-// ReceptionistApp.jsx — Cebu Grand Hotel Receptionist Panel
-// Usage in App.jsx:
-//   if (user?.role === 'RECEPTIONIST') return <ReceptionistApp user={user} token={token} onLogout={logout} />;
-
+// ReceptionistApp.jsx — Cebu Grand Hotel Receptionist Panel with Emergency Alerts
 import { useState, useEffect } from 'react';
 import { Offcanvas } from 'react-bootstrap';
 import 'bootstrap/dist/css/bootstrap.min.css';
+import { EmergencyProvider } from '../context/EmergencyContext';
 import {
   LayoutDashboard, CalendarCheck, CalendarX, BedDouble,
   Users, LogIn, LogOut, Search, Menu, X, ChevronRight,
   RefreshCw, Bell, UserCircle, Hotel, CreditCard, PlusCircle,
+  QrCode, ScanLine,
 } from 'lucide-react';
 
 import { ReceptionistDashboard }   from './ReceptionistDashboard';
@@ -19,6 +18,8 @@ import { ReceptionistWalkIn }      from './ReceptionistWalkIn';
 import { ReceptionistRoomBoard }   from './ReceptionistRoomBoard';
 import { ReceptionistGuests }      from './ReceptionistGuests';
 import { ReceptionistPayments }    from './ReceptionistPayments';
+import { ReceptionistQRCheckIn }   from './ReceptionistQRCheckIn';  
+import { ReceptionistInHouse }     from './ReceptionistInHouse';
 
 import { API_BASE as BASE } from '../constants/config';
 
@@ -93,6 +94,7 @@ const LAYOUT_CSS = `
 
 const NAV = [
   { key:'dashboard',   label:'Dashboard',      Icon: LayoutDashboard, section:'Overview' },
+  { key:'qrcheckin',   label:'QR Check-In',    Icon: QrCode,           section:"Today's Front Desk" },
   { key:'arrivals',    label:'Arrivals',        Icon: LogIn,           section:"Today's Front Desk" },
   { key:'departures',  label:'Departures',      Icon: LogOut },
   { key:'bookings',    label:'All Bookings',    Icon: CalendarCheck,   section:'Bookings' },
@@ -100,10 +102,12 @@ const NAV = [
   { key:'guests',      label:'Guest Profiles',  Icon: Users,           section:'Guests & Rooms' },
   { key:'roomboard',   label:'Room Board',      Icon: BedDouble },
   { key:'payments',    label:'Payments',        Icon: CreditCard,      section:'Payments' },
+  { key:'inhouse',     label:'In-House Guests', Icon: Users,           section:"Current Guests" },
 ];
 
 const PAGE_TITLES = {
   dashboard:  'Dashboard',
+  qrcheckin:  'QR Code Check-in',
   arrivals:   "Today's Arrivals",
   departures: "Today's Departures",
   bookings:   'All Bookings',
@@ -111,6 +115,7 @@ const PAGE_TITLES = {
   guests:     'Guest Profiles',
   roomboard:  'Room Status Board',
   payments:   'Payment Records',
+  inhouse:    'In-House Guests',
 };
 
 function ini(u) { const n = u?.username || u?.email || 'R'; return n.slice(0,2).toUpperCase(); }
@@ -141,7 +146,7 @@ function SidebarInner({ page, setPage, user, onLogout }) {
     <nav className="rc-sb-nav">
       {NAV.map(({ key, label, Icon, section }) => (
         <div key={key}>
-          {section && <div className="rc-sb-sec" style={key!=='dashboard'?{marginTop:'.55rem'}:{}}>{section}</div>}
+          {section && <div className="rc-sb-sec" style={key!=='dashboard' && key!=='qrcheckin' ? {marginTop:'.55rem'} : {}}>{section}</div>}
           <button className={`rc-sb-btn${page===key?' on':''}`} onClick={() => setPage(key)}>
             <span className="rc-sb-ico"><Icon size={14}/></span>
             {label}
@@ -217,6 +222,7 @@ function ReceptionistShell({ user, token, onLogout }) {
 
   const PAGE_MAP = {
     dashboard:  <ReceptionistDashboard  token={token} setPage={setPage} />,
+    qrcheckin:  <ReceptionistQRCheckIn   token={token} setPage={setPage} />,
     arrivals:   <ReceptionistArrivals   token={token} />,
     departures: <ReceptionistDepartures token={token} />,
     bookings:   <ReceptionistBookings   token={token} />,
@@ -224,6 +230,7 @@ function ReceptionistShell({ user, token, onLogout }) {
     guests:     <ReceptionistGuests     token={token} />,
     roomboard:  <ReceptionistRoomBoard  token={token} />,
     payments:   <ReceptionistPayments   token={token} />,
+    inhouse:    <ReceptionistInHouse    token={token} setPage={setPage} />,
   };
 
   return (
@@ -267,7 +274,7 @@ function ReceptionistShell({ user, token, onLogout }) {
   );
 }
 
-// ── Public export ──────────────────────────────────────────────
+// ── Public export with EmergencyProvider ──────────────────────────────────────────────
 export function ReceptionistApp({ user: propUser, token: propToken, onLogout: propLogout }) {
   const [user,  setUser]  = useState(propUser  || null);
   const [token, setToken] = useState(propToken || null);
@@ -288,16 +295,20 @@ export function ReceptionistApp({ user: propUser, token: propToken, onLogout: pr
     propLogout?.();
   };
 
+  // Wrap the entire Receptionist app with EmergencyProvider
   return (
     <>
       <style>{LAYOUT_CSS}</style>
       {(!user || !token)
         ? <ReceptionistLogin onLogin={handleLogin}/>
-        : <ReceptionistShell user={user} token={token} onLogout={handleLogout}/>
+        : (
+          <EmergencyProvider token={token}>
+            <ReceptionistShell user={user} token={token} onLogout={handleLogout}/>
+          </EmergencyProvider>
+        )
       }
     </>
   );
-
 }
 
 export default ReceptionistApp;

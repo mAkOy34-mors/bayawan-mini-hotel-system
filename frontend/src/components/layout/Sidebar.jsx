@@ -11,6 +11,7 @@ import {
   LogOut,
   Hotel,
   ClipboardList,
+  AlertTriangle,  // ← Add this for emergency icon
 } from 'lucide-react';
 
 const css = `
@@ -93,6 +94,37 @@ const css = `
   }
   .sb-btn:hover:not(.active) .sb-icon { background: #e2e8f0; color: #1a1f2e; }
 
+  /* Emergency button special styling */
+  .sb-btn-emergency {
+    width: 100%; display: flex; align-items: center; gap: .65rem;
+    padding: .54rem .75rem; border-radius: 9px;
+    font-family: 'DM Sans', sans-serif; font-size: .84rem; font-weight: 600;
+    cursor: pointer; transition: all .16s;
+    text-align: left; margin-top: .65rem; margin-bottom: .05rem;
+    background: rgba(220,38,38,0.1);
+    border: 1px solid rgba(220,38,38,0.25);
+    color: #dc2626;
+  }
+  .sb-btn-emergency:hover {
+    background: rgba(220,38,38,0.15);
+    border-color: rgba(220,38,38,0.4);
+    transform: translateX(2px);
+  }
+  .sb-btn-emergency.active {
+    background: rgba(220,38,38,0.15);
+    border-color: rgba(220,38,38,0.4);
+    color: #dc2626;
+  }
+  .sb-btn-emergency .sb-icon {
+    background: rgba(220,38,38,0.1);
+    color: #dc2626;
+    border-color: rgba(220,38,38,0.2);
+  }
+  .sb-btn-emergency.active .sb-icon {
+    background: rgba(220,38,38,0.15);
+    border-color: rgba(220,38,38,0.3);
+  }
+
   .sb-out {
     width: 100%; display: flex; align-items: center; gap: .65rem;
     padding: .54rem .75rem; border-radius: 9px; margin-top: .4rem;
@@ -171,6 +203,15 @@ function SidebarContent({ page, setPage, user, onLogout }) {
             {label}
           </button>
         ))}
+
+        {/* Emergency Button - Special styling */}
+        <button 
+          className={`sb-btn-emergency${page === 'emergency' ? ' active' : ''}`} 
+          onClick={() => setPage('emergency')}
+        >
+          <span className="sb-icon"><AlertTriangle size={15} /></span>
+          🚨 Emergency
+        </button>
 
         <div className="sb-sec" style={{ marginTop: '.65rem' }}>Account</div>
         {NAV_ACCOUNT.map(({ key, label, Icon }) => (

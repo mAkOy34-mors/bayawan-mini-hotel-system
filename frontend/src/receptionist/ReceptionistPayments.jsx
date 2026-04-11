@@ -33,7 +33,7 @@ export function ReceptionistPayments({ token }) {
   const load = async () => {
     setLoading(true);
     try {
-      const res  = await fetch(`${BASE}/admin/payments/`, { headers: h(token) });
+      const res  = await fetch(`${BASE}/receptionist/payments/`, { headers: h(token) });
       const data = await res.json().catch(() => []);
       setPayments(Array.isArray(data) ? data : (data.results || []));
     } catch { show('Failed to load payments', 'error'); }
@@ -64,7 +64,7 @@ export function ReceptionistPayments({ token }) {
     if (!bookRef.trim()) return;
     setBSearching(true); setCashBook(null);
     try {
-      const res  = await fetch(`${BASE}/admin/bookings/?search=${encodeURIComponent(bookRef)}`, { headers: h(token) });
+      const res  = await fetch(`${BASE}/receptionist/bookings/?search=${encodeURIComponent(bookRef)}`, { headers: h(token) });
       const data = await res.json().catch(() => []);
       const list = Array.isArray(data) ? data : [];
       const match = list.find(b => b.bookingReference?.toLowerCase() === bookRef.toLowerCase().trim());
@@ -79,7 +79,7 @@ export function ReceptionistPayments({ token }) {
     if (!cashAmt || parseFloat(cashAmt) <= 0) { show('Enter a valid amount', 'error'); return; }
     setRecording(true);
     try {
-      const res = await fetch(`${BASE}/admin/payments/`, {
+      const res = await fetch(`${BASE}/receptionist/payments/`, {
         method: 'POST', headers: hj(token),
         body: JSON.stringify({
           bookingId:   cashBook.id,

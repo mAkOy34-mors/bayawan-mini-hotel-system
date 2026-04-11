@@ -9,6 +9,8 @@ from drf_spectacular.views import (
     SpectacularRedocView,
     SpectacularSwaggerView,
 )
+from django.conf import settings
+from django.conf.urls.static import static
 
 # ── OpenAPI schema endpoints ──────────────────────────────────────────────────
 schema_patterns = [
@@ -28,11 +30,19 @@ api_v1_patterns = [
     path("rewards/",  include("apps.rewards.urls")),      # ← fixed
     path("support/",  include("apps.support.urls")),      # ← fixed
     path("reports/",  include("apps.reports.urls")),
-    path("api/v1/payments/", include("apps.payments.urls")),# ← fixed
-    path("api/v1/receptionist/", include("apps.receptionist.urls")),
+    path("payments/", include("apps.payments.urls")),# ← fixed
+    path("receptionist/", include("apps.receptionist.urls")),
+    path("emergency/", include("apps.emergency.urls")),
+    path("staff/", include("apps.staff.urls")),
+    path('api/v1/employees/', include('apps.employees.urls')),
+    path('housekeepers/', include('apps.housekeepers.urls')),
+
     *schema_patterns,
 ]
 
 urlpatterns = [
     path("api/v1/", include(api_v1_patterns)),
 ]
+
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

@@ -4,7 +4,7 @@ import { Modal } from 'react-bootstrap';
 import { SHARED_CSS, fmt, fmtDate, Pill, Spinner, useToast, Toast } from '../admin/adminShared';
 import { LogOut, Search, RefreshCw, AlertTriangle, BedDouble, CreditCard } from 'lucide-react';
 
-const BASE = '/api/v1';
+import { API_BASE as BASE } from '../constants/config';
 const h  = (t) => ({ Authorization: `Bearer ${t}`, 'ngrok-skip-browser-warning':'true' });
 const hj = (t) => ({ ...h(t), 'Content-Type':'application/json' });
 
@@ -20,13 +20,16 @@ export function ReceptionistDepartures({ token }) {
     setLoading(true);
     try {
       const today = new Date().toISOString().slice(0,10);
-      const res   = await fetch(`${BASE}/admin/bookings/`, { headers: h(token) });
+      const res   = await fetch(`${BASE}/receptionist/departures/?date=${today}`, { headers: h(token) });
       const data  = await res.json().catch(() => []);
       setBookings((Array.isArray(data) ? data : []).filter(b =>
         b.checkOutDate?.slice(0,10) === today && b.status === 'CHECKED_IN'
       ));
-    } catch { show('Failed to load departures', 'error'); }
-    finally { setLoading(false); }
+    } catch (e) {
+      show('Failed to load departures', 'error');
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => { load(); }, [token]);
@@ -41,7 +44,7 @@ export function ReceptionistDepartures({ token }) {
   const handleCheckOut = async () => {
     setSaving(true);
     try {
-      const res = await fetch(`${BASE}/admin/bookings/${selected.id}/status/`, {
+      const res = await fetch(`${BASE}/receptionist/bookings/${selected.id}/status/`, {
         method: 'POST', headers: hj(token),
         body: JSON.stringify({ status: 'COMPLETED' }),
       });
