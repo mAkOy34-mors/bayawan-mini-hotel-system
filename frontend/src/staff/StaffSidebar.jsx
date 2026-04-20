@@ -1,10 +1,11 @@
 // staff/StaffSidebar.jsx
 import { Offcanvas } from 'react-bootstrap';
-import { LayoutDashboard, ClipboardList, AlertTriangle, User, LogOut, Hotel, Wrench } from 'lucide-react';
+import { LayoutDashboard, ClipboardList, Sparkles, AlertTriangle, User, LogOut, Hotel, Wrench } from 'lucide-react';
 
 const NAV_ITEMS = [
   { key: 'dashboard', label: 'Dashboard', Icon: LayoutDashboard },
   { key: 'tasks', label: 'My Tasks', Icon: ClipboardList },
+  { key: 'service-tasks', label: 'Service Tasks', Icon: Sparkles },
   { key: 'emergency', label: 'Emergency', Icon: AlertTriangle },
   { key: 'profile', label: 'My Profile', Icon: User },
 ];

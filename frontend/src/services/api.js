@@ -153,3 +153,77 @@ export const deleteProfile = async (token) => {
   if (!res.ok && res.status !== 404) throw new Error('Failed to delete profile');
   return true;
 };
+
+// ===== FEEDBACK API FUNCTIONS - CORRECTED FOR YOUR BACKEND =====
+
+// Fetch user's feedback from your backend
+export const fetchFeedback = async (token) => {
+  try {
+    const response = await fetch(`${API_BASE}/feedback/my-feedback/`, {  // ✅ matches your URL pattern
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+    
+    if (!response.ok) {
+      if (response.status === 404) {
+        return [];
+      }
+      throw new Error('Failed to fetch feedback');
+    }
+    
+    const data = await response.json();
+    return Array.isArray(data) ? data : [];
+  } catch (error) {
+    console.error('Fetch feedback error:', error);
+    return [];
+  }
+};
+
+// Submit new feedback to your backend
+export const submitFeedback = async (token, feedbackData) => {
+  try {
+    // Map frontend data to match your Django serializer expectations
+    const payload = {
+      booking: feedbackData.bookingId,      // Your serializer expects 'booking'
+      overall_rating: feedbackData.rating,  // Your serializer expects 'overall_rating'
+      comment: feedbackData.comment || '',  // Your serializer expects 'comment'
+      // Optional: you can add these if you want more detailed ratings
+      // cleanliness_rating: feedbackData.rating,
+      // service_rating: feedbackData.rating,
+      // comfort_rating: feedbackData.rating,
+      // value_rating: feedbackData.rating,
+    };
+    
+    const response = await fetch(`${API_BASE}/feedback/submit/`, {  // ✅ matches your URL pattern
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || errorData.message || 'Failed to submit feedback');
+    }
+    
+    const data = await response.json();
+    
+    // Transform backend response to match what your Dashboard expects
+    return {
+      id: data.id,
+      bookingId: data.booking,
+      roomType: feedbackData.roomType,  // Use from frontend since backend might not return it
+      rating: data.overall_rating,
+      comment: data.comment,
+      date: data.created_at,
+      response: data.response,
+    };
+  } catch (error) {
+    console.error('Submit feedback error:', error);
+    throw error;
+  }
+};

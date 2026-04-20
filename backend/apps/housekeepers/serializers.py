@@ -1,21 +1,7 @@
 # apps/housekeepers/serializers.py
 from rest_framework import serializers
-from .models import Housekeeper, CleaningTask, CleaningChecklist, SupplyRequest, RoomStatusLog
-
-
-class HousekeeperSerializer(serializers.ModelSerializer):
-    full_name = serializers.ReadOnlyField()
-    status_display = serializers.CharField(source='get_status_display', read_only=True)
-    shift_display = serializers.CharField(source='get_shift_display', read_only=True)
-
-    class Meta:
-        model = Housekeeper
-        fields = [
-            'id', 'user', 'first_name', 'last_name', 'full_name', 'employee_id',
-            'phone_number', 'email', 'hire_date', 'shift', 'shift_display',
-            'status', 'status_display', 'skills', 'specialization',
-            'tasks_completed', 'rating', 'created_at', 'updated_at'
-        ]
+from .models import CleaningTask, CleaningChecklist, SupplyRequest, RoomStatusLog
+from apps.employees.models import EmployeeInformation
 
 
 class CleaningTaskSerializer(serializers.ModelSerializer):
@@ -23,23 +9,31 @@ class CleaningTaskSerializer(serializers.ModelSerializer):
     priority_display = serializers.CharField(source='get_priority_display', read_only=True)
     status_display = serializers.CharField(source='get_task_status_display', read_only=True)
     assigned_to_name = serializers.SerializerMethodField()
+    assigned_to_employee_id = serializers.SerializerMethodField()
     assigned_by_name = serializers.SerializerMethodField()
     time_taken = serializers.SerializerMethodField()
+    room_number_display = serializers.SerializerMethodField()
 
     class Meta:
         model = CleaningTask
         fields = [
             'id', 'title', 'description', 'task_type', 'task_type_display',
             'priority', 'priority_display', 'status', 'status_display',
-            'room', 'room_number', 'booking', 'assigned_to', 'assigned_to_name',
+            'room', 'room_number', 'room_number_display', 'booking',
+            'assigned_to_employee', 'assigned_to_name', 'assigned_to_employee_id',
             'assigned_by', 'assigned_by_name', 'created_at', 'started_at',
             'completed_at', 'verified_at', 'notes', 'before_image', 'after_image',
             'time_taken'
         ]
 
     def get_assigned_to_name(self, obj):
-        if obj.assigned_to:
-            return obj.assigned_to.full_name
+        if obj.assigned_to_employee:
+            return obj.assigned_to_employee.full_name
+        return None
+
+    def get_assigned_to_employee_id(self, obj):
+        if obj.assigned_to_employee:
+            return obj.assigned_to_employee.id
         return None
 
     def get_assigned_by_name(self, obj):
@@ -50,8 +44,13 @@ class CleaningTaskSerializer(serializers.ModelSerializer):
     def get_time_taken(self, obj):
         if obj.started_at and obj.completed_at:
             delta = obj.completed_at - obj.started_at
-            return int(delta.total_seconds() / 60)  # minutes
+            return int(delta.total_seconds() / 60)
         return None
+
+    def get_room_number_display(self, obj):
+        if obj.room:
+            return obj.room.room_number
+        return obj.room_number
 
 
 class CleaningChecklistSerializer(serializers.ModelSerializer):
@@ -63,30 +62,46 @@ class CleaningChecklistSerializer(serializers.ModelSerializer):
 class SupplyRequestSerializer(serializers.ModelSerializer):
     status_display = serializers.CharField(source='get_status_display', read_only=True)
     housekeeper_name = serializers.SerializerMethodField()
+    housekeeper_id = serializers.SerializerMethodField()
 
     class Meta:
         model = SupplyRequest
         fields = [
-            'id', 'housekeeper', 'housekeeper_name', 'item_name', 'quantity',
-            'reason', 'status', 'status_display', 'approved_by', 'created_at', 'fulfilled_at'
+            'id', 'housekeeper_employee', 'housekeeper_name', 'housekeeper_id',
+            'item_name', 'quantity', 'reason', 'status', 'status_display',
+            'approved_by', 'created_at', 'fulfilled_at'
         ]
 
     def get_housekeeper_name(self, obj):
-        return obj.housekeeper.full_name
+        if obj.housekeeper_employee:
+            return obj.housekeeper_employee.full_name
+        return None
+
+    def get_housekeeper_id(self, obj):
+        if obj.housekeeper_employee:
+            return obj.housekeeper_employee.id
+        return None
 
 
 class RoomStatusLogSerializer(serializers.ModelSerializer):
     action_display = serializers.CharField(source='get_action_display', read_only=True)
     performed_by_name = serializers.SerializerMethodField()
+    performed_by_employee_id = serializers.SerializerMethodField()
 
     class Meta:
         model = RoomStatusLog
         fields = [
             'id', 'room', 'previous_status', 'new_status', 'action',
-            'action_display', 'performed_by', 'performed_by_name', 'notes', 'created_at'
+            'action_display', 'performed_by_employee', 'performed_by_name',
+            'performed_by_employee_id', 'notes', 'created_at'
         ]
 
     def get_performed_by_name(self, obj):
-        if obj.performed_by:
-            return obj.performed_by.full_name
+        if obj.performed_by_employee:
+            return obj.performed_by_employee.full_name
+        return None
+
+    def get_performed_by_employee_id(self, obj):
+        if obj.performed_by_employee:
+            return obj.performed_by_employee.id
         return None

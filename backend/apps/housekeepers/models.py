@@ -3,61 +3,7 @@ from django.db import models
 from django.conf import settings
 from apps.rooms.models import Room
 from apps.bookings.models import Booking
-
-
-class Housekeeper(models.Model):
-    """Housekeeper information and details"""
-
-    class Status(models.TextChoices):
-        AVAILABLE = 'AVAILABLE', 'Available'
-        ON_DUTY = 'ON_DUTY', 'On Duty'
-        ON_BREAK = 'ON_BREAK', 'On Break'
-        OFF_DUTY = 'OFF_DUTY', 'Off Duty'
-
-    class Shift(models.TextChoices):
-        MORNING = 'MORNING', 'Morning (6AM - 2PM)'
-        AFTERNOON = 'AFTERNOON', 'Afternoon (2PM - 10PM)'
-        NIGHT = 'NIGHT', 'Night (10PM - 6AM)'
-
-    # Personal Information
-    user = models.OneToOneField(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
-        related_name='housekeeper_profile'
-    )
-    first_name = models.CharField(max_length=100)
-    last_name = models.CharField(max_length=100)
-    employee_id = models.CharField(max_length=50, unique=True)
-    phone_number = models.CharField(max_length=20)
-    email = models.EmailField()
-
-    # Employment Information
-    hire_date = models.DateField()
-    shift = models.CharField(max_length=20, choices=Shift.choices, default='MORNING')
-    status = models.CharField(max_length=20, choices=Status.choices, default='AVAILABLE')
-
-    # Skills and Specialization
-    skills = models.TextField(blank=True, null=True)
-    specialization = models.CharField(max_length=100, blank=True, null=True)
-
-    # Stats
-    tasks_completed = models.IntegerField(default=0)
-    rating = models.DecimalField(max_digits=3, decimal_places=2, default=5.00)
-
-    # Timestamps
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        db_table = 'housekeepers'
-        ordering = ['-created_at']
-
-    def __str__(self):
-        return f"{self.first_name} {self.last_name} - {self.employee_id}"
-
-    @property
-    def full_name(self):
-        return f"{self.first_name} {self.last_name}"
+from apps.employees.models import EmployeeInformation
 
 
 class CleaningTask(models.Model):
@@ -93,10 +39,21 @@ class CleaningTask(models.Model):
     room_number = models.CharField(max_length=10)
     booking = models.ForeignKey(Booking, on_delete=models.SET_NULL, null=True, blank=True)
 
-    # Assignment
-    assigned_to = models.ForeignKey(Housekeeper, on_delete=models.SET_NULL, null=True, blank=True,
-                                    related_name='assigned_tasks')
-    assigned_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+    # Assignment - THIS IS THE KEY FIELD
+    assigned_to_employee = models.ForeignKey(
+        EmployeeInformation,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='assigned_cleaning_tasks',
+        db_column='assigned_to_employee_id'  # This matches your database column
+    )
+    assigned_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True
+    )
 
     # Timestamps
     created_at = models.DateTimeField(auto_now_add=True)
@@ -112,6 +69,7 @@ class CleaningTask(models.Model):
     class Meta:
         db_table = 'cleaning_tasks'
         ordering = ['-priority', '-created_at']
+        managed = False  # Important: don't let Django manage this table
 
     def __str__(self):
         return f"{self.title} - Room {self.room_number}"
@@ -128,6 +86,7 @@ class CleaningChecklist(models.Model):
 
     class Meta:
         db_table = 'cleaning_checklists'
+        managed = False
 
     def __str__(self):
         return self.item_name
@@ -142,7 +101,12 @@ class SupplyRequest(models.Model):
         FULFILLED = 'FULFILLED', 'Fulfilled'
         REJECTED = 'REJECTED', 'Rejected'
 
-    housekeeper = models.ForeignKey(Housekeeper, on_delete=models.CASCADE, related_name='supply_requests')
+    housekeeper_employee = models.ForeignKey(
+        EmployeeInformation,
+        on_delete=models.CASCADE,
+        related_name='supply_requests',
+        db_column='housekeeper_employee_id'
+    )
     item_name = models.CharField(max_length=200)
     quantity = models.IntegerField()
     reason = models.TextField()
@@ -154,9 +118,10 @@ class SupplyRequest(models.Model):
     class Meta:
         db_table = 'supply_requests'
         ordering = ['-created_at']
+        managed = False
 
     def __str__(self):
-        return f"{self.item_name} x{self.quantity} - {self.housekeeper.full_name}"
+        return f"{self.item_name} x{self.quantity}"
 
 
 class RoomStatusLog(models.Model):
@@ -172,13 +137,21 @@ class RoomStatusLog(models.Model):
     previous_status = models.CharField(max_length=50)
     new_status = models.CharField(max_length=50)
     action = models.CharField(max_length=20, choices=Action.choices)
-    performed_by = models.ForeignKey(Housekeeper, on_delete=models.SET_NULL, null=True, blank=True)
+    performed_by_employee = models.ForeignKey(
+        EmployeeInformation,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='room_status_logs',
+        db_column='performed_by_employee_id'
+    )
     notes = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         db_table = 'room_status_logs'
         ordering = ['-created_at']
+        managed = False
 
     def __str__(self):
         return f"Room {self.room.room_number}: {self.previous_status} → {self.new_status}"

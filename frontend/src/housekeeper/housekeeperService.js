@@ -15,6 +15,7 @@ export const getRooms = async (token) => {
   if (!response.ok) throw new Error('Failed to fetch rooms');
   return response.json();
 };
+
 export const getRoomDetail = async (token, roomId) => {
   const response = await fetch(`${API_BASE}/housekeepers/rooms/${roomId}/`, {
     headers: getHeaders(token),
@@ -22,6 +23,7 @@ export const getRoomDetail = async (token, roomId) => {
   if (!response.ok) throw new Error('Failed to fetch room details');
   return response.json();
 };
+
 export const getRoomHistory = async (token, roomId) => {
   const response = await fetch(`${API_BASE}/housekeepers/rooms/${roomId}/history/`, {
     headers: getHeaders(token),
@@ -29,18 +31,12 @@ export const getRoomHistory = async (token, roomId) => {
   if (!response.ok) throw new Error('Failed to fetch room history');
   return response.json();
 };
+
 export const getRoomStats = async (token) => {
   const response = await fetch(`${API_BASE}/housekeepers/rooms/stats/`, {
     headers: getHeaders(token),
   });
   if (!response.ok) throw new Error('Failed to fetch room stats');
-  return response.json();
-};
-export const getRoomStatus = async (token) => {
-  const response = await fetch(`${API_BASE}/housekeepers/room-status/`, {
-    headers: getHeaders(token),
-  });
-  if (!response.ok) throw new Error('Failed to fetch room status');
   return response.json();
 };
 
@@ -110,7 +106,7 @@ export const getTaskHistory = async (token) => {
 
 // ── Profile ──────────────────────────────────────────────────────────────
 export const getMyProfile = async (token) => {
-  const response = await fetch(`${API_BASE}/housekeepers/my-profile/`, {
+  const response = await fetch(`${API_BASE}/employees/my-profile/`, {
     headers: getHeaders(token),
   });
   if (!response.ok) throw new Error('Failed to fetch profile');
@@ -118,7 +114,7 @@ export const getMyProfile = async (token) => {
 };
 
 export const updateMyProfile = async (token, data) => {
-  const response = await fetch(`${API_BASE}/housekeepers/my-profile/`, {
+  const response = await fetch(`${API_BASE}/employees/my-profile/`, {
     method: 'PUT',
     headers: getHeaders(token),
     body: JSON.stringify(data),
@@ -133,5 +129,56 @@ export const getMyStats = async (token) => {
     headers: getHeaders(token),
   });
   if (!response.ok) throw new Error('Failed to fetch stats');
+  return response.json();
+};
+
+// Add these new functions to your existing housekeeperService.js
+
+// ── Staff Tasks (for housekeeper to fetch assigned tasks) ──
+export const getStaffTasks = async (token) => {
+  const response = await fetch(`${API_BASE}/staff/tasks/`, {
+    headers: getHeaders(token),
+  });
+  if (!response.ok) throw new Error('Failed to fetch staff tasks');
+  const data = await response.json();
+  
+  // Filter for housekeeping/cleaning tasks only
+  return data.filter(task => 
+    task.task_type === 'HOUSEKEEPING' || 
+    task.task_type === 'CLEANING'
+  );
+};
+
+export const updateStaffTaskStatus = async (token, taskId, status, notes = '') => {
+  const response = await fetch(`${API_BASE}/staff/tasks/${taskId}/update/`, {
+    method: 'PATCH',
+    headers: getHeaders(token),
+    body: JSON.stringify({ status, note: notes }),
+  });
+  if (!response.ok) throw new Error('Failed to update task status');
+  return response.json();
+};
+
+export const getStaffTaskDetail = async (token, taskId) => {
+  const response = await fetch(`${API_BASE}/staff/tasks/${taskId}/`, {
+    headers: getHeaders(token),
+  });
+  if (!response.ok) throw new Error('Failed to fetch task detail');
+  return response.json();
+};
+
+export const getStaffTaskHistory = async (token, taskId) => {
+  const response = await fetch(`${API_BASE}/staff/tasks/${taskId}/history/`, {
+    headers: getHeaders(token),
+  });
+  if (!response.ok) throw new Error('Failed to fetch task history');
+  return response.json();
+};
+
+export const getStaffStats = async (token) => {
+  const response = await fetch(`${API_BASE}/staff/stats/`, {
+    headers: getHeaders(token),
+  });
+  if (!response.ok) throw new Error('Failed to fetch staff stats');
   return response.json();
 };

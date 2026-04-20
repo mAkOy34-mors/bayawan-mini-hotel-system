@@ -1,7 +1,18 @@
 // housekeeper/HousekeeperReport.jsx
+// housekeeper/HousekeeperReport.jsx
 import { useState, useEffect } from 'react';
 import { getMyReport, getTaskHistory } from './housekeeperService';
-import { Calendar, TrendingUp, Download, BarChart3, PieChart } from 'lucide-react';
+import { 
+  Calendar, 
+  TrendingUp, 
+  Download, 
+  BarChart3, 
+  PieChart,
+  RefreshCw,      // ← Add this
+  CheckCircle,    // ← Add this
+  Clock,          // ← Add this
+  Hotel           // ← Add this
+} from 'lucide-react';
 
 export function HousekeeperReport({ token }) {
   const [report, setReport] = useState(null);

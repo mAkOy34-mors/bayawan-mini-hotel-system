@@ -10,10 +10,10 @@ from rest_framework.permissions import IsAuthenticated
 from django.db import transaction
 from django.db.models import Q, Count, Avg
 
-from .models import Housekeeper, CleaningTask, CleaningChecklist, SupplyRequest, RoomStatusLog
+from .models import CleaningTask, CleaningChecklist, SupplyRequest, RoomStatusLog
 from .serializers import (
-    HousekeeperSerializer, CleaningTaskSerializer,
-    CleaningChecklistSerializer, SupplyRequestSerializer, RoomStatusLogSerializer
+    CleaningTaskSerializer, CleaningChecklistSerializer,
+    SupplyRequestSerializer, RoomStatusLogSerializer
 )
 from apps.rooms.models import Room
 from apps.bookings.models import Booking
@@ -43,8 +43,17 @@ def admin_only(view_func):
     return wrapper
 
 
-# ── Housekeeper Management ──────────────────────────────────────────────
+def get_employee_from_user(user):
+    """Helper function to get EmployeeInformation for a user"""
+    try:
+        return EmployeeInformation.objects.get(user=user)
+    except EmployeeInformation.DoesNotExist:
+        return None
 
+
+# ── Housekeeper Management (using EmployeeInformation) ─────────────────
+
+# Update HousekeeperListView
 class HousekeeperListView(APIView):
     """GET /api/v1/housekeepers/ - Get all housekeepers"""
 
@@ -55,11 +64,57 @@ class HousekeeperListView(APIView):
         if cached:
             return Response(cached)
 
-        housekeepers = Housekeeper.objects.all().order_by('-created_at')
-        serializer = HousekeeperSerializer(housekeepers, many=True)
+        # Get all users with role='HOUSEKEEPER' and their employee info
+        users = User.objects.filter(role='HOUSEKEEPER')
 
-        cache.set(cache_key, serializer.data, timeout=60)
-        return Response(serializer.data)
+        data = []
+        for user in users:
+            try:
+                employee = EmployeeInformation.objects.get(user=user)
+                data.append({
+                    'id': employee.id,
+                    'user': user.id,
+                    'first_name': employee.first_name,
+                    'last_name': employee.last_name,
+                    'full_name': employee.full_name,
+                    'employee_id': employee.employee_id,
+                    'phone_number': employee.contact_number,
+                    'email': employee.email,
+                    'hire_date': employee.hire_date,
+                    'shift': 'MORNING',
+                    'shift_display': 'Morning',
+                    'status': 'AVAILABLE' if employee.is_on_duty else 'OFF_DUTY',
+                    'status_display': 'Available' if employee.is_on_duty else 'Off Duty',
+                    'skills': employee.skills,
+                    'specialization': employee.position,
+                    'tasks_completed': 0,
+                    'rating': 5.0,
+                })
+            except EmployeeInformation.DoesNotExist:
+                # User has HOUSEKEEPER role but no employee record
+                data.append({
+                    'id': None,
+                    'user': user.id,
+                    'first_name': user.first_name or '',
+                    'last_name': user.last_name or '',
+                    'full_name': user.username,
+                    'employee_id': f"HK{user.id:06d}",
+                    'phone_number': '',
+                    'email': user.email,
+                    'hire_date': timezone.now().date(),
+                    'shift': 'MORNING',
+                    'shift_display': 'Morning',
+                    'status': 'AVAILABLE',
+                    'status_display': 'Available',
+                    'skills': '',
+                    'specialization': 'HOUSEKEEPER',
+                    'tasks_completed': 0,
+                    'rating': 5.0,
+                })
+
+        cache.set(cache_key, data, timeout=60)
+        return Response(data)
+
 
 
 class HousekeeperDetailView(APIView):
@@ -73,13 +128,34 @@ class HousekeeperDetailView(APIView):
             return Response(cached)
 
         try:
-            housekeeper = Housekeeper.objects.get(id=housekeeper_id)
-        except Housekeeper.DoesNotExist:
+            employee = EmployeeInformation.objects.get(id=housekeeper_id, position='HOUSEKEEPER')
+        except EmployeeInformation.DoesNotExist:
             return Response({"error": "Housekeeper not found"}, status=404)
 
-        serializer = HousekeeperSerializer(housekeeper)
-        cache.set(cache_key, serializer.data, timeout=60)
-        return Response(serializer.data)
+        data = {
+            'id': employee.id,
+            'user': employee.user_id,
+            'first_name': employee.first_name,
+            'last_name': employee.last_name,
+            'full_name': employee.full_name,
+            'employee_id': employee.employee_id,
+            'phone_number': employee.contact_number,
+            'email': employee.email,
+            'hire_date': employee.hire_date,
+            'shift': 'MORNING',
+            'shift_display': 'Morning',
+            'status': 'AVAILABLE' if employee.is_on_duty else 'OFF_DUTY',
+            'status_display': 'Available' if employee.is_on_duty else 'Off Duty',
+            'skills': employee.skills,
+            'specialization': employee.position,
+            'tasks_completed': 0,
+            'rating': 5.0,
+            'created_at': employee.created_at,
+            'updated_at': employee.updated_at,
+        }
+
+        cache.set(cache_key, data, timeout=60)
+        return Response(data)
 
 
 class HousekeeperCreateView(APIView):
@@ -93,9 +169,7 @@ class HousekeeperCreateView(APIView):
         email = request.data.get('email')
         phone_number = request.data.get('phoneNumber')
         hire_date = request.data.get('hireDate')
-        shift = request.data.get('shift', 'MORNING')
 
-        # Validation
         if not first_name or not last_name or not email:
             return Response(
                 {"error": "First name, last name, and email are required"},
@@ -107,7 +181,6 @@ class HousekeeperCreateView(APIView):
         try:
             user = User.objects.get(email=email)
         except User.DoesNotExist:
-            # Create new user
             username = email.split('@')[0]
             base_username = username
             counter = 1
@@ -125,40 +198,33 @@ class HousekeeperCreateView(APIView):
         # Generate employee ID
         employee_id = f"HK{user.id:06d}"
 
-        # Create housekeeper
-        housekeeper = Housekeeper.objects.create(
+        # Create employee_information record
+        employee = EmployeeInformation.objects.create(
             user=user,
             first_name=first_name,
             last_name=last_name,
+            contact_number=phone_number,
             employee_id=employee_id,
-            phone_number=phone_number,
-            email=email,
+            position='HOUSEKEEPER',
+            department='HOUSEKEEPING',
             hire_date=hire_date or timezone.now().date(),
-            shift=shift,
+            home_address=request.data.get('homeAddress', ''),
+            date_of_birth=request.data.get('dateOfBirth', '2000-01-01'),
+            email=email,
+            is_on_duty=True,
             skills=request.data.get('skills', ''),
-            specialization=request.data.get('specialization', ''),
         )
 
-        # Also create employee_information record
-        EmployeeInformation.objects.get_or_create(
-            user=user,
-            defaults={
-                'first_name': first_name,
-                'last_name': last_name,
-                'contact_number': phone_number,
-                'employee_id': employee_id,
-                'position': 'HOUSEKEEPER',
-                'hire_date': hire_date or timezone.now().date(),
-                'home_address': '',
-                'date_of_birth': '2000-01-01',
-            }
-        )
-
-        # Clear cache
         cache.delete("housekeepers_all")
 
-        serializer = HousekeeperSerializer(housekeeper)
-        return Response(serializer.data, status=201)
+        return Response({
+            'id': employee.id,
+            'first_name': employee.first_name,
+            'last_name': employee.last_name,
+            'employee_id': employee.employee_id,
+            'email': employee.email,
+            'message': 'Housekeeper created successfully'
+        }, status=201)
 
 
 class HousekeeperUpdateView(APIView):
@@ -168,44 +234,31 @@ class HousekeeperUpdateView(APIView):
     @transaction.atomic
     def put(self, request, housekeeper_id):
         try:
-            housekeeper = Housekeeper.objects.get(id=housekeeper_id)
-        except Housekeeper.DoesNotExist:
+            employee = EmployeeInformation.objects.get(id=housekeeper_id, position='HOUSEKEEPER')
+        except EmployeeInformation.DoesNotExist:
             return Response({"error": "Housekeeper not found"}, status=404)
 
-        # Update fields
-        housekeeper.first_name = request.data.get('firstName', housekeeper.first_name)
-        housekeeper.last_name = request.data.get('lastName', housekeeper.last_name)
-        housekeeper.phone_number = request.data.get('phoneNumber', housekeeper.phone_number)
-        housekeeper.email = request.data.get('email', housekeeper.email)
-        housekeeper.shift = request.data.get('shift', housekeeper.shift)
-        housekeeper.status = request.data.get('status', housekeeper.status)
-        housekeeper.skills = request.data.get('skills', housekeeper.skills)
-        housekeeper.specialization = request.data.get('specialization', housekeeper.specialization)
-        housekeeper.save()
+        employee.first_name = request.data.get('firstName', employee.first_name)
+        employee.last_name = request.data.get('lastName', employee.last_name)
+        employee.contact_number = request.data.get('phoneNumber', employee.contact_number)
+        employee.email = request.data.get('email', employee.email)
+        employee.skills = request.data.get('skills', employee.skills)
+        employee.is_on_duty = request.data.get('isOnDuty', employee.is_on_duty)
+        employee.save()
 
-        # Update user email if changed
-        if request.data.get('email') and housekeeper.user.email != request.data.get('email'):
-            housekeeper.user.email = request.data.get('email')
-            housekeeper.user.save()
+        if request.data.get('email') and employee.user.email != request.data.get('email'):
+            employee.user.email = request.data.get('email')
+            employee.user.save()
 
-        # Update employee_information
-        try:
-            employee = EmployeeInformation.objects.get(user=housekeeper.user)
-            employee.first_name = housekeeper.first_name
-            employee.last_name = housekeeper.last_name
-            employee.contact_number = housekeeper.phone_number
-            employee.email = housekeeper.email
-            employee.position = 'HOUSEKEEPER'
-            employee.save()
-        except EmployeeInformation.DoesNotExist:
-            pass
-
-        # Clear cache
         cache.delete("housekeepers_all")
         cache.delete(f"housekeeper_{housekeeper_id}")
 
-        serializer = HousekeeperSerializer(housekeeper)
-        return Response(serializer.data)
+        return Response({
+            'id': employee.id,
+            'first_name': employee.first_name,
+            'last_name': employee.last_name,
+            'message': 'Housekeeper updated successfully'
+        })
 
 
 class HousekeeperDeleteView(APIView):
@@ -215,18 +268,16 @@ class HousekeeperDeleteView(APIView):
     @transaction.atomic
     def delete(self, request, housekeeper_id):
         try:
-            housekeeper = Housekeeper.objects.get(id=housekeeper_id)
-        except Housekeeper.DoesNotExist:
+            employee = EmployeeInformation.objects.get(id=housekeeper_id, position='HOUSEKEEPER')
+        except EmployeeInformation.DoesNotExist:
             return Response({"error": "Housekeeper not found"}, status=404)
 
-        user = housekeeper.user
-        housekeeper.delete()
+        user = employee.user
+        employee.delete()
 
-        # Optionally delete user account
         if request.data.get('deleteUser', False):
             user.delete()
 
-        # Clear cache
         cache.delete("housekeepers_all")
         cache.delete(f"housekeeper_{housekeeper_id}")
 
@@ -239,22 +290,19 @@ class HousekeeperToggleStatusView(APIView):
     @admin_only
     def patch(self, request, housekeeper_id):
         try:
-            housekeeper = Housekeeper.objects.get(id=housekeeper_id)
-        except Housekeeper.DoesNotExist:
+            employee = EmployeeInformation.objects.get(id=housekeeper_id, position='HOUSEKEEPER')
+        except EmployeeInformation.DoesNotExist:
             return Response({"error": "Housekeeper not found"}, status=404)
 
-        new_status = request.data.get('status')
-        if new_status:
-            housekeeper.status = new_status
-            housekeeper.save()
+        employee.is_on_duty = not employee.is_on_duty
+        employee.save()
 
-        # Clear cache
         cache.delete("housekeepers_all")
         cache.delete(f"housekeeper_{housekeeper_id}")
 
         return Response({
-            "message": f"Housekeeper status updated to {housekeeper.get_status_display()}",
-            "status": housekeeper.status
+            "message": f"Housekeeper status updated to {'On Duty' if employee.is_on_duty else 'Off Duty'}",
+            "status": "AVAILABLE" if employee.is_on_duty else "OFF_DUTY"
         })
 
 
@@ -265,46 +313,39 @@ class MyProfileView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        # First try to get from Housekeeper model
         try:
-            housekeeper = Housekeeper.objects.get(user=request.user)
-            serializer = HousekeeperSerializer(housekeeper)
-            return Response(serializer.data)
-        except Housekeeper.DoesNotExist:
-            pass
-
-        # Fallback to EmployeeInformation
-        try:
-            employee = EmployeeInformation.objects.get(user=request.user)
+            employee = EmployeeInformation.objects.get(user=request.user, position='HOUSEKEEPER')
             return Response({
-                'id': None,
+                'id': employee.id,
                 'first_name': employee.first_name,
                 'last_name': employee.last_name,
+                'full_name': employee.full_name,
                 'employee_id': employee.employee_id,
                 'phone_number': employee.contact_number,
                 'email': employee.email,
+                'hire_date': employee.hire_date,
                 'shift': 'MORNING',
-                'status': 'AVAILABLE',
+                'status': 'AVAILABLE' if employee.is_on_duty else 'OFF_DUTY',
                 'skills': employee.skills,
                 'specialization': employee.position,
                 'tasks_completed': 0,
                 'rating': 5.0,
+                'home_address': employee.home_address,
             })
         except EmployeeInformation.DoesNotExist:
             return Response({"error": "Profile not found"}, status=404)
 
     def put(self, request):
         try:
-            housekeeper = Housekeeper.objects.get(user=request.user)
-            housekeeper.phone_number = request.data.get('phoneNumber', housekeeper.phone_number)
-            housekeeper.email = request.data.get('email', housekeeper.email)
-            housekeeper.skills = request.data.get('skills', housekeeper.skills)
-            housekeeper.specialization = request.data.get('specialization', housekeeper.specialization)
-            housekeeper.save()
-            serializer = HousekeeperSerializer(housekeeper)
-            return Response(serializer.data)
-        except Housekeeper.DoesNotExist:
-            return Response({"error": "Housekeeper profile not found"}, status=404)
+            employee = EmployeeInformation.objects.get(user=request.user, position='HOUSEKEEPER')
+            employee.contact_number = request.data.get('phoneNumber', employee.contact_number)
+            employee.email = request.data.get('email', employee.email)
+            employee.skills = request.data.get('skills', employee.skills)
+            employee.home_address = request.data.get('homeAddress', employee.home_address)
+            employee.save()
+            return Response({"message": "Profile updated successfully"})
+        except EmployeeInformation.DoesNotExist:
+            return Response({"error": "Profile not found"}, status=404)
 
 
 # ── Room Status Management (Role-based) ─────────────────────────────
@@ -342,11 +383,12 @@ class RoomStatusView(APIView):
                 'status': room.get('status', 'DIRTY'),
                 'statusDisplay': status_display,
                 'available': room['available'],
-                'lastCleaned': None,  # You can populate this if needed
+                'lastCleaned': None,
             })
 
         cache.set(cache_key, result, timeout=30)
         return Response(result)
+
 
 class UpdateRoomStatusView(APIView):
     """PATCH /api/v1/housekeepers/rooms/<room_id>/status/ - Update room status"""
@@ -373,7 +415,6 @@ class UpdateRoomStatusView(APIView):
             room.status = new_status
             room.save()
 
-        # Get performer name
         performer_name = None
         try:
             employee = EmployeeInformation.objects.get(user=request.user)
@@ -389,7 +430,7 @@ class UpdateRoomStatusView(APIView):
             RoomStatusLog.Action.DIRTY if new_status == 'DIRTY' else
             RoomStatusLog.Action.MAINTENANCE if new_status == 'MAINTENANCE' else
             RoomStatusLog.Action.INSPECTED,
-            performed_by=None,
+            performed_by_employee=get_employee_from_user(request.user),
             notes=f"Updated by {performer_name}: {request.data.get('notes', '')}"
         )
 
@@ -418,15 +459,26 @@ class RoomStatusHistoryView(APIView):
             return Response(cached)
 
         logs = RoomStatusLog.objects.filter(room_id=room_id).order_by('-created_at')
-        serializer = RoomStatusLogSerializer(logs, many=True)
 
-        cache.set(cache_key, serializer.data, timeout=60)
-        return Response(serializer.data)
+        history = []
+        for log in logs:
+            history.append({
+                'id': log.id,
+                'previousStatus': log.previous_status,
+                'newStatus': log.new_status,
+                'action': log.action,
+                'actionDisplay': log.get_action_display(),
+                'performedBy': log.performed_by_employee.full_name if log.performed_by_employee else None,
+                'notes': log.notes,
+                'createdAt': log.created_at,
+            })
+
+        cache.set(cache_key, history, timeout=60)
+        return Response(history)
 
 
 # ── Room Management for Housekeepers (Role-based) ────────────
 
-# apps/housekeepers/views.py - Update HousekeeperRoomListView
 class HousekeeperRoomListView(APIView):
     """GET /api/v1/housekeepers/rooms/ - Get all rooms for housekeeping"""
     permission_classes = [IsAuthenticated]
@@ -447,7 +499,6 @@ class HousekeeperRoomListView(APIView):
 
         rooms_data = []
         for room in rooms:
-            # Create a mapping for room type display without using get_room_type_display
             room_type_display = {
                 'STANDARD': 'Standard',
                 'DELUXE': 'Deluxe',
@@ -456,7 +507,6 @@ class HousekeeperRoomListView(APIView):
                 'VILLA': 'Villa',
             }.get(room.room_type, room.room_type)
 
-            # Create a mapping for status display
             status_display = {
                 'CLEAN': 'Clean',
                 'DIRTY': 'Dirty',
@@ -482,6 +532,7 @@ class HousekeeperRoomListView(APIView):
 
         cache.set(cache_key, rooms_data, timeout=60)
         return Response(rooms_data)
+
 
 class HousekeeperRoomDetailView(APIView):
     """GET /api/v1/housekeepers/rooms/<room_id>/ - Get room details"""
@@ -536,6 +587,7 @@ class HousekeeperRoomDetailView(APIView):
         cache.set(cache_key, room_data, timeout=60)
         return Response(room_data)
 
+
 class HousekeeperUpdateRoomStatusView(APIView):
     """PATCH /api/v1/housekeepers/rooms/<room_id>/status/ - Update room status"""
     permission_classes = [IsAuthenticated]
@@ -563,7 +615,6 @@ class HousekeeperUpdateRoomStatusView(APIView):
         room.status = new_status
         room.save()
 
-        # Get performer name from employee_information
         performer_name = None
         try:
             employee = EmployeeInformation.objects.get(user=request.user)
@@ -571,7 +622,6 @@ class HousekeeperUpdateRoomStatusView(APIView):
         except EmployeeInformation.DoesNotExist:
             performer_name = request.user.username
 
-        # Log the status change
         RoomStatusLog.objects.create(
             room=room,
             previous_status=previous_status,
@@ -580,11 +630,10 @@ class HousekeeperUpdateRoomStatusView(APIView):
             RoomStatusLog.Action.DIRTY if new_status == 'DIRTY' else
             RoomStatusLog.Action.MAINTENANCE if new_status == 'MAINTENANCE' else
             RoomStatusLog.Action.INSPECTED,
-            performed_by=None,
+            performed_by_employee=get_employee_from_user(request.user),
             notes=f"Updated by {performer_name}: {request.data.get('notes', '')}"
         )
 
-        # Clear caches
         cache.delete("housekeeper_rooms_all")
         cache.delete(f"housekeeper_room_{room_id}")
         cache.delete("room_status_all")
@@ -593,7 +642,7 @@ class HousekeeperUpdateRoomStatusView(APIView):
             'id': room.id,
             'roomNumber': room.room_number,
             'status': new_status,
-            'statusDisplay': dict(Room.RoomStatus.choices).get(new_status, new_status),
+            'statusDisplay': status_display,
             'message': f'Room {room.room_number} status updated to {new_status}'
         })
 
@@ -622,7 +671,7 @@ class HousekeeperRoomStatusHistoryView(APIView):
                 'newStatus': log.new_status,
                 'action': log.action,
                 'actionDisplay': log.get_action_display(),
-                'performedBy': log.performed_by.full_name if log.performed_by else None,
+                'performedBy': log.performed_by_employee.full_name if log.performed_by_employee else None,
                 'notes': log.notes,
                 'createdAt': log.created_at,
             })
@@ -631,6 +680,7 @@ class HousekeeperRoomStatusHistoryView(APIView):
         return Response(history)
 
 
+# Update HousekeeperRoomStatsView
 class HousekeeperRoomStatsView(APIView):
     """GET /api/v1/housekeepers/rooms/stats/ - Get room statistics"""
     permission_classes = [IsAuthenticated]
@@ -646,17 +696,18 @@ class HousekeeperRoomStatsView(APIView):
         occupied_rooms = Room.objects.filter(status='OCCUPIED').count()
         maintenance_rooms = Room.objects.filter(status='MAINTENANCE').count()
 
-        # Get rooms cleaned by this housekeeper today (if housekeeper profile exists)
+        # Get rooms cleaned by this housekeeper today
         rooms_cleaned_today = 0
-        try:
-            housekeeper = Housekeeper.objects.get(user=request.user)
-            rooms_cleaned_today = RoomStatusLog.objects.filter(
-                performed_by=housekeeper,
-                action=RoomStatusLog.Action.CLEANED,
-                created_at__date=timezone.now().date()
-            ).count()
-        except Housekeeper.DoesNotExist:
-            pass
+        if user_role == 'HOUSEKEEPER':
+            try:
+                employee = EmployeeInformation.objects.get(user=request.user)
+                rooms_cleaned_today = RoomStatusLog.objects.filter(
+                    performed_by_employee=employee,
+                    action=RoomStatusLog.Action.CLEANED,
+                    created_at__date=timezone.now().date()
+                ).count()
+            except EmployeeInformation.DoesNotExist:
+                pass
 
         stats = {
             'total': total_rooms,
@@ -669,7 +720,6 @@ class HousekeeperRoomStatsView(APIView):
         }
 
         return Response(stats)
-
 
 # ── Task Management ────────────────────────────────────────────────────
 
@@ -690,24 +740,44 @@ class CleaningTaskListView(APIView):
         return Response(serializer.data)
 
 
+# apps/housekeepers/views.py - Updated MyTasksView and MyStatsView
+
 class MyTasksView(APIView):
     """GET /api/v1/housekeepers/my-tasks/ - Get tasks assigned to current housekeeper"""
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
         user_role = getattr(request.user, 'role', '')
+
+        logger.info(f"MyTasksView called by user: {request.user.email}, Role: {user_role}")
+
         if user_role != 'HOUSEKEEPER':
-            return Response({"error": "Only housekeepers can access their tasks"}, status=403)
+            return Response({
+                "error": "Only housekeepers can access their tasks",
+                "your_role": user_role
+            }, status=403)
 
+        # Get employee record - link via user
         try:
-            housekeeper = Housekeeper.objects.get(user=request.user)
-        except Housekeeper.DoesNotExist:
-            return Response({"error": "Housekeeper profile not found"}, status=404)
+            employee = EmployeeInformation.objects.get(user=request.user)
+            logger.info(f"Found employee: {employee.first_name} {employee.last_name} (ID: {employee.id})")
+        except EmployeeInformation.DoesNotExist:
+            # If no employee record, return empty list
+            logger.warning(f"No employee record found for user {request.user.id}")
+            return Response([])
 
-        tasks = CleaningTask.objects.filter(assigned_to=housekeeper).order_by('-priority', '-created_at')
+        # Get tasks assigned to this employee
+        tasks = CleaningTask.objects.filter(assigned_to_employee=employee).order_by('-priority', '-created_at')
+
+        logger.info(f"Found {tasks.count()} tasks for employee {employee.id}")
+
         serializer = CleaningTaskSerializer(tasks, many=True)
         return Response(serializer.data)
 
+
+# apps/housekeepers/views.py - Updated CreateCleaningTaskView
+
+# apps/housekeepers/views.py - Fixed CreateCleaningTaskView
 
 class CreateCleaningTaskView(APIView):
     """POST /api/v1/housekeepers/tasks/create/ - Create a cleaning task"""
@@ -715,11 +785,18 @@ class CreateCleaningTaskView(APIView):
     @admin_only
     @transaction.atomic
     def post(self, request):
+        # Check if user is admin or receptionist using role
+        user_role = getattr(request.user, 'role', '')
+        if user_role not in ['ADMIN', 'RECEPTIONIST']:
+            return Response({"error": "Only admin and receptionist can create tasks"}, status=403)
+
         title = request.data.get('title')
         description = request.data.get('description')
         task_type = request.data.get('taskType')
         room_number = request.data.get('roomNumber')
         assigned_to_id = request.data.get('assignedTo')
+        priority = request.data.get('priority', 'MEDIUM')
+        notes = request.data.get('notes', '')
 
         if not title or not room_number:
             return Response({"error": "Title and room number are required"}, status=400)
@@ -731,30 +808,93 @@ class CreateCleaningTaskView(APIView):
             pass
 
         assigned_to = None
+
+        # If an ID was provided, try to assign to that specific housekeeper
         if assigned_to_id:
             try:
-                assigned_to = Housekeeper.objects.get(id=assigned_to_id)
-            except Housekeeper.DoesNotExist:
-                pass
+                assigned_to = EmployeeInformation.objects.get(id=assigned_to_id)
+                logger.info(f"Task assigned to: {assigned_to.first_name} {assigned_to.last_name}")
+            except EmployeeInformation.DoesNotExist:
+                logger.warning(f"Employee with ID {assigned_to_id} not found")
+                assigned_to = None
 
+        # If no assigned_to, auto-assign to a user with HOUSEKEEPER role
+        if not assigned_to:
+            try:
+                from apps.users.models import User
+
+                # Find a user with HOUSEKEEPER role (without is_active filter)
+                housekeeper_user = User.objects.filter(role='HOUSEKEEPER').first()
+
+                if housekeeper_user:
+                    # Get the EmployeeInformation for this user
+                    assigned_to = EmployeeInformation.objects.filter(user=housekeeper_user).first()
+
+                    if assigned_to:
+                        logger.info(
+                            f"Auto-assigned task to: {assigned_to.first_name} {assigned_to.last_name} (User: {housekeeper_user.username})")
+                    else:
+                        # If no EmployeeInformation, create one
+                        assigned_to = EmployeeInformation.objects.create(
+                            user=housekeeper_user,
+                            first_name=housekeeper_user.first_name or 'House',
+                            last_name=housekeeper_user.last_name or 'Keeper',
+                            employee_id=f"HK{housekeeper_user.id:06d}",
+                            contact_number='',
+                            email=housekeeper_user.email,
+                            position='HOUSEKEEPER',
+                            department='HOUSEKEEPING',
+                            hire_date=timezone.now().date(),
+                            is_on_duty=True,
+                            home_address='',
+                            date_of_birth='2000-01-01'
+                        )
+                        logger.info(f"Created EmployeeInformation for user {housekeeper_user.username}")
+                else:
+                    logger.warning("No user with HOUSEKEEPER role found")
+            except Exception as e:
+                logger.warning(f"Could not auto-assign housekeeper: {e}")
+
+        # Create task using assigned_to_employee
         task = CleaningTask.objects.create(
             title=title,
             description=description,
             task_type=task_type or 'ROOM_CLEANING',
-            priority=request.data.get('priority', 'MEDIUM'),
+            priority=priority,
             room=room,
             room_number=room_number,
-            assigned_to=assigned_to,
+            assigned_to_employee=assigned_to,
             assigned_by=request.user,
-            notes=request.data.get('notes', ''),
+            notes=notes,
+            status='PENDING'
         )
 
+        # Create checklist items
         checklist_items = request.data.get('checklistItems', [])
-        for item in checklist_items:
-            CleaningChecklist.objects.create(
-                task=task,
-                item_name=item
-            )
+        if checklist_items:
+            for item in checklist_items:
+                CleaningChecklist.objects.create(
+                    task=task,
+                    item_name=item
+                )
+        else:
+            default_items = [
+                "Make bed and change linens",
+                "Vacuum floor",
+                "Clean bathroom (toilet, sink, shower)",
+                "Replace towels",
+                "Restock amenities (soap, shampoo, tissue)",
+                "Wipe all surfaces",
+                "Empty trash bins",
+                "Check mini-bar",
+                "Arrange furniture",
+                "Final inspection"
+            ]
+            for item in default_items:
+                CleaningChecklist.objects.create(
+                    task=task,
+                    item_name=item
+                )
 
         cache.delete("cleaning_tasks_all")
 
@@ -768,21 +908,24 @@ class UpdateTaskStatusView(APIView):
 
     @transaction.atomic
     def patch(self, request, task_id):
+        print("=" * 60)
+        print(f"🎯 View called for task: {task_id}")
+
         try:
             task = CleaningTask.objects.get(id=task_id)
+            print(f"✅ Task found: {task.id} - {task.status}")
         except CleaningTask.DoesNotExist:
             return Response({"error": "Task not found"}, status=404)
 
         user_role = getattr(request.user, 'role', '')
+        print(f"👤 User role: {user_role}")
 
         # Check permission
         if user_role == 'HOUSEKEEPER':
-            try:
-                housekeeper = Housekeeper.objects.get(user=request.user)
-                if task.assigned_to and task.assigned_to.id != housekeeper.id:
+            if task.assigned_to_employee:
+                assigned_user = task.assigned_to_employee.user
+                if assigned_user.id != request.user.id:
                     return Response({"error": "You can only update your own tasks"}, status=403)
-            except Housekeeper.DoesNotExist:
-                return Response({"error": "Housekeeper profile not found"}, status=404)
         elif user_role not in ['ADMIN', 'RECEPTIONIST']:
             return Response({"error": "Permission denied"}, status=403)
 
@@ -792,15 +935,57 @@ class UpdateTaskStatusView(APIView):
         if not new_status:
             return Response({"error": "Status is required"}, status=400)
 
+        # Store old status to check if task is being completed
+        old_status = task.status
+
+        # Update task
         task.status = new_status
 
         if new_status == 'IN_PROGRESS' and not task.started_at:
             task.started_at = timezone.now()
         elif new_status == 'COMPLETED':
             task.completed_at = timezone.now()
-            if task.assigned_to:
-                task.assigned_to.tasks_completed += 1
-                task.assigned_to.save()
+
+            # ============================================================
+            # WHEN TASK IS COMPLETED, UPDATE ROOM STATUS TO CLEAN
+            # ============================================================
+            if task.room_number:
+                try:
+                    from apps.rooms.models import Room
+
+                    # Find the room by room number
+                    room = Room.objects.filter(room_number=task.room_number).first()
+
+                    if room:
+                        old_room_status = getattr(room, 'status', 'UNKNOWN')
+                        print(f"🏨 Updating room {room.room_number} status from {old_room_status} to CLEAN")
+
+                        # Update room status to CLEAN
+                        room.status = 'CLEAN'
+                        room.available = True
+                        room.save()
+
+                        print(f"✅ Room {room.room_number} is now CLEAN and available")
+
+                        # Also log this in room status history if you have that model
+                        try:
+                            from apps.housekeepers.models import RoomStatusLog
+                            RoomStatusLog.objects.create(
+                                room=room,
+                                previous_status=old_room_status,
+                                new_status='CLEAN',
+                                action=RoomStatusLog.Action.CLEANED,
+                                performed_by_employee=task.assigned_to_employee,
+                                notes=f"Task #{task.id} completed: Room cleaned"
+                            )
+                            print(f"📝 Room status change logged")
+                        except:
+                            pass
+                    else:
+                        print(f"⚠️ Room {task.room_number} not found")
+                except Exception as e:
+                    print(f"⚠️ Error updating room status: {e}")
+
         elif new_status == 'VERIFIED':
             task.verified_at = timezone.now()
 
@@ -809,6 +994,7 @@ class UpdateTaskStatusView(APIView):
 
         task.save()
 
+        # Update checklist if provided
         checklist_updates = request.data.get('checklist', [])
         for item in checklist_updates:
             try:
@@ -822,9 +1008,17 @@ class UpdateTaskStatusView(APIView):
 
         cache.delete("cleaning_tasks_all")
 
-        serializer = CleaningTaskSerializer(task)
-        return Response(serializer.data)
+        # Also clear room cache
 
+        cache.delete("housekeeper_rooms_all")
+        cache.delete("room_status_all")
+
+        serializer = CleaningTaskSerializer(task)
+
+        print(f"✅ Task updated. Room status changed to CLEAN")
+        print("=" * 60)
+
+        return Response(serializer.data, status=200)
 
 class TaskChecklistView(APIView):
     """GET /api/v1/housekeepers/tasks/<id>/checklist/ - Get task checklist"""
@@ -877,8 +1071,8 @@ class MyReportView(APIView):
             return Response({"error": "Only housekeepers can access their reports"}, status=403)
 
         try:
-            housekeeper = Housekeeper.objects.get(user=request.user)
-        except Housekeeper.DoesNotExist:
+            employee = EmployeeInformation.objects.get(user=request.user, position='HOUSEKEEPER')
+        except EmployeeInformation.DoesNotExist:
             return Response({"error": "Housekeeper profile not found"}, status=404)
 
         today = timezone.now().date()
@@ -890,7 +1084,7 @@ class MyReportView(APIView):
             start_date = today - timedelta(days=30)
 
         tasks = CleaningTask.objects.filter(
-            assigned_to=housekeeper,
+            assigned_to_employee=employee,
             created_at__date__gte=start_date
         )
 
@@ -904,23 +1098,17 @@ class MyReportView(APIView):
             total_minutes = sum((t.completed_at - t.started_at).total_seconds() / 60 for t in completed_with_time)
             avg_time = int(total_minutes / len(completed_with_time))
 
-        rooms_cleaned = RoomStatusLog.objects.filter(
-            performed_by=housekeeper,
-            action=RoomStatusLog.Action.CLEANED,
-            created_at__date__gte=start_date
-        ).count()
-
         report = {
             'period': period,
             'tasks_completed': completed_tasks.count(),
             'tasks_in_progress': in_progress_tasks.count(),
             'tasks_pending': pending_tasks.count(),
             'completion_rate': int((completed_tasks.count() / tasks.count() * 100)) if tasks.count() > 0 else 0,
-            'rooms_cleaned': rooms_cleaned,
+            'rooms_cleaned': 0,
             'avg_time_per_task': avg_time,
-            'rating': float(housekeeper.rating),
-            'shift': housekeeper.get_shift_display(),
-            'status': housekeeper.get_status_display(),
+            'rating': 5.0,
+            'shift': 'Morning',
+            'status': 'On Duty',
         }
 
         return Response(report)
@@ -936,11 +1124,11 @@ class TaskHistoryView(APIView):
             return Response({"error": "Only housekeepers can access their task history"}, status=403)
 
         try:
-            housekeeper = Housekeeper.objects.get(user=request.user)
-        except Housekeeper.DoesNotExist:
+            employee = EmployeeInformation.objects.get(user=request.user, position='HOUSEKEEPER')
+        except EmployeeInformation.DoesNotExist:
             return Response({"error": "Housekeeper profile not found"}, status=404)
 
-        tasks = CleaningTask.objects.filter(assigned_to=housekeeper).order_by('-completed_at', '-created_at')
+        tasks = CleaningTask.objects.filter(assigned_to_employee=employee).order_by('-completed_at', '-created_at')
         serializer = CleaningTaskSerializer(tasks, many=True)
         return Response(serializer.data)
 
@@ -953,11 +1141,10 @@ class HousekeeperStatsView(APIView):
     @admin_only
     def get(self, request):
         stats = {
-            'total': Housekeeper.objects.count(),
-            'available': Housekeeper.objects.filter(status='AVAILABLE').count(),
-            'on_duty': Housekeeper.objects.filter(status='ON_DUTY').count(),
-            'on_break': Housekeeper.objects.filter(status='ON_BREAK').count(),
-            'off_duty': Housekeeper.objects.filter(status='OFF_DUTY').count(),
+            'total': EmployeeInformation.objects.filter(position='HOUSEKEEPER').count(),
+            'available': EmployeeInformation.objects.filter(position='HOUSEKEEPER', is_on_duty=True).count(),
+            'on_duty': EmployeeInformation.objects.filter(position='HOUSEKEEPER', is_on_duty=True).count(),
+            'off_duty': EmployeeInformation.objects.filter(position='HOUSEKEEPER', is_on_duty=False).count(),
             'tasks_pending': CleaningTask.objects.filter(status='PENDING').count(),
             'tasks_in_progress': CleaningTask.objects.filter(status='IN_PROGRESS').count(),
             'tasks_completed_today': CleaningTask.objects.filter(
@@ -966,22 +1153,35 @@ class HousekeeperStatsView(APIView):
         }
         return Response(stats)
 
-
 class MyStatsView(APIView):
     """GET /api/v1/housekeepers/my-stats/ - Get statistics for current housekeeper"""
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
         user_role = getattr(request.user, 'role', '')
+
+        logger.info(f"MyStatsView called by user: {request.user.email}, Role: {user_role}")
+
         if user_role != 'HOUSEKEEPER':
             return Response({"error": "Only housekeepers can access their stats"}, status=403)
 
         try:
-            housekeeper = Housekeeper.objects.get(user=request.user)
-        except Housekeeper.DoesNotExist:
-            return Response({"error": "Housekeeper profile not found"}, status=404)
+            employee = EmployeeInformation.objects.get(user=request.user)
+            logger.info(f"Found employee: {employee.first_name} {employee.last_name}")
+        except EmployeeInformation.DoesNotExist:
+            # Return default stats
+            return Response({
+                'completed': 0,
+                'in_progress': 0,
+                'pending': 0,
+                'completion_rate': 0,
+                'rooms_cleaned': 0,
+                'rating': 5.0,
+                'shift': 'Morning',
+                'status': 'On Duty',
+            })
 
-        tasks = CleaningTask.objects.filter(assigned_to=housekeeper)
+        tasks = CleaningTask.objects.filter(assigned_to_employee=employee)
 
         completed = tasks.filter(status='COMPLETED').count()
         in_progress = tasks.filter(status='IN_PROGRESS').count()
@@ -990,25 +1190,18 @@ class MyStatsView(APIView):
         total = tasks.count()
         completion_rate = int((completed / total * 100)) if total > 0 else 0
 
-        rooms_cleaned_today = RoomStatusLog.objects.filter(
-            performed_by=housekeeper,
-            action=RoomStatusLog.Action.CLEANED,
-            created_at__date=timezone.now().date()
-        ).count()
-
         stats = {
             'completed': completed,
             'in_progress': in_progress,
             'pending': pending,
             'completion_rate': completion_rate,
-            'rooms_cleaned': rooms_cleaned_today,
-            'rating': float(housekeeper.rating),
-            'shift': housekeeper.get_shift_display(),
-            'status': housekeeper.get_status_display(),
+            'rooms_cleaned': 0,
+            'rating': 5.0,
+            'shift': 'Morning',
+            'status': 'On Duty',
         }
 
         return Response(stats)
-
 
 # ── Supply Requests ────────────────────────────────────────────────────
 
@@ -1039,8 +1232,8 @@ class CreateSupplyRequestView(APIView):
             return Response({"error": "Only housekeepers can create supply requests"}, status=403)
 
         try:
-            housekeeper = Housekeeper.objects.get(user=request.user)
-        except Housekeeper.DoesNotExist:
+            employee = EmployeeInformation.objects.get(user=request.user, position='HOUSEKEEPER')
+        except EmployeeInformation.DoesNotExist:
             return Response({"error": "Housekeeper profile not found"}, status=404)
 
         item_name = request.data.get('itemName')
@@ -1051,7 +1244,7 @@ class CreateSupplyRequestView(APIView):
             return Response({"error": "Item name, quantity, and reason are required"}, status=400)
 
         supply_request = SupplyRequest.objects.create(
-            housekeeper=housekeeper,
+            housekeeper_employee=employee,
             item_name=item_name,
             quantity=quantity,
             reason=reason
@@ -1059,8 +1252,13 @@ class CreateSupplyRequestView(APIView):
 
         cache.delete("supply_requests_all")
 
-        serializer = SupplyRequestSerializer(supply_request)
-        return Response(serializer.data, status=201)
+        return Response({
+            'id': supply_request.id,
+            'item_name': item_name,
+            'quantity': quantity,
+            'status': 'PENDING',
+            'message': 'Supply request created successfully'
+        }, status=201)
 
 
 class UpdateSupplyRequestStatusView(APIView):
@@ -1084,5 +1282,4 @@ class UpdateSupplyRequestStatusView(APIView):
 
         cache.delete("supply_requests_all")
 
-        serializer = SupplyRequestSerializer(supply_request)
-        return Response(serializer.data)
+        return Response({"message": f"Supply request status updated to {new_status}"})

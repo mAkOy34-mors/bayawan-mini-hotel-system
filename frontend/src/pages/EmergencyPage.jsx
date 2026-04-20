@@ -237,10 +237,10 @@ export function EmergencyPage({ user, token, roomNumber }) {
   const [showConfirm, setShowConfirm] = useState(false);
   const [recentAlerts, setRecentAlerts] = useState([]);
   const [stats, setStats] = useState({ total: 0, active: 0, resolved: 0 });
+  const [displayRoom, setDisplayRoom] = useState('Loading...');
   const { alert, showAlert } = useAlert();
 
   const guestName = user?.fullName || user?.username || user?.email?.split('@')[0] || 'Guest';
-  const room = roomNumber || user?.roomNumber || 'Not assigned';
 
   // Load recent alerts
   const loadRecentAlerts = async () => {
@@ -250,7 +250,24 @@ export function EmergencyPage({ user, token, roomNumber }) {
       });
       if (response.ok) {
         const data = await response.json();
+        console.log('API Response:', data);
         setRecentAlerts(data.alerts || []);
+        
+        // Update room from most recent alert
+        if (data.alerts && data.alerts.length > 0 && data.alerts[0].roomNumber) {
+          const roomFromApi = data.alerts[0].roomNumber;
+          if (roomFromApi && roomFromApi !== 'Unknown' && roomFromApi !== 'Not assigned') {
+            setDisplayRoom(roomFromApi);
+            console.log('Room set from API:', roomFromApi);
+          }
+        } else if (roomNumber && roomNumber !== 'Not assigned') {
+          setDisplayRoom(roomNumber);
+        } else if (user?.roomNumber && user?.roomNumber !== 'Not assigned') {
+          setDisplayRoom(user.roomNumber);
+        } else {
+          setDisplayRoom('Not assigned');
+        }
+        
         setStats({
           total: data.stats?.total || 0,
           active: data.stats?.active || 0,
@@ -266,22 +283,34 @@ export function EmergencyPage({ user, token, roomNumber }) {
   const sendEmergencyAlert = async () => {
     setLoading(true);
     try {
+      const requestBody = {
+        emergencyType: selectedType?.id,
+        emergencyTypeName: selectedType?.name,
+        roomNumber: displayRoom,
+        guestName: guestName,
+        timestamp: new Date().toISOString(),
+      };
+      
+      console.log('Sending alert:', requestBody);
+      
       const response = await fetch(`${API_BASE}/emergency/alert/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({
-          emergencyType: selectedType?.id,
-          emergencyTypeName: selectedType?.name,
-          roomNumber: room,
-          guestName: guestName,
-          timestamp: new Date().toISOString(),
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       if (response.ok) {
+        const data = await response.json();
+        console.log('Alert response:', data);
+        
+        // Update room from response
+        if (data.room_number && data.room_number !== 'Unknown') {
+          setDisplayRoom(data.room_number);
+        }
+        
         setShowConfirm(false);
         setSelectedType(null);
         showAlert('Emergency alert sent! Staff has been notified.', 'success');
@@ -291,6 +320,7 @@ export function EmergencyPage({ user, token, roomNumber }) {
         showAlert(error.message || 'Failed to send alert', 'error');
       }
     } catch (err) {
+      console.error('Network error:', err);
       showAlert('Network error. Please try again.', 'error');
     } finally {
       setLoading(false);
@@ -314,8 +344,10 @@ export function EmergencyPage({ user, token, roomNumber }) {
 
   // Load alerts on mount
   useEffect(() => {
-    loadRecentAlerts();
-  }, []);
+    if (token) {
+      loadRecentAlerts();
+    }
+  }, [token]);
 
   return (
     <div className="emergency-root">
@@ -353,7 +385,7 @@ export function EmergencyPage({ user, token, roomNumber }) {
           { label: 'My Alerts', value: stats.total, icon: '🚨', color: 'red' },
           { label: 'Active', value: stats.active, icon: '🔔', color: 'blue' },
           { label: 'Resolved', value: stats.resolved, icon: '✅', color: 'green' },
-          { label: 'Room', value: room, icon: '🏨', color: 'gold' },
+          { label: 'Room', value: displayRoom, icon: '🏨', color: 'gold' },
         ].map((s, i) => (
           <div key={i} className={`emergency-stat ${s.color}`} style={{ animationDelay: `${i * 0.06}s` }}>
             <div className="emergency-stat-icon"><span style={{ fontSize: '1.2rem' }}>{s.icon}</span></div>
@@ -506,7 +538,7 @@ export function EmergencyPage({ user, token, roomNumber }) {
             </div>
             <div className="emergency-confirm-row">
               <span className="emergency-confirm-label">Room Number</span>
-              <span className="emergency-confirm-value">{room}</span>
+              <span className="emergency-confirm-value">{displayRoom}</span>
             </div>
             <div className="emergency-confirm-row">
               <span className="emergency-confirm-label">Emergency Type</span>

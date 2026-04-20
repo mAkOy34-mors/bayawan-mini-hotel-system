@@ -1,5 +1,7 @@
-// Topbar.jsx – Light card UI matching BookingPage style
+// Topbar.jsx – Simple select dropdown with all languages
 import { LANGUAGES } from '../../constants/config';
+import { useLang } from '../../context/LangContext';
+import { Globe } from 'lucide-react';
 
 const css = `
   @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&display=swap');
@@ -37,13 +39,21 @@ const css = `
   .tb-right { display: flex; align-items: center; gap: .7rem; }
 
   .tb-lang {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
     appearance: none;
-    background: #f4f6f8 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='7' viewBox='0 0 10 7'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%238a96a8' fill='none' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E") no-repeat right .65rem center;
-    border: 1px solid #e2e8f0; border-radius: 8px;
-    color: #4a5568; padding: .36rem .55rem .36rem .7rem;
+    background: #f4f6f8 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1L5 5L9 1' stroke='%238a96a8' fill='none' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E") no-repeat right .65rem center;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    color: #4a5568;
+    padding: .36rem .55rem .36rem .7rem;
     padding-right: 2rem;
-    font-size: .79rem; font-family: 'DM Sans', sans-serif;
-    cursor: pointer; outline: none; transition: border-color .15s;
+    font-size: .79rem;
+    font-family: 'DM Sans', sans-serif;
+    cursor: pointer;
+    outline: none;
+    transition: border-color .15s;
   }
   .tb-lang:focus { border-color: #C9A84C; background-color: #fff; }
 
@@ -58,13 +68,28 @@ const css = `
   }
 `;
 
+// Full language list with flags and names
+const FULL_LANGUAGE_LIST = [
+  { code: 'en',  flag: '🇺🇸', label: 'English' },
+  { code: 'es',  flag: '🇪🇸', label: 'Español' },
+  { code: 'fr',  flag: '🇫🇷', label: 'Français' },
+  { code: 'de',  flag: '🇩🇪', label: 'Deutsch' },
+  { code: 'ja',  flag: '🇯🇵', label: '日本語' },
+  { code: 'zh',  flag: '🇨🇳', label: '中文' },
+  { code: 'ko',  flag: '🇰🇷', label: '한국어' },
+  { code: 'fil', flag: '🇵🇭', label: 'Filipino' },
+  { code: 'ceb', flag: '🇵🇭', label: 'Cebuano' },
+];
+
 function initials(user) {
   const n = user?.fullName || user?.username || user?.email || '';
   const p = n.trim().split(' ');
-  return p.length >= 2 ? (p[0][0] + p[1][0]).toUpperCase() : n.slice(0,2).toUpperCase() || 'G';
+  return p.length >= 2 ? (p[0][0] + p[1][0]).toUpperCase() : n.slice(0, 2).toUpperCase() || 'G';
 }
 
-export function Topbar({ title, user, onMenuClick, lang, setLang }) {
+export function Topbar({ title, user, onMenuClick }) {
+  const { lang, setLang } = useLang();
+  
   return (
     <header className="tb-wrap">
       <style>{css}</style>
@@ -73,13 +98,11 @@ export function Topbar({ title, user, onMenuClick, lang, setLang }) {
         <span className="tb-title">{title}</span>
       </div>
       <div className="tb-right">
-        {LANGUAGES && (
-          <select className="tb-lang" value={lang} onChange={e => setLang(e.target.value)}>
-            {LANGUAGES.map(l => (
-              <option key={l.code} value={l.code}>{l.flag} {l.label}</option>
-            ))}
-          </select>
-        )}
+        <select className="tb-lang" value={lang} onChange={e => setLang(e.target.value)}>
+          {FULL_LANGUAGE_LIST.map(l => (
+            <option key={l.code} value={l.code}>{l.flag} {l.label}</option>
+          ))}
+        </select>
         <div className="tb-av">{initials(user)}</div>
       </div>
     </header>

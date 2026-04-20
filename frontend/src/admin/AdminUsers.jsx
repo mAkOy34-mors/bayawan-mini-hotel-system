@@ -6,7 +6,8 @@ import {
   Search, RefreshCw, AlertTriangle, Eye, EyeOff,
   Mail, Phone, MapPin, Briefcase, Calendar, CreditCard,
   Building2, BadgeIndianRupee, Hash, UserCircle, Shield,
-  CheckCircle, XCircle, Clock, Save, X, Plus, Coffee
+  CheckCircle, XCircle, Clock, Save, X, Plus, Coffee,
+   Wrench  
 } from 'lucide-react';
 import { SHARED_CSS, fmtDate, Pill, Spinner, Pager, Toast, useToast } from './adminShared';
 import { API_BASE } from '../constants/config';
@@ -18,6 +19,10 @@ const ROLE_OPTIONS = [
   { value: 'HOUSEKEEPER', label: 'Housekeeper', icon: <Building2 size={14} />, color: '#10b981' },
   { value: 'STAFF', label: 'Staff', icon: <Briefcase size={14} />, color: '#f59e0b' },
   { value: 'ADMIN', label: 'Admin', icon: <Shield size={14} />, color: '#dc2626' },
+  { value: 'MAINTENANCE', label: 'Maintenance', icon: <Wrench size={14} />, color: '#f97316' },
+  { value: 'SECURITY', label: 'Security', icon: <Shield size={14} />, color: '#ef4444' },
+  { value: 'FRONT_DESK', label: 'Front Desk', icon: <Phone size={14} />, color: '#06b6d4' },
+  { value: 'MANAGEMENT', label: 'Management', icon: <Users size={14} />, color: '#8b5cf6' },
 ];
 
 const DEPARTMENT_OPTIONS = [
@@ -119,6 +124,10 @@ export function AdminUsers({ token }) {
     receptionists: users.filter(u => u.role === 'RECEPTIONIST').length,
     housekeepers: users.filter(u => u.role === 'HOUSEKEEPER').length,
     staff: users.filter(u => u.role === 'STAFF').length,
+    maintenance: users.filter(u => u.role === 'MAINTENANCE').length,
+  security: users.filter(u => u.role === 'SECURITY').length,
+  frontDesk: users.filter(u => u.role === 'FRONT_DESK').length,
+  management: users.filter(u => u.role === 'MANAGEMENT').length,
   };
 
   // Validate form

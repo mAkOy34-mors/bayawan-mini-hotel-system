@@ -3,6 +3,7 @@ import { Offcanvas } from 'react-bootstrap';
 import {
   LayoutDashboard, BedDouble, Hotel, Users, CreditCard,
   Star, MessageCircle, Settings, LogOut, RefreshCw, ShieldCheck,
+  AlertTriangle, FileText  // ← Added AlertTriangle and FileText
 } from 'lucide-react';
 
 const css = `
@@ -38,77 +39,98 @@ const css = `
   .asb-oc .offcanvas-header{padding:1rem 1.2rem;border-bottom:1px solid #e2e8f0}
 `;
 
+// ✅ Updated NAV with Emergency section
 const NAV = [
-  { key:'dashboard',       label:'Dashboard',        Icon: LayoutDashboard, section:'Management' },
-   { key:'users',          label:'Users',            Icon: Users },
-  { key:'bookings',        label:'Bookings',          Icon: BedDouble },
-  { key:'change-requests', label:'Change Requests',   Icon: RefreshCw,      badge:'pendingChanges' },
-  { key:'rooms',           label:'Rooms',             Icon: Hotel },
-  { key:'guests',          label:'Guests',            Icon: Users },
-  { key:'payments',        label:'Payments',          Icon: CreditCard },
-  { key:'rewards',         label:'Rewards',           Icon: Star,           section:'Operations' },
-  { key:'support',         label:'Support',           Icon: MessageCircle,  badge:'pendingTickets' },
-  { key:'settings',        label:'Settings',          Icon: Settings },
- 
+  { key: 'dashboard', label: 'Dashboard', Icon: LayoutDashboard, section: 'Management' },
+  { key: 'users', label: 'Users', Icon: Users },
+  { key: 'bookings', label: 'Bookings', Icon: BedDouble },
+  { key: 'change-requests', label: 'Change Requests', Icon: RefreshCw, badge: 'pendingChanges' },
+  { key: 'rooms', label: 'Rooms', Icon: Hotel },
+  { key: 'guests', label: 'Guests', Icon: Users },
+  { key: 'payments', label: 'Payments', Icon: CreditCard },
+  { key: 'feedback', label: 'Guest Feedback', Icon: MessageCircle, section: 'Operations', badge: 'pendingFeedback' },
+  { key: 'rewards', label: 'Rewards', Icon: Star },
+  { key: 'support', label: 'Support', Icon: MessageCircle, badge: 'pendingTickets' },
+  // ✅ Emergency Section - Added
+  { key: 'emergency', label: '🚨 Live Alerts', Icon: AlertTriangle, section: 'Emergency' },
+  { key: 'emergency-log', label: '📋 Emergency Log', Icon: FileText },
+  { key: 'settings', label: 'Settings', Icon: Settings },
 ];
 
-function ini(u) { const n=u?.username||u?.email||'A'; return n.slice(0,2).toUpperCase(); }
-function uname(u) { return u?.username||u?.email?.split('@')[0]||'Admin'; }
+function ini(u) { 
+  const n = u?.username || u?.email || 'A'; 
+  return n.slice(0, 2).toUpperCase(); 
+}
+
+function uname(u) { 
+  return u?.username || u?.email?.split('@')[0] || 'Admin'; 
+}
 
 function Inner({ page, setPage, user, onLogout, counts }) {
-  return <>
-    <style>{css}</style>
-    <div className="asb-logo">
-      <div className="asb-logo-row">
-        <div className="asb-mark"><Hotel size={15}/></div>
+  return (
+    <>
+      <style>{css}</style>
+      <div className="asb-logo">
+        <div className="asb-logo-row">
+          <div className="asb-mark"><Hotel size={15}/></div>
+          <div>
+            <div className="asb-name">Bayawan Mini Hotel</div>
+            <div className="asb-sub">Admin Panel</div>
+          </div>
+        </div>
+        <div className="asb-badge"><ShieldCheck size={10}/>Administrator</div>
+      </div>
+      <div className="asb-user">
+        <div className="asb-av">{ini(user)}</div>
         <div>
-          <div className="asb-name">Bayawan Mini Hotel</div>
-          <div className="asb-sub">Admin Panel</div>
+          <div className="asb-uname">{uname(user)}</div>
+          <div className="asb-urole">Admin</div>
         </div>
       </div>
-      <div className="asb-badge"><ShieldCheck size={10}/>Administrator</div>
-    </div>
-    <div className="asb-user">
-      <div className="asb-av">{ini(user)}</div>
-      <div><div className="asb-uname">{uname(user)}</div><div className="asb-urole">Admin</div></div>
-    </div>
-    <nav className="asb-nav">
-      {NAV.map(({ key, label, Icon, section, badge }) => (
-        <div key={key}>
-          {section && <div className="asb-sec" style={key!=='dashboard'?{marginTop:'.65rem'}:{}}>{section}</div>}
-          <button className={`asb-btn${page===key?' on':''}`} onClick={()=>setPage(key)}>
-            <span className="asb-ico"><Icon size={14}/></span>
-            {label}
-            {badge && counts?.[badge] > 0 && <span className="asb-badge-count">{counts[badge]}</span>}
-          </button>
-        </div>
-      ))}
-      <button className="asb-out" onClick={onLogout}>
-        <span className="asb-out-ico"><LogOut size={14}/></span>Sign Out
-      </button>
-    </nav>
-    <div className="asb-foot">© 2026 Bayawan Mini hotel</div>
-  </>;
+      <nav className="asb-nav">
+        {NAV.map(({ key, label, Icon, section, badge }) => (
+          <div key={key}>
+            {section && <div className="asb-sec" style={key !== 'dashboard' ? { marginTop: '.65rem' } : {}}>{section}</div>}
+            <button className={`asb-btn${page === key ? ' on' : ''}`} onClick={() => setPage(key)}>
+              <span className="asb-ico"><Icon size={14}/></span>
+              {label}
+              {badge && counts?.[badge] > 0 && <span className="asb-badge-count">{counts[badge]}</span>}
+            </button>
+          </div>
+        ))}
+        <button className="asb-out" onClick={onLogout}>
+          <span className="asb-out-ico"><LogOut size={14}/></span>Sign Out
+        </button>
+      </nav>
+      <div className="asb-foot">© 2026 Bayawan Mini Hotel</div>
+    </>
+  );
 }
 
 export function AdminSidebar({ page, setPage, user, onLogout, open, onClose, counts }) {
-  const nav = k => { setPage(k); onClose?.(); };
-  return <>
-    <aside className="asb d-none d-md-flex flex-column">
-      <Inner page={page} setPage={setPage} user={user} onLogout={onLogout} counts={counts}/>
-    </aside>
-    <Offcanvas show={open} onHide={onClose} placement="start" className="asb-oc" style={{width:252}}>
-      <Offcanvas.Header closeButton>
-        <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:'1.05rem',fontWeight:600,color:'#1a1f2e',display:'flex',alignItems:'center',gap:'.45rem'}}>
-          <div style={{width:24,height:24,borderRadius:7,background:'linear-gradient(135deg,#9a7a2e,#C9A84C)',display:'flex',alignItems:'center',justifyContent:'center'}}>
-            <Hotel size={12} color="#fff"/>
+  const nav = (k) => { 
+    setPage(k); 
+    onClose?.(); 
+  };
+  
+  return (
+    <>
+      <aside className="asb d-none d-md-flex flex-column">
+        <Inner page={page} setPage={setPage} user={user} onLogout={onLogout} counts={counts}/>
+      </aside>
+      <Offcanvas show={open} onHide={onClose} placement="start" className="asb-oc" style={{ width: 252 }}>
+        <Offcanvas.Header closeButton>
+          <div style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: '1.05rem', fontWeight: 600, color: '#1a1f2e', display: 'flex', alignItems: 'center', gap: '.45rem' }}>
+            <div style={{ width: 24, height: 24, borderRadius: 7, background: 'linear-gradient(135deg,#9a7a2e,#C9A84C)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Hotel size={12} color="#fff"/>
+            </div>
+            Admin Panel
           </div>
-          Admin Panel
-        </div>
-      </Offcanvas.Header>
-      <Offcanvas.Body>
-        <Inner page={page} setPage={nav} user={user} onLogout={onLogout} counts={counts}/>
-      </Offcanvas.Body>
-    </Offcanvas>
-  </>;
+        </Offcanvas.Header>
+        <Offcanvas.Body>
+          <Inner page={page} setPage={nav} user={user} onLogout={onLogout} counts={counts}/>
+        </Offcanvas.Body>
+      </Offcanvas>
+    </>
+  );
 }

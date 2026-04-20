@@ -1,5 +1,7 @@
-// Sidebar.jsx – Light card UI with Lucide icons
+// Sidebar.jsx – Light card UI with Lucide icons and translations
 import { Offcanvas } from 'react-bootstrap';
+import { useLang } from '../../context/LangContext';
+
 import {
   LayoutDashboard,
   BedDouble,
@@ -11,7 +13,9 @@ import {
   LogOut,
   Hotel,
   ClipboardList,
-  AlertTriangle,  // ← Add this for emergency icon
+  AlertTriangle,
+  Flag,
+  Sparkles,
 } from 'lucide-react';
 
 const css = `
@@ -94,7 +98,32 @@ const css = `
   }
   .sb-btn:hover:not(.active) .sb-icon { background: #e2e8f0; color: #1a1f2e; }
 
-  /* Emergency button special styling */
+  .sb-btn-services {
+    width: 100%; display: flex; align-items: center; gap: .65rem;
+    padding: .54rem .75rem; border-radius: 9px;
+    font-family: 'DM Sans', sans-serif; font-size: .84rem; font-weight: 600;
+    cursor: pointer; transition: all .16s;
+    text-align: left; margin-bottom: .05rem;
+    background: rgba(16,185,129,0.08);
+    border: 1px solid rgba(16,185,129,0.2);
+    color: #10b981;
+  }
+  .sb-btn-services:hover {
+    background: rgba(16,185,129,0.12);
+    border-color: rgba(16,185,129,0.3);
+    transform: translateX(2px);
+  }
+  .sb-btn-services.active {
+    background: rgba(16,185,129,0.12);
+    border-color: rgba(16,185,129,0.3);
+    color: #10b981;
+  }
+  .sb-btn-services .sb-icon {
+    background: rgba(16,185,129,0.08);
+    color: #10b981;
+    border-color: rgba(16,185,129,0.15);
+  }
+
   .sb-btn-emergency {
     width: 100%; display: flex; align-items: center; gap: .65rem;
     padding: .54rem .75rem; border-radius: 9px;
@@ -120,9 +149,31 @@ const css = `
     color: #dc2626;
     border-color: rgba(220,38,38,0.2);
   }
-  .sb-btn-emergency.active .sb-icon {
-    background: rgba(220,38,38,0.15);
-    border-color: rgba(220,38,38,0.3);
+
+  .sb-btn-complaint {
+    width: 100%; display: flex; align-items: center; gap: .65rem;
+    padding: .54rem .75rem; border-radius: 9px;
+    font-family: 'DM Sans', sans-serif; font-size: .84rem; font-weight: 600;
+    cursor: pointer; transition: all .16s;
+    text-align: left; margin-bottom: .05rem;
+    background: rgba(139,92,246,0.08);
+    border: 1px solid rgba(139,92,246,0.2);
+    color: #8b5cf6;
+  }
+  .sb-btn-complaint:hover {
+    background: rgba(139,92,246,0.12);
+    border-color: rgba(139,92,246,0.3);
+    transform: translateX(2px);
+  }
+  .sb-btn-complaint.active {
+    background: rgba(139,92,246,0.12);
+    border-color: rgba(139,92,246,0.3);
+    color: #8b5cf6;
+  }
+  .sb-btn-complaint .sb-icon {
+    background: rgba(139,92,246,0.08);
+    color: #8b5cf6;
+    border-color: rgba(139,92,246,0.15);
   }
 
   .sb-out {
@@ -149,29 +200,34 @@ const css = `
   .sb-offcanvas .offcanvas-header { padding: 1rem 1.2rem; border-bottom: 1px solid #e2e8f0; }
 `;
 
-const NAV_MAIN = [
-  { key: 'dashboard',   label: 'Dashboard',    Icon: LayoutDashboard },
-  { key: 'bookings',    label: 'Book a Room',  Icon: BedDouble       },
-  { key: 'mybookings',  label: 'My Bookings',  Icon: ClipboardList   },
-  { key: 'rewards',     label: 'Rewards',      Icon: Star            },
-  { key: 'payments',    label: 'Payments',     Icon: CreditCard      },
-];
-const NAV_ACCOUNT = [
-  { key: 'profile',  label: 'My Profile', Icon: User          },
-  { key: 'settings', label: 'Settings',   Icon: Settings      },
-  { key: 'support',  label: 'Support',    Icon: MessageCircle },
-];
-
 function initials(user) {
   const n = user?.fullName || user?.username || user?.email || '';
   const p = n.trim().split(' ');
-  return p.length >= 2 ? (p[0][0] + p[1][0]).toUpperCase() : n.slice(0,2).toUpperCase() || 'G';
+  return p.length >= 2 ? (p[0][0] + p[1][0]).toUpperCase() : n.slice(0, 2).toUpperCase() || 'G';
 }
+
 function uname(user) {
   return user?.fullName || user?.username || user?.email?.split('@')[0] || 'Guest';
 }
 
 function SidebarContent({ page, setPage, user, onLogout }) {
+  const { t } = useLang();
+
+  const NAV_MAIN = [
+    { key: 'dashboard', label: t.dashboard, Icon: LayoutDashboard },
+    { key: 'bookings', label: t.bookings, Icon: BedDouble },
+    { key: 'mybookings', label: t.mybookings, Icon: ClipboardList },
+    { key: 'rewards', label: t.rewards, Icon: Star },
+    { key: 'payments', label: t.payments, Icon: CreditCard },
+    { key: 'services', label: t.services, Icon: Sparkles },
+  ];
+
+  const NAV_ACCOUNT = [
+    { key: 'profile', label: t.profile, Icon: User },
+    { key: 'settings', label: t.settings, Icon: Settings },
+    { key: 'support', label: t.support, Icon: MessageCircle },
+  ];
+
   return (
     <>
       <style>{css}</style>
@@ -181,7 +237,7 @@ function SidebarContent({ page, setPage, user, onLogout }) {
             <Hotel size={16} />
           </div>
           <div>
-            <div className="sb-logo-name">Bayawan Mini hotel</div>
+            <div className="sb-logo-name">Bayawan Mini Hotel</div>
             <div className="sb-logo-sub">Guest Portal</div>
           </div>
         </div>
@@ -204,13 +260,20 @@ function SidebarContent({ page, setPage, user, onLogout }) {
           </button>
         ))}
 
-        {/* Emergency Button - Special styling */}
-        <button 
-          className={`sb-btn-emergency${page === 'emergency' ? ' active' : ''}`} 
+        <button
+          className={`sb-btn-complaint${page === 'complaints' ? ' active' : ''}`}
+          onClick={() => setPage('complaints')}
+        >
+          <span className="sb-icon"><Flag size={15} /></span>
+          {t.complaints}
+        </button>
+
+        <button
+          className={`sb-btn-emergency${page === 'emergency' ? ' active' : ''}`}
           onClick={() => setPage('emergency')}
         >
           <span className="sb-icon"><AlertTriangle size={15} /></span>
-          🚨 Emergency
+          🚨 {t.emergency}
         </button>
 
         <div className="sb-sec" style={{ marginTop: '.65rem' }}>Account</div>
@@ -223,7 +286,7 @@ function SidebarContent({ page, setPage, user, onLogout }) {
 
         <button className="sb-out" onClick={onLogout}>
           <span className="sb-out-icon"><LogOut size={15} /></span>
-          Sign Out
+          {t.signout}
         </button>
       </nav>
 
@@ -241,8 +304,8 @@ export function Sidebar({ page, setPage, user, onLogout, open, onClose }) {
       </aside>
       <Offcanvas show={open} onHide={onClose} placement="start" className="sb-offcanvas" style={{ width: 252 }}>
         <Offcanvas.Header closeButton>
-          <div style={{ fontFamily:"'Cormorant Garamond',serif", fontSize:'1.05rem', fontWeight:600, color:'#1a1f2e', display:'flex', alignItems:'center', gap:'.45rem' }}>
-            <div style={{ width:24, height:24, borderRadius:7, background:'linear-gradient(135deg,#9a7a2e,#C9A84C)', display:'flex', alignItems:'center', justifyContent:'center', color:'#fff' }}>
+          <div style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: '1.05rem', fontWeight: 600, color: '#1a1f2e', display: 'flex', alignItems: 'center', gap: '.45rem' }}>
+            <div style={{ width: 24, height: 24, borderRadius: 7, background: 'linear-gradient(135deg,#9a7a2e,#C9A84C)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}>
               <Hotel size={13} />
             </div>
             Guest Panel

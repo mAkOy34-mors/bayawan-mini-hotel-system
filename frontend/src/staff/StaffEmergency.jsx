@@ -1,18 +1,9 @@
 // staff/StaffEmergency.jsx
 import { useEmergency } from '../context/EmergencyContext';
-import { Phone, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { Phone, CheckCircle2, AlertTriangle, Clock } from 'lucide-react';
 
-export function StaffEmergency() {
+export function StaffEmergency({ token, user }) {
   const { activeEmergencies, soundOn, enableSound, disableSound } = useEmergency();
-
-  const getEmergencyIcon = (type) => {
-    switch (type) {
-      case 'medical': return '❤️';
-      case 'fire': return '🔥';
-      case 'security': return '🛡️';
-      default: return '🚨';
-    }
-  };
 
   const getEmergencyColor = (type) => {
     switch (type) {
@@ -23,11 +14,21 @@ export function StaffEmergency() {
     }
   };
 
+  const formatTime = (timestamp) => {
+    if (!timestamp) return '';
+    const date = new Date(timestamp);
+    return date.toLocaleTimeString();
+  };
+
   return (
     <div>
       <div style={{ marginBottom: '1.5rem' }}>
-        <h1 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: '1.5rem', fontWeight: 600, margin: 0 }}>Emergency Response</h1>
-        <p style={{ fontSize: '0.8rem', color: '#8a96a8', margin: 0 }}>Respond to active emergencies</p>
+        <h1 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: '1.5rem', fontWeight: 600, margin: 0 }}>
+          🚨 Live Emergency Alerts
+        </h1>
+        <p style={{ fontSize: '0.8rem', color: '#8a96a8', margin: 0 }}>
+          {activeEmergencies.length} active emergency(ies) requiring immediate attention
+        </p>
       </div>
 
       {/* Sound Control */}
@@ -43,7 +44,7 @@ export function StaffEmergency() {
         )}
       </div>
 
-      {/* Active Emergencies */}
+      {/* Active Emergencies Only */}
       {activeEmergencies.length === 0 ? (
         <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 14, padding: '3rem', textAlign: 'center' }}>
           <CheckCircle2 size={48} strokeWidth={1} style={{ marginBottom: '0.5rem', opacity: 0.3 }} />
@@ -52,7 +53,14 @@ export function StaffEmergency() {
         </div>
       ) : (
         activeEmergencies.map(emergency => (
-          <div key={emergency.id} style={{ background: '#fff', border: `2px solid ${getEmergencyColor(emergency.emergencyType)}`, borderRadius: 14, marginBottom: '1rem', overflow: 'hidden', animation: 'pulse 1s infinite' }}>
+          <div key={emergency.id} style={{ 
+            background: '#fff', 
+            border: `2px solid ${getEmergencyColor(emergency.emergencyType)}`, 
+            borderRadius: 14, 
+            marginBottom: '1rem', 
+            overflow: 'hidden', 
+            animation: 'pulse 1s infinite' 
+          }}>
             <div style={{ background: `linear-gradient(135deg, ${getEmergencyColor(emergency.emergencyType)}, ${getEmergencyColor(emergency.emergencyType)}cc)`, padding: '0.75rem 1rem', color: '#fff' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                 <AlertTriangle size={20} />
@@ -60,10 +68,16 @@ export function StaffEmergency() {
               </div>
             </div>
             <div style={{ padding: '1rem 1.25rem' }}>
-              <div style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '0.25rem' }}>{emergency.guestName}</div>
+              <div style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '0.25rem' }}>{emergency.guestName || 'Guest'}</div>
               <div style={{ fontSize: '1.3rem', fontWeight: 800, color: getEmergencyColor(emergency.emergencyType), marginBottom: '0.5rem' }}>Room {emergency.roomNumber}</div>
-              <div style={{ fontSize: '0.8rem', color: '#8a96a8', marginBottom: '0.75rem' }}>Received at {new Date(emergency.createdAt).toLocaleTimeString()}</div>
-              <button onClick={() => window.location.href = `tel:${emergency.guestPhone || '+63328888888'}`} style={{ background: '#3b82f6', color: '#fff', border: 'none', borderRadius: 8, padding: '0.5rem 1rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+              <div style={{ fontSize: '0.8rem', color: '#8a96a8', marginBottom: '0.75rem' }}>
+                <Clock size={12} style={{ display: 'inline', marginRight: '0.2rem' }} />
+                Received at {formatTime(emergency.createdAt)}
+              </div>
+              <button 
+                onClick={() => window.location.href = `tel:${emergency.guestPhone || '+63328888888'}`} 
+                style={{ background: '#3b82f6', color: '#fff', border: 'none', borderRadius: 8, padding: '0.5rem 1rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
+              >
                 <Phone size={14} /> Call Room
               </button>
             </div>

@@ -1,12 +1,14 @@
-// DashboardPage.jsx – Light card UI with Lucide icons
+// DashboardPage.jsx – Light card UI with Lucide icons - Feedback & Rating version
 import { useState, useEffect } from 'react';
-import { fetchRecentBookings, fetchPayments } from '../services/api';
+import { fetchRecentBookings, fetchPayments, fetchFeedback, submitFeedback } from '../services/api';
 import { fmt, fmtDate } from '../utils/format';
 import {
   Hotel, BedDouble, CheckCircle2, DollarSign, Star,
   CreditCard, User, ChevronRight, Calendar,
   AlertTriangle, RefreshCw, BedSingle, Building2,
-  Home, Sparkles, Crown, Gem, TrendingUp,
+  Home, Sparkles, Crown, Gem, MessageCircle,
+  ThumbsUp, Smile, Clock, Award, Edit2, Send,
+  X, Heart
 } from 'lucide-react';
 
 const css = `
@@ -31,6 +33,10 @@ const css = `
     --blue-bg:    rgba(59,130,246,0.1);
     --orange:     #f59e0b;
     --orange-bg:  rgba(245,158,11,0.1);
+    --purple:     #8b5cf6;
+    --purple-bg:  rgba(139,92,246,0.1);
+    --pink:       #ec4899;
+    --pink-bg:    rgba(236,72,153,0.1);
   }
 
   * { box-sizing:border-box; scrollbar-width:thin; scrollbar-color:rgba(201,168,76,0.3) #f0f0f0; }
@@ -41,7 +47,8 @@ const css = `
   @keyframes fadeUp  { from{opacity:0;transform:translateY(14px)} to{opacity:1;transform:translateY(0)} }
   @keyframes spin    { to{transform:rotate(360deg)} }
   @keyframes shimmer { 0%{background-position:-600px 0} 100%{background-position:600px 0} }
-  @keyframes barUp   { from{transform:scaleY(0)} to{transform:scaleY(1)} }
+  @keyframes scaleIn { from{opacity:0;transform:scale(0.9)} to{opacity:1;transform:scale(1)} }
+  @keyframes slideIn { from{opacity:0;transform:translateX(20px)} to{opacity:1;transform:translateX(0)} }
 
   .db-root {
     min-height:100vh; background:var(--bg); font-family:'DM Sans',sans-serif;
@@ -77,7 +84,7 @@ const css = `
   .db-stat.gold::before   { background:linear-gradient(to right,#9a7a2e,#C9A84C); }
   .db-stat.green::before  { background:linear-gradient(to right,#059669,#34d399); }
   .db-stat.blue::before   { background:linear-gradient(to right,#2563eb,#60a5fa); }
-  .db-stat.orange::before { background:linear-gradient(to right,#d97706,#fbbf24); }
+  .db-stat.purple::before { background:linear-gradient(to right,#7c3aed,#a78bfa); }
 
   .db-stat-icon {
     width:34px; height:34px; border-radius:9px; margin-bottom:.65rem;
@@ -87,13 +94,13 @@ const css = `
   .db-stat.gold   .db-stat-icon { background:rgba(201,168,76,0.12);  border-color:rgba(201,168,76,0.2);  color:#9a7a2e; }
   .db-stat.green  .db-stat-icon { background:rgba(45,155,111,0.12);  border-color:rgba(45,155,111,0.2);  color:#2d9b6f; }
   .db-stat.blue   .db-stat-icon { background:rgba(59,130,246,0.12);  border-color:rgba(59,130,246,0.2);  color:#3b82f6; }
-  .db-stat.orange .db-stat-icon { background:rgba(245,158,11,0.12);  border-color:rgba(245,158,11,0.2);  color:#f59e0b; }
+  .db-stat.purple .db-stat-icon { background:rgba(139,92,246,0.12);  border-color:rgba(139,92,246,0.2);  color:#8b5cf6; }
 
   .db-stat-label { font-size:.67rem; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--text-muted); margin-bottom:.3rem; }
   .db-stat-val { font-family:'Cormorant Garamond',serif; font-size:1.9rem; font-weight:600; color:var(--text); line-height:1; }
 
   /* ── Main layout ── */
-  .db-main { display:grid; grid-template-columns:1fr 300px; gap:1rem; }
+  .db-main { display:grid; grid-template-columns:1fr 380px; gap:1rem; }
   @media(max-width:1050px){ .db-main { grid-template-columns:1fr; } }
 
   /* ── Panel ── */
@@ -199,34 +206,80 @@ const css = `
   .db-sbar-track { height:5px; border-radius:99px; background:#f1f5f9; }
   .db-sbar-fill  { height:100%; border-radius:99px; transition:width .6s ease; }
 
-  /* ── Activity feed ── */
-  .db-act-item { display:flex; gap:.65rem; padding:.68rem 0; border-bottom:1px solid #f8f9fb; }
-  .db-act-item:last-child { border-bottom:none; }
-  .db-act-dot-col { display:flex; flex-direction:column; align-items:center; gap:.12rem; padding-top:3px; }
-  .db-act-dot  { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
-  .db-act-line { flex:1; width:1px; background:var(--border); min-height:14px; }
-  .db-act-text { font-size:.79rem; color:var(--text-sub); line-height:1.5; }
-  .db-act-text strong { color:var(--text); }
-  .db-act-time { font-size:.68rem; color:var(--text-muted); margin-top:.12rem; }
+  /* ── Feedback / Rating Styles ── */
+  .rating-stars {
+    display:flex; gap:3px; align-items:center;
+  }
+  .rating-star {
+    cursor:pointer; transition:transform .15s, color .15s;
+    color:#cbd5e1;
+  }
+  .rating-star:hover { transform:scale(1.1); }
+  .rating-star.active { color:#fbbf24; fill:#fbbf24; }
+  .rating-star.permanent { color:#fbbf24; fill:#fbbf24; cursor:default; }
+  .rating-star.permanent:hover { transform:none; }
 
-  /* ── Bar chart ── */
-  .db-chart { display:flex; align-items:flex-end; gap:.45rem; position:relative; padding-bottom:1.4rem; }
-  .db-chart-grid {
-    position:absolute; inset:0 0 1.4rem 0; pointer-events:none;
-    background-image:repeating-linear-gradient(to top,transparent 0%,transparent calc(25% - 1px),#f1f5f9 calc(25% - 1px),#f1f5f9 25%);
+  .feedback-card {
+    background:var(--surface2); border-radius:12px; padding:1rem;
+    margin-bottom:1rem; transition:all .2s;
+    border:1px solid var(--border);
   }
-  .db-bar-wrap { flex:1; display:flex; flex-direction:column; align-items:center; gap:.38rem; }
-  .db-bar-outer { width:100%; display:flex; align-items:flex-end; }
-  .db-bar-inner {
-    width:100%; border-radius:5px 5px 0 0; cursor:pointer; position:relative;
-    background:linear-gradient(to top,rgba(201,168,76,.7),rgba(201,168,76,.3));
-    transform-origin:bottom; animation:barUp .5s cubic-bezier(.22,1,.36,1) both;
-    transition:background .18s;
+  .feedback-card:hover { border-color:rgba(201,168,76,0.3); box-shadow:0 2px 8px rgba(0,0,0,.04); }
+
+  .feedback-highlight {
+    background:linear-gradient(135deg, rgba(201,168,76,0.08), rgba(201,168,76,0.02));
+    border-left:3px solid var(--gold);
   }
-  .db-bar-inner:hover { background:linear-gradient(to top,#C9A84C,rgba(201,168,76,.55)); }
-  .db-bar-inner::after { content:attr(data-v); position:absolute; bottom:calc(100% + 3px); left:50%; transform:translateX(-50%); font-size:.59rem; color:var(--gold-dark); white-space:nowrap; opacity:0; transition:opacity .15s; }
-  .db-bar-inner:hover::after { opacity:1; }
-  .db-bar-lbl { font-size:.6rem; color:var(--text-muted); letter-spacing:.02em; }
+
+  .feedback-modal-overlay {
+    position:fixed; top:0; left:0; right:0; bottom:0;
+    background:rgba(0,0,0,0.6); backdrop-filter:blur(4px);
+    display:flex; align-items:center; justify-content:center;
+    z-index:1000; animation:fadeUp .2s ease;
+  }
+  .feedback-modal {
+    background:var(--surface); border-radius:20px; width:90%; max-width:500px;
+    box-shadow:0 25px 50px -12px rgba(0,0,0,0.25); animation:scaleIn .2s ease;
+    overflow:hidden;
+  }
+  .feedback-modal-header {
+    display:flex; justify-content:space-between; align-items:center;
+    padding:1rem 1.5rem; border-bottom:1px solid var(--border);
+    background:var(--surface2);
+  }
+  .feedback-modal-header h3 { font-family:'Cormorant Garamond',serif; margin:0; font-size:1.2rem; }
+  .feedback-modal-close {
+    cursor:pointer; padding:4px; border-radius:50%; display:flex;
+    transition:background .15s;
+  }
+  .feedback-modal-close:hover { background:rgba(0,0,0,0.05); }
+  .feedback-modal-body { padding:1.5rem; }
+  .feedback-textarea {
+    width:100%; border:1px solid var(--border); border-radius:12px;
+    padding:.8rem 1rem; font-family:'DM Sans',sans-serif;
+    font-size:.85rem; resize:vertical; min-height:100px;
+    transition:border .15s;
+  }
+  .feedback-textarea:focus { outline:none; border-color:var(--gold); box-shadow:0 0 0 2px rgba(201,168,76,0.2); }
+  .feedback-submit {
+    width:100%; margin-top:1rem; padding:.7rem;
+    background:linear-gradient(135deg, #9a7a2e, #C9A84C);
+    border:none; border-radius:10px; color:white;
+    font-weight:600; font-size:.85rem; cursor:pointer;
+    display:flex; align-items:center; justify-content:center; gap:.5rem;
+    transition:opacity .15s;
+  }
+  .feedback-submit:hover { opacity:0.9; }
+  .feedback-submit:disabled { opacity:0.5; cursor:not-allowed; }
+
+  .feedback-toast {
+    position:fixed; bottom:24px; right:24px;
+    background:#1a1f2e; color:white; padding:12px 20px;
+    border-radius:99px; font-size:.85rem; font-weight:500;
+    display:flex; align-items:center; gap:8px;
+    z-index:1001; animation:slideIn .3s ease;
+    box-shadow:0 4px 12px rgba(0,0,0,0.15);
+  }
 
   /* ── Skeleton ── */
   .db-skel {
@@ -274,22 +327,57 @@ function StatusPill({ status }) {
   );
 }
 
-function BarChart({ data, height = 110 }) {
-  const max = Math.max(...data.map(d => d.value), 1);
+function RatingStars({ rating, onRate, size = 16, permanent = false }) {
+  const [hoverRating, setHoverRating] = useState(0);
+  
   return (
-    <div className="db-chart" style={{ height: height + 22 }}>
-      <div className="db-chart-grid"/>
-      {data.map((d, i) => {
-        const h = Math.max(4, (d.value / max) * height);
-        return (
-          <div key={i} className="db-bar-wrap">
-            <div className="db-bar-outer" style={{ height }}>
-              <div className="db-bar-inner" style={{ height: h, animationDelay: `${i * 0.05}s` }} data-v={fmt(d.value)}/>
+    <div className="rating-stars" onMouseLeave={() => !permanent && setHoverRating(0)}>
+      {[1,2,3,4,5].map(star => (
+        <Star
+          key={star}
+          size={size}
+          className={`rating-star ${(!permanent && onRate) ? 'interactive' : ''} ${(permanent ? (star <= rating) : (star <= (hoverRating || rating))) ? 'active' : ''}`}
+          style={{ cursor: (!permanent && onRate) ? 'pointer' : 'default' }}
+          onClick={() => !permanent && onRate && onRate(star)}
+          onMouseEnter={() => !permanent && onRate && setHoverRating(star)}
+          fill={(permanent ? (star <= rating) : (star <= (hoverRating || rating))) ? '#fbbf24' : 'none'}
+        />
+      ))}
+    </div>
+  );
+}
+
+function FeedbackItem({ feedback, showBookingInfo = false }) {
+  return (
+    <div className={`feedback-card ${feedback.highlighted ? 'feedback-highlight' : ''}`}>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:'8px' }}>
+        <div style={{ display:'flex', alignItems:'center', gap:'8px' }}>
+          {feedback.roomType && showBookingInfo && (
+            <div className="db-room-ico" style={{ width:'28px', height:'28px' }}>
+              {getRoomIcon(feedback.roomType)}
             </div>
-            <span className="db-bar-lbl">{d.label}</span>
+          )}
+          <div>
+            {showBookingInfo && feedback.roomType && (
+              <div style={{ fontWeight:600, fontSize:'.8rem' }}>{feedback.roomType}</div>
+            )}
+            <div style={{ fontSize:'.7rem', color:'var(--text-muted)' }}>
+              {feedback.date ? fmtDate(feedback.date) : 'Recent stay'}
+            </div>
           </div>
-        );
-      })}
+        </div>
+        <RatingStars rating={feedback.rating} size={14} permanent />
+      </div>
+      {feedback.comment && (
+        <p style={{ fontSize:'.8rem', color:'var(--text-sub)', margin:'8px 0 0 0', lineHeight:1.5 }}>
+          "{feedback.comment}"
+        </p>
+      )}
+      {feedback.response && (
+        <div style={{ marginTop:'10px', paddingTop:'8px', borderTop:'1px solid var(--border)', fontSize:'.72rem', color:'var(--gold-dark)' }}>
+          <span style={{ fontWeight:600 }}>Hotel replied:</span> {feedback.response}
+        </div>
+      )}
     </div>
   );
 }
@@ -301,20 +389,31 @@ function getUsername(user) {
 export function DashboardPage({ user, token, t, setPage }) {
   const [bookings,    setBookings]    = useState([]);
   const [payments,    setPayments]    = useState([]);
+  const [feedbackList, setFeedbackList] = useState([]);
   const [loading,     setLoading]     = useState(true);
   const [error,       setError]       = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [today]                       = useState(() => new Date().toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric', year:'numeric' }));
+  
+  // Feedback modal state
+  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+  const [selectedBooking, setSelectedBooking] = useState(null);
+  const [feedbackRating, setFeedbackRating] = useState(0);
+  const [feedbackComment, setFeedbackComment] = useState('');
+  const [submittingFeedback, setSubmittingFeedback] = useState(false);
+  const [toastMessage, setToastMessage] = useState(null);
 
   const load = () => {
     setLoading(true); setError(null);
     Promise.all([
       fetchRecentBookings(token),
       fetchPayments(token).catch(() => []),
+      fetchFeedback(token).catch(() => []),
     ])
-      .then(([bData, pData]) => {
+      .then(([bData, pData, fData]) => {
         setBookings(Array.isArray(bData) ? bData : []);
         setPayments(Array.isArray(pData) ? pData : []);
+        setFeedbackList(Array.isArray(fData) ? fData : []);
         setLoading(false);
       })
       .catch(err => { setError(err?.message || 'Failed to load.'); setLoading(false); });
@@ -346,17 +445,10 @@ export function DashboardPage({ user, token, t, setPage }) {
     .filter(b => b.status !== 'CANCELLED')
     .reduce((s, b) => s + Math.floor((b.totalAmount || 0) / 100) * 10, 0);
 
-  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  const now = new Date();
-  const chartData = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(now.getFullYear(), now.getMonth() - 6 + i, 1);
-    const val = bookings.filter(b => {
-      const bd = new Date(b.checkInDate);
-      return bd.getMonth() === d.getMonth() && bd.getFullYear() === d.getFullYear()
-        && b.status !== 'CANCELLED';
-    }).reduce((s, b) => s + parseFloat(b.depositAmount || 0), 0);
-    return { label: months[d.getMonth()].slice(0, 3), value: val };
-  });
+  // Calculate average rating from feedback
+  const avgRating = feedbackList.length > 0
+    ? (feedbackList.reduce((sum, f) => sum + f.rating, 0) / feedbackList.length).toFixed(1)
+    : 0;
 
   const statusCounts = { COMPLETED:0, CONFIRMED:0, PENDING:0, CANCELLED:0 };
   bookings.forEach(b => { if (statusCounts[b.status] !== undefined) statusCounts[b.status]++; });
@@ -365,15 +457,63 @@ export function DashboardPage({ user, token, t, setPage }) {
     { Icon: Hotel,        label:'Total Bookings',  value: bookings.length,               color:'gold'   },
     { Icon: CheckCircle2, label:'Completed Stays', value: completed,                     color:'green'  },
     { Icon: DollarSign,   label:'Net Spent',       value: fmt(netSpentFinal),            color:'blue'   },
-    { Icon: Star,         label:'Reward Points',   value: rewards.toLocaleString(),      color:'orange' },
+    { Icon: Star,         label:'Avg Rating',      value: feedbackList.length > 0 ? `${avgRating} ★` : '—', color:'purple' },
   ];
 
   const quickActions = [
     { Icon: BedDouble,  label:'Book a Room',    sub:'Check availability',     act: () => setPage('bookings') },
     { Icon: CreditCard, label:'Make Payment',   sub:'Settle outstanding dues', act: () => setPage('payments') },
     { Icon: User,       label:'Update Profile', sub:'Manage your information', act: () => setPage('profile') },
-    { Icon: Star,       label:'View Rewards',   sub:'Redeem your points',      act: () => setPage('rewards') },
+    { Icon: MessageCircle, label:'Leave Feedback', sub:'Share your experience', act: () => {
+        const completedBookings = bookings.filter(b => b.status === 'COMPLETED');
+        const alreadyRatedIds = new Set(feedbackList.map(f => f.bookingId));
+        const unratedCompleted = completedBookings.filter(b => !alreadyRatedIds.has(b.id));
+        if (unratedCompleted.length > 0) {
+          setSelectedBooking(unratedCompleted[0]);
+          setFeedbackRating(0);
+          setFeedbackComment('');
+          setShowFeedbackModal(true);
+        } else if (completedBookings.length > 0) {
+          setToastMessage({ type: 'info', text: 'You have already rated all your completed stays. Thank you!' });
+          setTimeout(() => setToastMessage(null), 3000);
+        } else {
+          setToastMessage({ type: 'info', text: 'You need to complete a stay before leaving feedback.' });
+          setTimeout(() => setToastMessage(null), 3000);
+        }
+      } },
   ];
+
+  const handleSubmitFeedback = async () => {
+    if (!selectedBooking) return;
+    if (feedbackRating === 0) {
+      setToastMessage({ type: 'error', text: 'Please select a rating before submitting.' });
+      setTimeout(() => setToastMessage(null), 3000);
+      return;
+    }
+    
+    setSubmittingFeedback(true);
+    try {
+      const newFeedback = await submitFeedback(token, {
+        bookingId: selectedBooking.id,
+        roomType: selectedBooking.roomType,
+        rating: feedbackRating,
+        comment: feedbackComment.trim() || null,
+        date: new Date().toISOString()
+      });
+      setFeedbackList(prev => [newFeedback, ...prev]);
+      setShowFeedbackModal(false);
+      setSelectedBooking(null);
+      setFeedbackRating(0);
+      setFeedbackComment('');
+      setToastMessage({ type: 'success', text: 'Thank you for your feedback!' });
+      setTimeout(() => setToastMessage(null), 3000);
+    } catch (err) {
+      setToastMessage({ type: 'error', text: 'Failed to submit feedback. Please try again.' });
+      setTimeout(() => setToastMessage(null), 3000);
+    } finally {
+      setSubmittingFeedback(false);
+    }
+  };
 
   const pageBtns = () => {
     const btns = [];
@@ -388,9 +528,84 @@ export function DashboardPage({ user, token, t, setPage }) {
     return btns;
   };
 
+  // Get recent feedback (last 4) for sidebar
+  const recentFeedback = [...feedbackList].slice(0, 4);
+
   return (
     <div className="db-root">
       <style>{css}</style>
+
+      {/* Toast notification */}
+      {toastMessage && (
+        <div className="feedback-toast">
+          {toastMessage.type === 'success' && <ThumbsUp size={16} />}
+          {toastMessage.type === 'error' && <AlertTriangle size={16} />}
+          {toastMessage.type === 'info' && <Smile size={16} />}
+          {toastMessage.text}
+        </div>
+      )}
+
+      {/* Feedback Modal */}
+      {showFeedbackModal && selectedBooking && (
+        <div className="feedback-modal-overlay" onClick={() => setShowFeedbackModal(false)}>
+          <div className="feedback-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="feedback-modal-header">
+              <h3>Rate Your Stay</h3>
+              <div className="feedback-modal-close" onClick={() => setShowFeedbackModal(false)}>
+                <X size={20} />
+              </div>
+            </div>
+            <div className="feedback-modal-body">
+              <div style={{ marginBottom: '1rem', padding: '.5rem .75rem', background: 'var(--surface2)', borderRadius: '10px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div className="db-room-ico" style={{ width: '32px', height: '32px' }}>
+                    {getRoomIcon(selectedBooking.roomType)}
+                  </div>
+                  <div>
+                    <div style={{ fontWeight: 600 }}>{selectedBooking.roomType}</div>
+                    <div style={{ fontSize: '.7rem', color: 'var(--text-muted)' }}>
+                      {fmtDate(selectedBooking.checkInDate)} → {fmtDate(selectedBooking.checkOutDate)}
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              <div style={{ marginBottom: '1rem' }}>
+                <div style={{ fontSize: '.8rem', fontWeight: 600, marginBottom: '.5rem' }}>Your Rating</div>
+                <RatingStars rating={feedbackRating} onRate={setFeedbackRating} size={28} />
+                {feedbackRating > 0 && (
+                  <div style={{ fontSize: '.7rem', color: 'var(--text-muted)', marginTop: '.3rem' }}>
+                    {feedbackRating === 5 && 'Excellent! 🌟'}
+                    {feedbackRating === 4 && 'Good! 👍'}
+                    {feedbackRating === 3 && 'Average 🤔'}
+                    {feedbackRating === 2 && 'Could be better 😕'}
+                    {feedbackRating === 1 && 'Disappointing 😞'}
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <div style={{ fontSize: '.8rem', fontWeight: 600, marginBottom: '.5rem' }}>Your Comments (Optional)</div>
+                <textarea
+                  className="feedback-textarea"
+                  placeholder="Share your experience with us..."
+                  value={feedbackComment}
+                  onChange={(e) => setFeedbackComment(e.target.value)}
+                />
+              </div>
+
+              <button 
+                className="feedback-submit" 
+                onClick={handleSubmitFeedback}
+                disabled={submittingFeedback || feedbackRating === 0}
+              >
+                {submittingFeedback ? <div className="db-spin" style={{ width: '18px', height: '18px', margin: 0 }} /> : <Send size={16} />}
+                Submit Feedback
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Header */}
       <div className="db-header">
@@ -428,26 +643,8 @@ export function DashboardPage({ user, token, t, setPage }) {
       {/* Main grid */}
       <div className="db-main">
 
-        {/* Left column */}
+        {/* Left column - Bookings Table */}
         <div style={{ display:'flex', flexDirection:'column', gap:'1rem' }}>
-
-          {/* Revenue chart */}
-          {!loading && bookings.length > 0 && (
-            <div className="db-panel" style={{ animationDelay:'.05s' }}>
-              <div className="db-panel-hd">
-                <div>
-                  <div className="db-panel-title">Monthly Revenue</div>
-                  <div className="db-panel-sub">Last 7 months booking revenue</div>
-                </div>
-                <div style={{ display:'flex', alignItems:'center', gap:'.4rem', fontSize:'.85rem', color:'var(--gold-dark)', fontWeight:700 }}>
-                  <TrendingUp size={15}/> {fmt(chartData.reduce((s,d)=>s+d.value,0))}
-                </div>
-              </div>
-              <div className="db-panel-body">
-                <BarChart data={chartData}/>
-              </div>
-            </div>
-          )}
 
           {/* Bookings table */}
           <div className="db-panel" style={{ animationDelay:'.08s' }}>
@@ -485,25 +682,54 @@ export function DashboardPage({ user, token, t, setPage }) {
                         <th>Check-in / Check-out</th>
                         <th>Amount</th>
                         <th>Status</th>
+                        <th>Rate</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {visible.map(b => (
-                        <tr key={b.id}>
-                          <td>
-                            <div className="db-room-cell">
-                              <div className="db-room-ico">{getRoomIcon(b.roomType)}</div>
-                              <div className="db-room-name">{b.roomType}</div>
-                            </div>
-                          </td>
-                          <td>
-                            <div className="db-date-sm">{fmtDate(b.checkInDate)}</div>
-                            <div className="db-date-sm" style={{ color:'#cbd5e1' }}>→ {fmtDate(b.checkOutDate)}</div>
-                          </td>
-                          <td><span style={{ fontWeight:700, color:'var(--text)', fontVariantNumeric:'tabular-nums' }}>{fmt(b.totalAmount)}</span></td>
-                          <td><StatusPill status={b.status}/></td>
-                        </tr>
-                      ))}
+                      {visible.map(b => {
+                        const hasFeedback = feedbackList.some(f => f.bookingId === b.id);
+                        return (
+                          <tr key={b.id}>
+                            <td>
+                              <div className="db-room-cell">
+                                <div className="db-room-ico">{getRoomIcon(b.roomType)}</div>
+                                <div className="db-room-name">{b.roomType}</div>
+                              </div>
+                            </td>
+                            <td>
+                              <div className="db-date-sm">{fmtDate(b.checkInDate)}</div>
+                              <div className="db-date-sm" style={{ color:'#cbd5e1' }}>→ {fmtDate(b.checkOutDate)}</div>
+                            </td>
+                            <td><span style={{ fontWeight:700, color:'var(--text)', fontVariantNumeric:'tabular-nums' }}>{fmt(b.totalAmount)}</span></td>
+                            <td><StatusPill status={b.status}/></td>
+                            <td>
+                              {b.status === 'COMPLETED' ? (
+                                hasFeedback ? (
+                                  <RatingStars rating={feedbackList.find(f => f.bookingId === b.id)?.rating || 0} size={14} permanent />
+                                ) : (
+                                  <button
+                                    onClick={() => {
+                                      setSelectedBooking(b);
+                                      setFeedbackRating(0);
+                                      setFeedbackComment('');
+                                      setShowFeedbackModal(true);
+                                    }}
+                                    style={{
+                                      background:'none', border:'none', cursor:'pointer',
+                                      fontSize:'.7rem', color:'var(--gold-dark)', fontWeight:500,
+                                      display:'flex', alignItems:'center', gap:'4px'
+                                    }}
+                                  >
+                                    <Edit2 size={12} /> Rate
+                                  </button>
+                                )
+                              ) : (
+                                <span style={{ fontSize:'.65rem', color:'var(--text-muted)' }}>—</span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -574,27 +800,78 @@ export function DashboardPage({ user, token, t, setPage }) {
             </div>
           )}
 
-          {/* Activity Feed */}
+          {/* Guest Feedback Section */}
           <div className="db-panel" style={{ animationDelay:'.12s' }}>
             <div className="db-panel-hd">
-              <div className="db-panel-title">Recent Activity</div>
+              <div className="db-panel-title">
+                <span style={{ display:'flex', alignItems:'center', gap:'6px' }}>
+                  <Heart size={14} style={{ color:'var(--pink)' }} />
+                  Guest Feedback
+                </span>
+              </div>
+              {feedbackList.length > 0 && (
+                <div className="db-panel-sub">
+                  <RatingStars rating={parseFloat(avgRating)} size={12} permanent />
+                  <span style={{ marginLeft:'6px' }}>({feedbackList.length})</span>
+                </div>
+              )}
             </div>
             <div className="db-panel-body">
-              {bookings.length === 0
-                ? <div style={{ color:'var(--text-muted)', fontSize:'.79rem', textAlign:'center', padding:'.5rem 0' }}>No recent activity</div>
-                : bookings.slice(0, 5).map((b, i) => (
-                    <div key={i} className="db-act-item">
-                      <div className="db-act-dot-col">
-                        <div className="db-act-dot" style={{ background: STATUS_COLORS[b.status] || '#C9A84C' }}/>
-                        {i < 4 && <div className="db-act-line"/>}
-                      </div>
-                      <div>
-                        <div className="db-act-text"><strong>{b.roomType}</strong> — {b.status?.charAt(0)+b.status?.slice(1).toLowerCase()}</div>
-                        <div className="db-act-time">{fmtDate(b.checkInDate)}</div>
-                      </div>
+              {loading ? (
+                <div style={{ textAlign:'center', padding:'1rem' }}>
+                  <div className="db-spin" style={{ width:'20px', height:'20px' }} />
+                </div>
+              ) : feedbackList.length === 0 ? (
+                <div style={{ textAlign:'center', padding:'1rem 0.5rem' }}>
+                  <div className="db-empty-ico" style={{ marginBottom:'0.5rem' }}>
+                    <MessageCircle size={36} strokeWidth={1} />
+                  </div>
+                  <div className="db-empty-title" style={{ fontSize:'0.9rem' }}>No feedback yet</div>
+                  <div className="db-empty-sub" style={{ fontSize:'0.7rem' }}>
+                    Share your experience after your stay
+                  </div>
+                  <button 
+                    className="db-book-btn" 
+                    onClick={() => {
+                      const completedBookings = bookings.filter(b => b.status === 'COMPLETED');
+                      const alreadyRatedIds = new Set(feedbackList.map(f => f.bookingId));
+                      const unratedCompleted = completedBookings.filter(b => !alreadyRatedIds.has(b.id));
+                      if (unratedCompleted.length > 0) {
+                        setSelectedBooking(unratedCompleted[0]);
+                        setFeedbackRating(0);
+                        setFeedbackComment('');
+                        setShowFeedbackModal(true);
+                      } else if (completedBookings.length > 0) {
+                        setToastMessage({ type: 'info', text: 'You have already rated all your stays!' });
+                        setTimeout(() => setToastMessage(null), 3000);
+                      } else {
+                        setToastMessage({ type: 'info', text: 'Complete a stay to leave feedback.' });
+                        setTimeout(() => setToastMessage(null), 3000);
+                      }
+                    }}
+                    style={{ padding:'0.4rem 0.8rem', fontSize:'0.7rem' }}
+                  >
+                    <MessageCircle size={12} /> Leave Feedback
+                  </button>
+                </div>
+              ) : (
+                <>
+                  {recentFeedback.map((feedback, idx) => (
+                    <FeedbackItem key={idx} feedback={feedback} showBookingInfo />
+                  ))}
+                  {feedbackList.length > 4 && (
+                    <div style={{ textAlign:'center', marginTop:'0.5rem' }}>
+                      <button 
+                        className="db-view-all" 
+                        onClick={() => setPage('feedback')}
+                        style={{ fontSize:'0.7rem' }}
+                      >
+                        View all {feedbackList.length} reviews <ChevronRight size={12}/>
+                      </button>
                     </div>
-                  ))
-              }
+                  )}
+                </>
+              )}
             </div>
           </div>
         </div>

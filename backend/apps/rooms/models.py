@@ -1,7 +1,6 @@
 """
 apps/rooms/models.py
 Mirrors Spring Boot Room exactly — table: rooms
-managed = False (table already exists in Supabase)
 """
 from django.db import models
 
@@ -30,9 +29,19 @@ class Room(models.Model):
     # LocalDateTime updatedAt
     updated_at = models.DateTimeField(null=True, blank=True, db_column="updated_at")
 
+    # ========== ADD STATUS FIELD ==========
+    # Room status: CLEAN, DIRTY, MAINTENANCE, OCCUPIED, READY, VACANT
+    status = models.CharField(
+        max_length=20,
+        default='CLEAN',
+        blank=True,
+        null=True,
+        db_column="status"
+    )
+
     class Meta:
         db_table = "rooms"
-        managed  = True
+        managed = True  # Keep as True so Django can read the column
 
     def __str__(self):
         return f"Room {self.room_number} ({self.room_type})"

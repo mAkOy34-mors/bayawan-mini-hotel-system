@@ -15,6 +15,8 @@ class Task(models.Model):
         ('EMERGENCY', 'Emergency'),
         ('CLEANING', 'Cleaning'),
         ('REPAIR', 'Repair'),
+        ('SECURITY', 'Security'),  # Add this
+        ('HOUSEKEEPING', 'Housekeeping'),  # Add this
     ]
 
     PRIORITY_CHOICES = [
@@ -47,6 +49,15 @@ class Task(models.Model):
                                     related_name='assigned_tasks')
     assigned_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
                                     related_name='created_tasks')
+
+    # Reference to complaint - ADD THIS FIELD
+    complaint = models.ForeignKey(
+        'complaints.Complaint',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='tasks'
+    )
 
     # Timestamps
     created_at = models.DateTimeField(auto_now_add=True)

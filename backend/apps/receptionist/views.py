@@ -748,38 +748,41 @@ class ReceptionistRoomsView(APIView):
         if err:
             return err
 
-        version   = cache.get("rooms_cache_version", 0)
+        version = cache.get("rooms_cache_version", 0)
         cache_key = f"receptionist_rooms_v{version}"
-        cached    = cache.get(cache_key)
+        cached = cache.get(cache_key)
         if cached:
             return Response(cached)
 
-        rooms             = Room.objects.all().order_by("room_number")
+        rooms = Room.objects.all().order_by("room_number")
         occupied_room_ids = set(
             Booking.objects.filter(
                 status=Booking.BookingStatus.CHECKED_IN
             ).values_list("room_id", flat=True)
         )
 
-        data = [
-            {
-                "id":            r.id,
-                "roomNumber":    r.room_number,
-                "roomType":      r.room_type,
+        data = []
+        for r in rooms:
+            # Get the room status (if status field exists, default to 'CLEAN')
+            room_status = getattr(r, 'status', 'CLEAN')
+
+            data.append({
+                "id": r.id,
+                "roomNumber": r.room_number,
+                "roomType": r.room_type,
                 "pricePerNight": float(r.price_per_night),
-                "maxOccupancy":  r.max_occupancy,
-                "available":     r.available,
-                "amenities":     r.amenities,
-                "imageUrl":      r.image_url,
-                "isOccupied":    r.id in occupied_room_ids,
+                "maxOccupancy": r.max_occupancy,
+                "available": r.available,
+                "amenities": r.amenities,
+                "imageUrl": r.image_url,
+                "isOccupied": r.id in occupied_room_ids,
+                "status": room_status,  # ← ADD THIS LINE
                 "currentStatus": (
-                    "OCCUPIED"    if r.id in occupied_room_ids else
-                    "AVAILABLE"   if r.available else
+                    "OCCUPIED" if r.id in occupied_room_ids else
+                    "AVAILABLE" if r.available else
                     "UNAVAILABLE"
                 ),
-            }
-            for r in rooms
-        ]
+            })
 
         cache.set(cache_key, data, timeout=60)
         return Response(data)
@@ -809,25 +812,37 @@ class ReceptionistRoomStatusView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        available = request.data.get("available")
-        if available is None:
-            return Response({"message": "available field is required."}, status=400)
+        # Check if updating status (CLEAN, DIRTY, MAINTENANCE, etc.)
+        new_status = request.data.get('status')
+        available = request.data.get('available')
 
-        room.available = bool(available)
-        room.save(update_fields=["available"])
+        if new_status:
+            # Update the status field
+            if hasattr(room, 'status'):
+                room.status = new_status
+                room.save(update_fields=['status'])
+                logger.info(
+                    "Room %s status updated to %s by receptionist %s",
+                    room.room_number, new_status, request.user.id,
+                )
+
+        if available is not None:
+            room.available = bool(available)
+            room.save(update_fields=["available"])
+            logger.info(
+                "Room %s set to %s by receptionist %s",
+                room.room_number,
+                "available" if room.available else "unavailable",
+                request.user.id,
+            )
+
         _clear_room_cache()
 
-        logger.info(
-            "Room %s set to %s by receptionist %s",
-            room.room_number,
-            "available" if room.available else "unavailable",
-            request.user.id,
-        )
-
         return Response({
-            "message":    f"Room {room.room_number} marked as {'available' if room.available else 'unavailable'}.",
+            "message": f"Room {room.room_number} updated.",
             "roomNumber": room.room_number,
-            "available":  room.available,
+            "available": room.available,
+            "status": getattr(room, 'status', 'CLEAN'),
         })
 
 
@@ -1141,4 +1156,364 @@ class VerifyQRCheckInView(APIView):
                 "depositAmount": float(booking.deposit_amount or 0),
                 "totalAmount": float(booking.total_amount or 0)
             }
+        })
+
+
+# apps/receptionist/views.py - Updated VerifyQRCheckOutView
+# apps/receptionist/views.py - Complete VerifyQRCheckOutView and ProcessQRCheckOutView
+
+class VerifyQRCheckOutView(APIView):
+    """
+    POST /api/v1/receptionist/verify-qr-checkout/
+
+    Receptionist scans guest's QR code to check them out.
+    Shows all outstanding charges including room balance and service charges.
+    """
+
+    def post(self, request):
+        err = receptionist_check(request)
+        if err:
+            return err
+
+        qr_data = request.data.get('qr_data')
+        if not qr_data:
+            return Response(
+                {"error": "QR data is required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Parse QR data
+        booking_ref = None
+        try:
+            if isinstance(qr_data, str):
+                if qr_data.strip().startswith('{'):
+                    try:
+                        parsed = json.loads(qr_data)
+                        booking_ref = parsed.get('bookingReference') or parsed.get('booking_reference')
+                    except:
+                        pass
+                if not booking_ref:
+                    booking_ref = qr_data.strip()
+            elif isinstance(qr_data, dict):
+                booking_ref = qr_data.get('bookingReference') or qr_data.get('booking_reference')
+        except:
+            booking_ref = str(qr_data).strip()
+
+        if not booking_ref:
+            return Response(
+                {"error": "Invalid QR code"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        booking_ref = booking_ref.strip().upper()
+
+        # Find booking
+        try:
+            booking = Booking.objects.select_related('room', 'user').get(
+                booking_reference__iexact=booking_ref
+            )
+        except Booking.DoesNotExist:
+            code_part = booking_ref.replace('CGH-', '')
+            booking = Booking.objects.select_related('room', 'user').filter(
+                booking_reference__icontains=code_part
+            ).first()
+            if not booking:
+                return Response(
+                    {"error": f"Booking {booking_ref} not found"},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+        # Check if checked in
+        if booking.status != 'CHECKED_IN':
+            return Response({
+                "error": f"Guest is not checked in. Status: {booking.status}",
+                "booking": {"reference": booking.booking_reference, "status": booking.status}
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # Get today's date for validation
+        today = timezone.now().date()
+        check_out_date = booking.check_out_date
+        is_early_checkout = check_out_date > today
+        is_late_checkout = check_out_date < today
+        days_difference = (check_out_date - today).days if check_out_date else 0
+
+        # Get outstanding charges
+        outstanding_charges = []
+
+        # 1. Room remaining balance
+        remaining_balance = float(booking.remaining_amount or 0)
+        if remaining_balance > 0:
+            outstanding_charges.append({
+                "type": "ROOM_BALANCE",
+                "description": f"Remaining room balance",
+                "amount": remaining_balance
+            })
+
+        # 2. Service requests for this guest/room
+        try:
+            from apps.services.models import ServiceRequest
+
+            # Find service requests by room_number AND guest_email
+            service_requests = ServiceRequest.objects.filter(
+                room_number=booking.room.room_number,
+                guest_email=booking.user.email,
+                is_paid=False,
+                status='COMPLETED'
+            )
+
+            for sr in service_requests:
+                outstanding_charges.append({
+                    "type": "SERVICE_CHARGE",
+                    "service_id": sr.id,
+                    "description": f"{sr.get_service_type_display()} - Room {sr.room_number}",
+                    "amount": float(sr.service_charge),
+                    "notes": sr.description
+                })
+        except ImportError:
+            pass
+
+        total_due = remaining_balance + sum(c['amount'] for c in outstanding_charges if c['type'] == 'SERVICE_CHARGE')
+
+        return Response({
+            "success": True,
+            "booking": {
+                "id": booking.id,
+                "reference": booking.booking_reference,
+                "guestName": booking.user.username,
+                "guestEmail": booking.user.email,
+                "roomNumber": booking.room.room_number if booking.room else None,
+                "roomType": booking.room.room_type if booking.room else None,
+                "checkInDate": str(booking.check_in_date),
+                "checkOutDate": str(booking.check_out_date),
+                "totalAmount": float(booking.total_amount or 0),
+                "depositPaid": float(booking.deposit_amount or 0),
+                "remainingBalance": remaining_balance,
+                "status": booking.status
+            },
+            "charges": outstanding_charges,
+            "summary": {
+                "subtotal": float(booking.total_amount or 0),
+                "deposit_paid": float(booking.deposit_amount or 0),
+                "service_charges": sum(c['amount'] for c in outstanding_charges if c['type'] == 'SERVICE_CHARGE'),
+                "total_due": total_due,
+                "is_early_checkout": is_early_checkout,
+                "is_late_checkout": is_late_checkout,
+                "check_out_date": str(check_out_date),
+                "today": str(today),
+                "days_difference": days_difference
+            }
+        })
+
+
+class ProcessQRCheckOutView(APIView):
+    """
+    POST /api/v1/receptionist/process-qr-checkout/
+
+    Process the check-out after payment is collected.
+    Validates check-out date, marks room as dirty, and creates cleaning task.
+    """
+
+    def post(self, request):
+        err = receptionist_check(request)
+        if err:
+            return err
+
+        booking_id = request.data.get('booking_id')
+        payment_collected = request.data.get('payment_collected', 0)
+        payment_method = request.data.get('payment_method', 'CASH')
+        force_checkout = request.data.get('force_checkout', False)
+
+        if not booking_id:
+            return Response(
+                {"error": "Booking ID is required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            booking = Booking.objects.select_related('room', 'user').get(id=booking_id)
+        except Booking.DoesNotExist:
+            return Response({"error": "Booking not found"}, status=404)
+
+        if booking.status != 'CHECKED_IN':
+            return Response(
+                {"error": f"Booking is not checked in (status: {booking.status})"},
+                status=400
+            )
+
+        # ============================================================
+        # DATE VALIDATION - Check if check-out date is valid
+        # ============================================================
+        today = timezone.now().date()
+        check_out_date = booking.check_out_date
+        days_difference = (check_out_date - today).days if check_out_date else 0
+
+        # Check if check-out date is today or earlier
+        if check_out_date > today:
+            # Future check-out date - not allowed
+            days_early = days_difference
+
+            if not force_checkout:
+                return Response({
+                    "error": f"Cannot check out guest yet. Check-out date is {check_out_date} ({days_early} day(s) from today).",
+                    "check_out_date": str(check_out_date),
+                    "today": str(today),
+                    "days_early": days_early,
+                    "can_force": True,
+                    "message": "Use force_checkout=true to override (for early check-out)"
+                }, status=status.HTTP_400_BAD_REQUEST)
+            else:
+                # Early check-out - add note
+                early_checkout_note = f"EARLY CHECK-OUT: Guest checked out {days_early} day(s) early on {today}"
+                logger.info(f"Early check-out for booking {booking.booking_reference}: {early_checkout_note}")
+
+        elif check_out_date < today:
+            # Past check-out date - late check-out
+            days_late = abs(days_difference)
+            late_checkout_note = f"LATE CHECK-OUT: Guest checked out {days_late} day(s) late on {today}"
+            logger.info(f"Late check-out for booking {booking.booking_reference}: {late_checkout_note}")
+
+        # Process payment
+        remaining = float(booking.remaining_amount or 0)
+        payment_collected = float(payment_collected)
+
+        if payment_collected > 0:
+            if payment_collected >= remaining:
+                booking.remaining_amount = 0
+                booking.payment_status = Booking.PaymentStatus.FULLY_PAID
+                booking.balance_paid_at = timezone.now()
+            else:
+                booking.remaining_amount = remaining - payment_collected
+
+            # Create payment record
+            Payment.objects.create(
+                paymongo_link_id=f"CHECKOUT-{booking.booking_reference}-{uuid.uuid4().hex[:6].upper()}",
+                checkout_url="",
+                email=booking.user.email,
+                description=f"Check-out payment - {payment_method}",
+                amount=payment_collected,
+                status="PAID",
+                type="BALANCE",
+                booking_id=booking.id,
+                paid_at=timezone.now(),
+            )
+
+        # Mark service requests as paid
+        try:
+            from apps.services.models import ServiceRequest
+
+            # Find and mark service requests as paid
+            service_requests = ServiceRequest.objects.filter(
+                room_number=booking.room.room_number,
+                guest_email=booking.user.email,
+                is_paid=False,
+                status='COMPLETED'
+            )
+
+            for sr in service_requests:
+                sr.is_paid = True
+                sr.save()
+
+                # Create payment record for service if needed
+                if sr.service_charge > 0:
+                    Payment.objects.create(
+                        paymongo_link_id=f"SERVICE-{sr.id}-{uuid.uuid4().hex[:6].upper()}",
+                        checkout_url="",
+                        email=booking.user.email,
+                        description=f"Service charge: {sr.get_service_type_display()} - Room {sr.room_number}",
+                        amount=float(sr.service_charge),
+                        status="PAID",
+                        type="SERVICE",
+                        booking_id=booking.id,
+                        paid_at=timezone.now(),
+                    )
+        except ImportError:
+            pass
+
+        # Complete check-out
+        booking.status = Booking.BookingStatus.COMPLETED
+        booking.check_out_date = timezone.now().date()
+        booking.save()
+
+        # Mark room as DIRTY and create cleaning task
+        room = booking.room
+        cleaning_task_created = False
+
+        if room:
+            room.available = False
+            if hasattr(room, 'status'):
+                room.status = 'DIRTY'
+            room.save()
+
+            # Create cleaning task for housekeeping
+            try:
+                from apps.housekeepers.models import CleaningTask, CleaningChecklist
+
+                cleaning_task = CleaningTask.objects.create(
+                    title=f"Clean Room {room.room_number} after check-out",
+                    description=f"Room {room.room_number} ({room.room_type}) needs cleaning after guest check-out.\n"
+                                f"Booking: {booking.booking_reference}\n"
+                                f"Guest: {booking.user.username}",
+                    task_type='ROOM_CLEANING',
+                    priority='HIGH',
+                    room=room,
+                    room_number=room.room_number,
+                    booking=booking,
+                    assigned_by=request.user,
+                    status='PENDING',
+                    notes="Priority cleaning needed after check-out"
+                )
+
+                # Create default checklist items
+                default_items = [
+                    "Make bed and change linens",
+                    "Vacuum floor",
+                    "Clean bathroom (toilet, sink, shower)",
+                    "Replace towels",
+                    "Restock amenities (soap, shampoo, tissue)",
+                    "Wipe all surfaces",
+                    "Empty trash bins",
+                    "Check mini-bar",
+                    "Arrange furniture",
+                    "Final inspection"
+                ]
+                for item in default_items:
+                    CleaningChecklist.objects.create(
+                        task=cleaning_task,
+                        item_name=item
+                    )
+
+                cleaning_task_created = True
+                logger.info(f"Cleaning task created for room {room.room_number}")
+
+            except ImportError as e:
+                logger.warning(f"Could not create cleaning task: {e}")
+            except Exception as e:
+                logger.error(f"Error creating cleaning task: {e}")
+
+        # Clear all caches
+        _clear_booking_cache()
+        _clear_room_cache()
+        cache.delete(f"receptionist_booking_{booking.id}")
+        cache.delete("housekeeper_rooms_all")
+        cache.delete("cleaning_tasks_all")
+
+        return Response({
+            "success": True,
+            "message": f"Guest checked out successfully. Room marked as DIRTY and cleaning task created.",
+            "booking": {
+                "id": booking.id,
+                "reference": booking.booking_reference,
+                "status": booking.status,
+                "paymentStatus": booking.payment_status,
+                "remainingBalance": float(booking.remaining_amount or 0)
+            },
+            "room": {
+                "id": room.id if room else None,
+                "number": room.room_number if room else None,
+                "status": "DIRTY"
+            } if room else None,
+            "cleaning_task_created": cleaning_task_created,
+            "early_checkout": check_out_date > today if check_out_date else False,
+            "late_checkout": check_out_date < today if check_out_date else False,
+            "days_difference": days_difference
         })

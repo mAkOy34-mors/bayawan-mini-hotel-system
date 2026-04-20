@@ -36,7 +36,9 @@ api_v1_patterns = [
     path("staff/", include("apps.staff.urls")),
     path('api/v1/employees/', include('apps.employees.urls')),
     path('housekeepers/', include('apps.housekeepers.urls')),
-
+    path("complaints/", include("apps.complaints.urls")),
+    path('services/', include('apps.services.urls')),
+    path('feedback/', include('apps.feedback.urls')),
     *schema_patterns,
 ]
 

@@ -377,7 +377,7 @@ class AdminGuestsView(APIView):
                 return Response(cached)
 
         qs = User.objects.filter(
-            role__in=["USER", "RECEPTIONIST"]
+            role__in=["USER"]
         ).order_by("-created_at")
 
         if search:
@@ -693,7 +693,7 @@ class AdminUserCreateView(APIView):
 
         # Map frontend roles to database roles
         # Only RECEPTIONIST and ADMIN exist in the User table
-        valid_roles = ['ADMIN', 'RECEPTIONIST', 'HOUSEKEEPER', 'STAFF']
+        valid_roles = ['ADMIN', 'RECEPTIONIST', 'HOUSEKEEPER', 'STAFF', 'MAINTENANCE', 'SECURITY', 'FRONT_DESK', 'MANAGEMENT']
         db_role = frontend_role if frontend_role in valid_roles else 'STAFF'
 
         # Get employee information
@@ -809,7 +809,7 @@ class AdminUserUpdateView(APIView):
 
         # Update role in User table
         if frontend_role:
-            valid_roles = ['ADMIN', 'RECEPTIONIST', 'HOUSEKEEPER', 'STAFF']
+            valid_roles = ['ADMIN', 'RECEPTIONIST', 'HOUSEKEEPER', 'STAFF', 'MAINTENANCE', 'SECURITY', 'FRONT_DESK', 'MANAGEMENT']
             if frontend_role in valid_roles:
                 user.role = frontend_role
                 logger.info(f"Setting user.role to: {frontend_role}")

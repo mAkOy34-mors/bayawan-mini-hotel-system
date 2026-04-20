@@ -107,6 +107,8 @@ from django.conf import settings
 from django.db import models
 
 
+# apps/bookings/models.py - Update the BookingChangeRequest model
+
 class BookingChangeRequest(models.Model):
     """
     Guest-submitted requests to change booking dates or room type.
@@ -114,36 +116,48 @@ class BookingChangeRequest(models.Model):
     """
 
     class Status(models.TextChoices):
-        PENDING  = "PENDING",  "Pending"
+        PENDING = "PENDING", "Pending"
         APPROVED = "APPROVED", "Approved"
         REJECTED = "REJECTED", "Rejected"
+        PAYMENT_PENDING = "PAYMENT_PENDING", "Payment Pending"  # ← ADD THIS
 
-    booking             = models.ForeignKey(
-                            "Booking",
-                            on_delete=models.CASCADE,
-                            related_name="change_requests",
-                         )
-    user                = models.ForeignKey(
-                            settings.AUTH_USER_MODEL,
-                            on_delete=models.CASCADE,
-                            related_name="change_requests",
-                         )
-    reason              = models.TextField()
-    requested_checkin   = models.DateField(null=True, blank=True)
-    requested_checkout  = models.DateField(null=True, blank=True)
+    booking = models.ForeignKey(
+        "Booking",
+        on_delete=models.CASCADE,
+        related_name="change_requests",
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="change_requests",
+    )
+    reason = models.TextField()
+    requested_checkin = models.DateField(null=True, blank=True)
+    requested_checkout = models.DateField(null=True, blank=True)
     requested_room_type = models.CharField(max_length=50, blank=True)
-    status              = models.CharField(
-                            max_length=10,
-                            choices=Status.choices,
-                            default=Status.PENDING,
-                         )
-    admin_note          = models.TextField(blank=True)
-    reviewed_at         = models.DateTimeField(null=True, blank=True)
-    created_at          = models.DateTimeField(auto_now_add=True)
-    updated_at          = models.DateTimeField(auto_now=True)
+    status = models.CharField(
+        max_length=20,  # ← Changed from 10 to 20
+        choices=Status.choices,
+        default=Status.PENDING,
+    )
+    admin_note = models.TextField(blank=True)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    # ========== NEW FIELDS - ADD THESE ==========
+    current_nights = models.IntegerField(null=True, blank=True)
+    new_nights = models.IntegerField(null=True, blank=True)
+    current_total = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    new_total = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    price_difference = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    additional_deposit = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    payment_link_id = models.CharField(max_length=200, null=True, blank=True)
+    payment_completed = models.BooleanField(default=False)
 
     class Meta:
         db_table = "booking_change_requests"
+        managed = False  # Keep this as False
         ordering = ["-created_at"]
 
     def __str__(self):

@@ -12,9 +12,13 @@ import { ProfilePage } from './pages/ProfilePage';
 import { MyBookingsPage } from './pages/MyBookingsPage';  
 import { EmergencyPage } from './pages/EmergencyPage'; 
 import { EmergencyProvider } from './context/EmergencyContext';
+import { GuestComplaintPage } from './pages/GuestComplaintPage'; 
 import { StaffApp } from './staff/StaffApp';
 import { RewardsPage, SettingsPage, SupportPage } from './pages/OtherPages';
 import { PAGE_TITLES } from './constants/config';
+import { GuestServiceRequest } from './pages/GuestServiceRequest';
+import { ReceptionServiceList } from './receptionist/ReceptionServiceList';
+import { StaffServiceTasks } from './staff/StaffServiceTasks'; 
 import 'bootstrap/dist/css/bootstrap.min.css';
 import './styles/main.css';
 import { AdminApp } from './admin/AdminApp';
@@ -28,6 +32,7 @@ function AppShell() {
 
   const renderPage = () => {
     const props = { user, token, t, setPage };
+    const roomNumber = user?.roomNumber || '';
     switch (page) {
       case 'dashboard':
         return <DashboardPage {...props} />;
@@ -45,9 +50,12 @@ function AppShell() {
         return <SettingsPage {...props} />;
       case 'support':
         return <SupportPage {...props} />;
-      case 'emergency':  // ← Add this case
-        return <EmergencyPage {...props} />;
-      
+      case 'emergency':
+      return <EmergencyPage {...props} roomNumber={roomNumber} />;  // ← Add roomNumber
+      case 'complaints':
+      return <GuestComplaintPage {...props} roomNumber={roomNumber} />;  // ← Add roomNumber
+      case 'services':
+        return <GuestServiceRequest {...props} roomNumber={roomNumber} />;  // ← Add roomNumber
       default:
         return <DashboardPage {...props} />;
     }
@@ -105,11 +113,12 @@ export default function App() {
   if (user?.role === 'RECEPTIONIST') {
     return <ReceptionistApp user={user} token={token} onLogout={logout} />;
   }
-  if (user?.role === 'STAFF') {
-    return <StaffApp user={user} token={token} onLogout={logout} />;
-  }
   if (user?.role === 'HOUSEKEEPER') {
   return <HousekeeperApp user={user} token={token} onLogout={logout} />;
+  }
+  const staffRoles = ['STAFF', 'MAINTENANCE', 'SECURITY', 'FRONT_DESK', 'MANAGEMENT'];
+  if (staffRoles.includes(user?.role)) {
+    return <StaffApp user={user} token={token} onLogout={logout} />;
   }
   
   return <AppShell />;

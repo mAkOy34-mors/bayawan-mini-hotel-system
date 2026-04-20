@@ -7,7 +7,8 @@ import {
   LayoutDashboard, CalendarCheck, CalendarX, BedDouble,
   Users, LogIn, LogOut, Search, Menu, X, ChevronRight,
   RefreshCw, Bell, UserCircle, Hotel, CreditCard, PlusCircle,
-  QrCode, ScanLine,
+  QrCode, ScanLine, ClipboardList, Sparkles, MessageCircle, 
+  AlertTriangle, FileText  // ← Add Sparkles for services
 } from 'lucide-react';
 
 import { ReceptionistDashboard }   from './ReceptionistDashboard';
@@ -20,7 +21,12 @@ import { ReceptionistGuests }      from './ReceptionistGuests';
 import { ReceptionistPayments }    from './ReceptionistPayments';
 import { ReceptionistQRCheckIn }   from './ReceptionistQRCheckIn';  
 import { ReceptionistInHouse }     from './ReceptionistInHouse';
-
+import { ReceptionistTasks }       from './ReceptionistTasks';
+import { ReceptionServiceList }    from './ReceptionServiceList'; // ← Add this import
+import { ReceptionistQRCheckOut }  from './ReceptionistQRCheckOut'; // ← Add this component for QR Checkout
+import { ReceptionistEmergencyLog } from './ReceptionistEmergencyLog';
+import { StaffEmergency } from '../staff/StaffEmergency';
+import FeedbackManager from './FeedbackManager'; 
 import { API_BASE as BASE } from '../constants/config';
 
 const LAYOUT_CSS = `
@@ -95,10 +101,16 @@ const LAYOUT_CSS = `
 const NAV = [
   { key:'dashboard',   label:'Dashboard',      Icon: LayoutDashboard, section:'Overview' },
   { key:'qrcheckin',   label:'QR Check-In',    Icon: QrCode,           section:"Today's Front Desk" },
+  { key:'qrcheckout', label:'QR Check-out',    Icon: LogOut, section:"Today's Front Desk" },
   { key:'arrivals',    label:'Arrivals',        Icon: LogIn,           section:"Today's Front Desk" },
   { key:'departures',  label:'Departures',      Icon: LogOut },
   { key:'bookings',    label:'All Bookings',    Icon: CalendarCheck,   section:'Bookings' },
   { key:'walkin',      label:'Walk-in Booking', Icon: PlusCircle },
+  { key:'feedback',    label:'Guest Feedback',  Icon: MessageCircle,   section:'Guest Relations' }, 
+  { key:'emergency',   label:'Live Alerts',    Icon: AlertTriangle,    section:'Emergency' },
+  { key:'emergency-log',label:'Emergency Log', Icon: FileText,         section:'Emergency' },
+  { key:'services',    label:'Service Requests', Icon: Sparkles,       section:'Operations' },  // ← Add Service Requests
+  { key:'tasks',       label:'Staff Tasks',     Icon: ClipboardList,   section:'Operations' },
   { key:'guests',      label:'Guest Profiles',  Icon: Users,           section:'Guests & Rooms' },
   { key:'roomboard',   label:'Room Board',      Icon: BedDouble },
   { key:'payments',    label:'Payments',        Icon: CreditCard,      section:'Payments' },
@@ -108,10 +120,16 @@ const NAV = [
 const PAGE_TITLES = {
   dashboard:  'Dashboard',
   qrcheckin:  'QR Code Check-in',
+  qrcheckout: 'QR Code Check-out',
   arrivals:   "Today's Arrivals",
   departures: "Today's Departures",
   bookings:   'All Bookings',
   walkin:     'Walk-in Booking',
+  feedback:   'Guest Feedback',
+  emergency: '🚨 Live Emergency Alerts',
+  'emergency-log': '📋 Emergency Log', 
+  services:   'Service Requests',  // ← Add this
+  tasks:      'Staff Tasks & Complaints',
   guests:     'Guest Profiles',
   roomboard:  'Room Status Board',
   payments:   'Payment Records',
@@ -223,13 +241,19 @@ function ReceptionistShell({ user, token, onLogout }) {
   const PAGE_MAP = {
     dashboard:  <ReceptionistDashboard  token={token} setPage={setPage} />,
     qrcheckin:  <ReceptionistQRCheckIn   token={token} setPage={setPage} />,
+    qrcheckout: <ReceptionistQRCheckOut token={token} setPage={setPage} />,
     arrivals:   <ReceptionistArrivals   token={token} />,
     departures: <ReceptionistDepartures token={token} />,
     bookings:   <ReceptionistBookings   token={token} />,
     walkin:     <ReceptionistWalkIn     token={token} setPage={setPage} />,
+    feedback:   <FeedbackManager   token={token} user={user} />,
+     emergency: <StaffEmergency token={token} user={user} />,
+  'emergency-log': <ReceptionistEmergencyLog token={token} />,
+    services:   <ReceptionServiceList   token={token} />,  // ← Add Service List component
+    tasks:      <ReceptionistTasks      token={token} setPage={setPage} />,
     guests:     <ReceptionistGuests     token={token} />,
     roomboard:  <ReceptionistRoomBoard  token={token} />,
-    payments:   <ReceptionistPayments   token={token} />,
+    payments:   <ReceptionistPayments   token={token} />, 
     inhouse:    <ReceptionistInHouse    token={token} setPage={setPage} />,
   };
 

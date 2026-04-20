@@ -1,8 +1,9 @@
-"""apps/rooms/urls.py"""
+# apps/rooms/urls.py
 
 from django.urls import path
-from .views import AvailableRoomsView
+from .views import AllRoomsView, AvailableRoomsView
 
 urlpatterns = [
-    path("available", AvailableRoomsView.as_view(), name="rooms-available"),
+    path("", AllRoomsView.as_view(), name="all-rooms"),  # GET /api/v1/rooms/
+    path("available/", AvailableRoomsView.as_view(), name="rooms-available"),  # GET /api/v1/rooms/available/
 ]

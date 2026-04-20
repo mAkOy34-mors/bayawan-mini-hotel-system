@@ -1,7 +1,7 @@
 // housekeeper/HousekeeperProfile.jsx
 import { useState, useEffect } from 'react';
 import { getMyProfile, updateMyProfile } from './housekeeperService';
-import { User, Mail, Phone, Calendar, Briefcase, Save, Edit2, X } from 'lucide-react';
+import { User, Mail, Phone, Calendar, Briefcase, Save, Edit2, X, MapPin, Building2 } from 'lucide-react';
 
 export function HousekeeperProfile({ user, token }) {
   const [profile, setProfile] = useState(null);
@@ -15,7 +15,14 @@ export function HousekeeperProfile({ user, token }) {
     try {
       const data = await getMyProfile(token);
       setProfile(data);
-      setForm(data);
+      setForm({
+        firstName: data.first_name,
+        lastName: data.last_name,
+        email: data.email,
+        phoneNumber: data.contact_number,
+        homeAddress: data.home_address,
+        skills: data.skills || '',
+      });
     } catch (err) {
       console.error('Error loading profile:', err);
     } finally {
@@ -30,8 +37,12 @@ export function HousekeeperProfile({ user, token }) {
   const handleSave = async () => {
     setSaving(true);
     try {
-      await updateMyProfile(token, form);
-      setProfile(form);
+      await updateMyProfile(token, {
+        contactNumber: form.phoneNumber,
+        homeAddress: form.homeAddress,
+        skills: form.skills,
+      });
+      setProfile({ ...profile, ...form });
       setEditing(false);
     } catch (err) {
       console.error('Error saving profile:', err);
@@ -85,12 +96,16 @@ export function HousekeeperProfile({ user, token }) {
         <div style={{ padding: '1.5rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem' }}>
             <div style={{ width: 80, height: 80, borderRadius: 20, background: 'linear-gradient(135deg, #10b981, #34d399)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2rem', fontWeight: 600, color: '#fff' }}>
-              {profile.firstName?.charAt(0)}{profile.lastName?.charAt(0)}
+              {profile.first_name?.charAt(0)}{profile.last_name?.charAt(0)}
             </div>
             <div>
-              <div style={{ fontSize: '1.2rem', fontWeight: 700 }}>{profile.firstName} {profile.lastName}</div>
-              <div style={{ fontSize: '0.8rem', color: '#10b981' }}>Housekeeping Staff</div>
-              <div style={{ fontSize: '0.75rem', color: '#8a96a8', marginTop: '0.2rem' }}>Employee ID: {profile.employeeId}</div>
+              <div style={{ fontSize: '1.2rem', fontWeight: 700 }}>{profile.first_name} {profile.last_name}</div>
+              <div style={{ fontSize: '0.8rem', color: '#10b981' }}>
+                {profile.position_display || 'Housekeeping Staff'}
+              </div>
+              <div style={{ fontSize: '0.75rem', color: '#8a96a8', marginTop: '0.2rem' }}>
+                Employee ID: {profile.employee_id}
+              </div>
             </div>
           </div>
 
@@ -99,44 +114,19 @@ export function HousekeeperProfile({ user, token }) {
               <div style={{ fontSize: '0.7rem', color: '#8a96a8', marginBottom: '0.25rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
                 <User size={12} /> First Name
               </div>
-              {editing ? (
-                <input
-                  value={form.firstName || ''}
-                  onChange={e => setForm({ ...form, firstName: e.target.value })}
-                  style={{ width: '100%', padding: '0.5rem', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: '0.85rem' }}
-                />
-              ) : (
-                <div style={{ fontSize: '0.9rem', fontWeight: 500 }}>{profile.firstName || '—'}</div>
-              )}
+              <div style={{ fontSize: '0.9rem', fontWeight: 500 }}>{profile.first_name || '—'}</div>
             </div>
             <div>
               <div style={{ fontSize: '0.7rem', color: '#8a96a8', marginBottom: '0.25rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
                 <User size={12} /> Last Name
               </div>
-              {editing ? (
-                <input
-                  value={form.lastName || ''}
-                  onChange={e => setForm({ ...form, lastName: e.target.value })}
-                  style={{ width: '100%', padding: '0.5rem', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: '0.85rem' }}
-                />
-              ) : (
-                <div style={{ fontSize: '0.9rem', fontWeight: 500 }}>{profile.lastName || '—'}</div>
-              )}
+              <div style={{ fontSize: '0.9rem', fontWeight: 500 }}>{profile.last_name || '—'}</div>
             </div>
             <div>
               <div style={{ fontSize: '0.7rem', color: '#8a96a8', marginBottom: '0.25rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
                 <Mail size={12} /> Email
               </div>
-              {editing ? (
-                <input
-                  type="email"
-                  value={form.email || ''}
-                  onChange={e => setForm({ ...form, email: e.target.value })}
-                  style={{ width: '100%', padding: '0.5rem', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: '0.85rem' }}
-                />
-              ) : (
-                <div style={{ fontSize: '0.9rem', fontWeight: 500 }}>{profile.email || '—'}</div>
-              )}
+              <div style={{ fontSize: '0.9rem', fontWeight: 500 }}>{profile.email || '—'}</div>
             </div>
             <div>
               <div style={{ fontSize: '0.7rem', color: '#8a96a8', marginBottom: '0.25rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
@@ -149,79 +139,57 @@ export function HousekeeperProfile({ user, token }) {
                   style={{ width: '100%', padding: '0.5rem', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: '0.85rem' }}
                 />
               ) : (
-                <div style={{ fontSize: '0.9rem', fontWeight: 500 }}>{profile.phoneNumber || '—'}</div>
+                <div style={{ fontSize: '0.9rem', fontWeight: 500 }}>{profile.contact_number || '—'}</div>
               )}
+            </div>
+            <div>
+              <div style={{ fontSize: '0.7rem', color: '#8a96a8', marginBottom: '0.25rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                <Building2 size={12} /> Department
+              </div>
+              <div style={{ fontSize: '0.9rem', fontWeight: 500 }}>{profile.department_display || 'Housekeeping'}</div>
+            </div>
+            <div>
+              <div style={{ fontSize: '0.7rem', color: '#8a96a8', marginBottom: '0.25rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                <Briefcase size={12} /> Position
+              </div>
+              <div style={{ fontSize: '0.9rem', fontWeight: 500 }}>{profile.position_display || 'Housekeeper'}</div>
             </div>
             <div>
               <div style={{ fontSize: '0.7rem', color: '#8a96a8', marginBottom: '0.25rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
                 <Calendar size={12} /> Hire Date
               </div>
-              {editing ? (
-                <input
-                  type="date"
-                  value={form.hireDate || ''}
-                  onChange={e => setForm({ ...form, hireDate: e.target.value })}
-                  style={{ width: '100%', padding: '0.5rem', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: '0.85rem' }}
-                />
-              ) : (
-                <div style={{ fontSize: '0.9rem', fontWeight: 500 }}>{profile.hireDate ? new Date(profile.hireDate).toLocaleDateString() : '—'}</div>
-              )}
+              <div style={{ fontSize: '0.9rem', fontWeight: 500 }}>{profile.hire_date ? new Date(profile.hire_date).toLocaleDateString() : '—'}</div>
             </div>
             <div>
               <div style={{ fontSize: '0.7rem', color: '#8a96a8', marginBottom: '0.25rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                <Briefcase size={12} /> Shift
+                <MapPin size={12} /> Address
               </div>
               {editing ? (
-                <select
-                  value={form.shift || 'MORNING'}
-                  onChange={e => setForm({ ...form, shift: e.target.value })}
+                <input
+                  value={form.homeAddress || ''}
+                  onChange={e => setForm({ ...form, homeAddress: e.target.value })}
                   style={{ width: '100%', padding: '0.5rem', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: '0.85rem' }}
-                >
-                  <option value="MORNING">Morning (6AM - 2PM)</option>
-                  <option value="AFTERNOON">Afternoon (2PM - 10PM)</option>
-                  <option value="NIGHT">Night (10PM - 6AM)</option>
-                </select>
+                />
               ) : (
-                <div style={{ fontSize: '0.9rem', fontWeight: 500 }}>
-                  {profile.shift === 'MORNING' ? 'Morning (6AM - 2PM)' : 
-                   profile.shift === 'AFTERNOON' ? 'Afternoon (2PM - 10PM)' : 
-                   profile.shift === 'NIGHT' ? 'Night (10PM - 6AM)' : '—'}
-                </div>
+                <div style={{ fontSize: '0.9rem', fontWeight: 500 }}>{profile.home_address || '—'}</div>
               )}
             </div>
           </div>
 
-          {profile.skills && (
-            <div style={{ marginTop: '1rem' }}>
-              <div style={{ fontSize: '0.7rem', color: '#8a96a8', marginBottom: '0.25rem' }}>Skills</div>
-              {editing ? (
-                <textarea
-                  value={form.skills || ''}
-                  onChange={e => setForm({ ...form, skills: e.target.value })}
-                  rows={3}
-                  style={{ width: '100%', padding: '0.5rem', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: '0.85rem' }}
-                  placeholder="List your skills..."
-                />
-              ) : (
-                <div style={{ fontSize: '0.85rem', color: '#4a5568' }}>{profile.skills}</div>
-              )}
-            </div>
-          )}
-
-          {profile.specialization && (
-            <div style={{ marginTop: '1rem' }}>
-              <div style={{ fontSize: '0.7rem', color: '#8a96a8', marginBottom: '0.25rem' }}>Specialization</div>
-              {editing ? (
-                <input
-                  value={form.specialization || ''}
-                  onChange={e => setForm({ ...form, specialization: e.target.value })}
-                  style={{ width: '100%', padding: '0.5rem', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: '0.85rem' }}
-                />
-              ) : (
-                <div style={{ fontSize: '0.85rem', color: '#4a5568' }}>{profile.specialization}</div>
-              )}
-            </div>
-          )}
+          <div style={{ marginTop: '1rem' }}>
+            <div style={{ fontSize: '0.7rem', color: '#8a96a8', marginBottom: '0.25rem' }}>Skills</div>
+            {editing ? (
+              <textarea
+                value={form.skills || ''}
+                onChange={e => setForm({ ...form, skills: e.target.value })}
+                rows={3}
+                style={{ width: '100%', padding: '0.5rem', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: '0.85rem' }}
+                placeholder="List your skills..."
+              />
+            ) : (
+              <div style={{ fontSize: '0.85rem', color: '#4a5568' }}>{profile.skills || 'No skills listed'}</div>
+            )}
+          </div>
         </div>
       </div>
     </div>

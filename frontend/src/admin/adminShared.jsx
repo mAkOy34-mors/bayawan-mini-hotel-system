@@ -247,4 +247,5 @@ export function BarChart({ data, height=110, keyVal='total', keyLabel='label' })
       })}
     </div>
   );
+  
 }

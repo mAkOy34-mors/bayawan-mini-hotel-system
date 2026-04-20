@@ -1,4 +1,4 @@
-"""apps/bookings/urls.py"""
+# apps/bookings/urls.py
 from django.urls import path
 
 from . import otp_views
@@ -13,27 +13,66 @@ from .management_views import (
     AdminApproveChangeRequestView,
     AdminRejectChangeRequestView,
 )
+from .change_request_views import (
+    SubmitChangeRequestView as NewSubmitChangeRequestView,
+    GetChangeRequestsView,
+    AdminApproveChangeRequestView as NewAdminApproveChangeRequestView,
+    AdminRejectChangeRequestView as NewAdminRejectChangeRequestView,
+)
 
 urlpatterns = [
-    # ── Fixed named paths first ──────────────────────────────────────
-    path("my-bookings/",              MyBookingsView.as_view()),
-    path("request-otp/",              RequestBookingOtpView.as_view()),
-    path("confirm/",                  ConfirmBookingWithOtpView.as_view()),
+    # ============================================================
+    # BOOKING ENDPOINTS
+    # ============================================================
 
-    # ── Admin change requests ─────────────────────────────────────────
-    path("change-requests/",                          AdminChangeRequestsView.as_view()),
-    path("change-requests/<int:pk>/approve/", AdminApproveChangeRequestView.as_view()),
-    path("change-requests/<int:pk>/reject/", AdminRejectChangeRequestView.as_view()),
+    # Create a new booking
+    path("", CreateBookingView.as_view(), name="create-booking"),
 
-    # ── Per-booking actions (pk paths) ────────────────────────────────
-    path("<int:pk>/change-requests/",  ChangeRequestListView.as_view()),
-    path("<int:pk>/change-request/",   SubmitChangeRequestView.as_view()),
-    path("<int:pk>/cancel/",           CancelBookingView.as_view()),
-    path("<int:pk>/",                  BookingDetailView.as_view()),
+    # Get authenticated user's bookings
+    path("my-bookings/", MyBookingsView.as_view(), name="my-bookings"),
 
-    # ── Create booking (empty path always last) ───────────────────────
-    path("",                           CreateBookingView.as_view()),
-    path('request-otp/', otp_views.RequestBookingOtpView.as_view(), name='request_otp'),
-    path('confirm/', otp_views.ConfirmBookingWithOtpView.as_view(), name='confirm_booking'),
-    path('<str:booking_reference>/status/', BookingStatusView.as_view(), name='booking-status'),
+    # Get booking status by reference
+    path("<str:booking_reference>/status/", BookingStatusView.as_view(), name="booking-status"),
+
+    # Get single booking details
+    path("<int:pk>/", BookingDetailView.as_view(), name="booking-detail"),
+
+    # Cancel a booking
+    path("<int:pk>/cancel/", CancelBookingView.as_view(), name="cancel-booking"),
+
+
+    # ============================================================
+    # OTP ENDPOINTS (for booking verification)
+    # ============================================================
+
+    # Request OTP for booking confirmation
+    path("request-otp/", RequestBookingOtpView.as_view(), name="request-otp"),
+
+    # Confirm booking with OTP
+    path("confirm/", ConfirmBookingWithOtpView.as_view(), name="confirm-booking"),
+
+
+    # ============================================================
+    # CHANGE REQUEST ENDPOINTS (Guest)
+    # ============================================================
+
+    # Submit a change request for a specific booking
+    path("<int:booking_id>/change-request/", NewSubmitChangeRequestView.as_view(), name="submit-change-request"),
+
+    # Get all change requests for a specific booking
+    path("<int:booking_id>/change-requests/", GetChangeRequestsView.as_view(), name="get-change-requests"),
+
+
+    # ============================================================
+    # ADMIN CHANGE REQUEST MANAGEMENT
+    # ============================================================
+
+    # Get all change requests (admin view)
+    path("change-requests/", AdminChangeRequestsView.as_view(), name="admin-change-requests"),
+
+    # Approve a change request
+    path("change-requests/<int:pk>/approve/", NewAdminApproveChangeRequestView.as_view(), name="approve-change-request"),
+
+    # Reject a change request
+    path("change-requests/<int:pk>/reject/", NewAdminRejectChangeRequestView.as_view(), name="reject-change-request"),
 ]

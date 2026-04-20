@@ -16,6 +16,10 @@ import { AdminSupport }         from './AdminSupport';
 import { AdminSettings }        from './AdminSettings';
 import { AdminChangeRequests }  from './AdminChangeRequests';
 import { AdminUsers }           from './AdminUsers';
+import AdminFeedbackManager     from './FeedbackManager';
+// ✅ Import Emergency Components
+import { AdminEmergency } from './AdminEmergency';
+import { AdminEmergencyLog } from './AdminEmergencyLog';
 
 import { API_BASE as BASE } from '../constants/config';
 
@@ -104,17 +108,28 @@ function AdminShell({ user, token, onLogout }) {
   const [page,          setPage]         = useState('dashboard');
   const [menuOpen,      setMenuOpen]     = useState(false);
   const [pendingChanges, setPendingChanges] = useState(0);
+  const [pendingFeedback, setPendingFeedback] = useState(0);
 
   useEffect(() => {
     // Poll pending change requests count every 60s
     const fetchCounts = async () => {
       try {
-        const res = await fetch(`${BASE}/bookings/change-requests/`, {
+        // Fetch pending change requests
+        const changeRes = await fetch(`${BASE}/bookings/change-requests/`, {
           headers: { Authorization: `Bearer ${token}` },
         });
-        if (res.ok) {
-          const data = await res.json();
+        if (changeRes.ok) {
+          const data = await changeRes.json();
           setPendingChanges(Array.isArray(data) ? data.filter(r => r.status === 'PENDING').length : 0);
+        }
+        
+        // Fetch pending feedback count
+        const feedbackRes = await fetch(`${BASE}/feedback/unresponded/`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (feedbackRes.ok) {
+          const data = await feedbackRes.json();
+          setPendingFeedback(Array.isArray(data) ? data.length : 0);
         }
       } catch { /* silent */ }
     };
@@ -123,6 +138,7 @@ function AdminShell({ user, token, onLogout }) {
     return () => clearInterval(interval);
   }, [token]);
 
+  // ✅ Updated PAGE_MAP with Emergency pages
   const PAGE_MAP = {
     dashboard:         <AdminDashboard      token={token} setPage={setPage} />,
     bookings:          <AdminBookings       token={token} />,
@@ -134,6 +150,10 @@ function AdminShell({ user, token, onLogout }) {
     support:           <AdminSupport        token={token} />,
     settings:          <AdminSettings       token={token} />,
     users:             <AdminUsers          token={token} />,
+    feedback:          <AdminFeedbackManager token={token} user={user} />,
+    // ✅ Emergency pages
+    emergency:         <AdminEmergency      token={token} user={user} />,
+    'emergency-log':   <AdminEmergencyLog   token={token} />,
   };
 
   return (
@@ -142,7 +162,10 @@ function AdminShell({ user, token, onLogout }) {
         page={page} setPage={setPage}
         user={user}  onLogout={onLogout}
         open={menuOpen} onClose={() => setMenuOpen(false)}
-        counts={{ pendingChanges }}
+        counts={{ 
+          pendingChanges,
+          pendingFeedback
+        }}
       />
       <div className="admin-main">
         <AdminTopbar page={page} user={user} onMenuClick={() => setMenuOpen(true)} />

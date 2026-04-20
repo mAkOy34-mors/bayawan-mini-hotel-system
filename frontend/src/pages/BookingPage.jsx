@@ -1,4 +1,4 @@
-// BookingPage.jsx – Card UI matching assignment/activity card layout with QR Code & Email
+// BookingPage.jsx – Fixed for date-based room availability with multi-language support
 import { useState, useEffect } from 'react';
 import { Modal } from 'react-bootstrap';
 import { QRCodeSVG } from 'qrcode.react';
@@ -7,6 +7,7 @@ import { Alert } from '../components/ui/Alert';
 import { useAlert } from '../hooks/useAlert';
 import { fmt, fmtDate, todayISO, addDays } from '../utils/format';
 import { API_BASE } from '../constants/config';
+import { useLang } from '../context/LangContext';
 import {
   Search, BedDouble, Sparkles, Crown, Gem, Home, Hotel,
   Users, Calendar, Lock, ClipboardList, CreditCard,
@@ -112,7 +113,7 @@ const css = `
   @media(max-width:1100px){ .bp-room-grid { grid-template-columns:repeat(2,1fr); } }
   @media(max-width:640px) { .bp-room-grid { grid-template-columns:1fr; } }
 
-  /* ══ Room Card (matching screenshot card style) ══ */
+  /* ══ Room Card ══ */
   .bp-room-card {
     background:var(--surface); border:1px solid var(--border); border-radius:14px;
     overflow:hidden; transition:transform .2s, box-shadow .2s, border-color .2s;
@@ -122,7 +123,6 @@ const css = `
   }
   .bp-room-card:hover { transform:translateY(-3px); box-shadow:0 8px 28px rgba(0,0,0,.12); border-color:rgba(201,168,76,0.4); }
 
-  /* Colored top border like the screenshot cards */
   .bp-room-card::before {
     content:''; position:absolute; top:0; left:0; right:0; height:3px;
     background:linear-gradient(to right,#9a7a2e,#C9A84C);
@@ -133,7 +133,6 @@ const css = `
   .bp-room-card.type-PRESIDENTIAL::before { background:linear-gradient(to right,#f59e0b,#fbbf24); }
   .bp-room-card.type-VILLA::before     { background:linear-gradient(to right,#ef4444,#f87171); }
 
-  /* Card image */
   .bp-room-img {
     height:140px; position:relative; overflow:hidden;
     display:flex; align-items:center; justify-content:center;
@@ -141,10 +140,8 @@ const css = `
   .bp-room-img img { width:100%; height:100%; object-fit:cover; display:block; }
   .bp-room-img-fallback { display:flex; align-items:center; justify-content:center; color:#94a3b8; opacity:.5; }
 
-  /* Card body */
   .bp-room-body { padding:1rem 1.1rem; flex:1; display:flex; flex-direction:column; }
 
-  /* Type label + badge row — matching screenshot "ACTIVITY | Locked" */
   .bp-card-type-row {
     display:flex; align-items:center; justify-content:space-between; margin-bottom:.55rem;
   }
@@ -161,23 +158,19 @@ const css = `
     background:var(--red-bg); color:var(--red); border-color:rgba(220,53,69,0.25);
   }
 
-  /* Title */
   .bp-room-type { font-weight:700; font-size:1rem; color:var(--text); margin-bottom:.35rem; line-height:1.3; }
 
-  /* Meta rows — matching screenshot's icon + text rows */
   .bp-meta-list { display:flex; flex-direction:column; gap:.3rem; margin-bottom:.75rem; }
   .bp-meta-row  { display:flex; align-items:center; gap:.45rem; font-size:.78rem; color:var(--text-sub); }
   .bp-meta-icon { font-size:.78rem; flex-shrink:0; width:16px; text-align:center; }
   .bp-meta-dot  { width:3px; height:3px; border-radius:50%; background:var(--text-muted); margin:0 .1rem; }
 
-  /* Amenity tags */
   .bp-amenity-row { display:flex; flex-wrap:wrap; gap:.3rem; margin-bottom:.85rem; }
   .bp-amenity-tag {
     font-size:.65rem; font-weight:500; padding:.2rem .55rem; border-radius:6px;
     background:#f1f5f9; color:var(--text-sub); border:1px solid #e2e8f0;
   }
 
-  /* Status box — matching screenshot's "Returned / Submitted" box */
   .bp-status-box {
     background:#f0f7ff; border:1px solid #d0e4f7; border-radius:10px;
     padding:.7rem .85rem; margin-bottom:.85rem;
@@ -194,7 +187,6 @@ const css = `
     letter-spacing:.03em;
   }
 
-  /* Card footer — matching screenshot's "Late submissions disabled | Open" */
   .bp-card-footer {
     padding:.75rem 1.1rem; border-top:1px solid var(--border);
     display:flex; align-items:center; justify-content:space-between;
@@ -206,14 +198,15 @@ const css = `
     border-radius:8px; font-size:.78rem; font-family:'DM Sans',sans-serif;
     font-weight:600; cursor:pointer; color:var(--text); transition:all .18s;
   }
-  .bp-book-btn:hover { border-color:var(--gold); color:var(--gold); background:rgba(201,168,76,0.05); }
+  .bp-book-btn:hover:not(:disabled) { border-color:var(--gold); color:var(--gold); background:rgba(201,168,76,0.05); }
+  .bp-book-btn.disabled, .bp-book-btn:disabled {
+    opacity:0.5; cursor:not-allowed; background:#f5f5f5;
+  }
 
-  /* ══ Empty state ══ */
   .bp-empty { text-align:center; padding:4rem 2rem; color:var(--text-muted); animation:fadeUp .5s ease both; background:var(--surface); border-radius:14px; border:1px solid var(--border); }
   .bp-empty-icon { margin-bottom:.85rem; display:flex; justify-content:center; }
   .bp-empty-text { font-size:.85rem; line-height:1.7; }
 
-  /* ══ Skeleton loader ══ */
   .bp-skeleton-card {
     background:var(--surface); border:1px solid var(--border); border-radius:14px;
     overflow:hidden; box-shadow:0 1px 4px rgba(0,0,0,.04);
@@ -237,7 +230,6 @@ const css = `
   .bm-modal .modal-footer  { background:#fafbfc; border-top:1px solid var(--border); padding:1rem 1.5rem; gap:.6rem; flex-shrink:0; }
   .bm-modal .modal-title   { font-family:'Cormorant Garamond',serif; font-size:1.2rem; color:var(--text); font-weight:600; }
 
-  /* ══ Inline error banner inside modal ══ */
   @keyframes errShake { 0%,100%{transform:translateX(0)} 20%,60%{transform:translateX(-5px)} 40%,80%{transform:translateX(5px)} }
   .bm-err {
     display:flex; align-items:flex-start; gap:.65rem;
@@ -316,7 +308,6 @@ const css = `
   .bm-confirm-btn:hover:not(:disabled) { background:linear-gradient(135deg,#b09038,#dfc06e); box-shadow:0 4px 16px rgba(201,168,76,0.35); }
   .bm-confirm-btn:disabled { opacity:.5; cursor:not-allowed; }
 
-  /* ══ Payment option cards ══ */
   .bm-pay-options { display:grid; grid-template-columns:1fr 1fr; gap:.65rem; margin-bottom:.75rem; }
   @media(max-width:560px){ .bm-pay-options { grid-template-columns:1fr; } }
   .bm-pay-card {
@@ -420,7 +411,6 @@ const css = `
     font-size:.83rem; color:var(--green);
   }
   
-  /* QR Code Styles */
   .bs-qr-section {
     text-align: center;
     margin: 1rem 0 1.5rem;
@@ -500,6 +490,7 @@ const css = `
 `;
 
 export function BookingPage({ token, user }) {
+  const { t } = useLang();
   const [rooms, setRooms]         = useState([]);
   const [initialLoading, setInitialLoading] = useState(true);
   const [checkIn, setCheckIn]     = useState(addDays(todayISO(), 1));
@@ -513,16 +504,15 @@ export function BookingPage({ token, user }) {
   const [guestEmail, setGuestEmail]       = useState(user?.email || '');
   const [guestPhone, setGuestPhone]       = useState('');
   const [paymentMethod, setPaymentMethod] = useState('ONLINE');
-  const [paymentType, setPaymentType]     = useState('DEPOSIT'); // 'DEPOSIT' | 'FULL'
+  const [paymentType, setPaymentType]     = useState('DEPOSIT');
 
   const [confirming, setConfirming] = useState(false);
   const [booked, setBooked]         = useState(null);
-  const [bookedData, setBookedData] = useState(null); // Store full booking data for QR
+  const [bookedData, setBookedData] = useState(null);
   const [touched, setTouched]       = useState(false);
   const [modalError, setModalError] = useState('');
   const [copied, setCopied]         = useState(false);
 
-  // OTP states
   const [showOtp,    setShowOtp]    = useState(false);
   const [otpDigits,  setOtpDigits]  = useState(['','','','','','']);
   const [otpError,   setOtpError]   = useState('');
@@ -531,7 +521,6 @@ export function BookingPage({ token, user }) {
   const [otpTimer,   setOtpTimer]   = useState(0);
   const [pendingPayload, setPendingPayload] = useState(null);
 
-  // PayMongo iframe popup states
   const [showPayModal,  setShowPayModal]  = useState(false);
   const [payUrl,        setPayUrl]        = useState('');
   const [payBookingId,  setPayBookingId]  = useState(null);
@@ -540,11 +529,9 @@ export function BookingPage({ token, user }) {
 
   const { alert, showAlert } = useAlert();
 
-  // Helper function to get full image URL
   const getFullImageUrl = (imageUrl) => {
     if (!imageUrl) return null;
     if (imageUrl.startsWith('http')) return imageUrl;
-    // Remove /api/v1 from API_BASE to get the base URL
     const baseUrl = API_BASE.replace('/api/v1', '');
     return `${baseUrl}${imageUrl}`;
   };
@@ -583,59 +570,72 @@ export function BookingPage({ token, user }) {
     return c[roomType] || '#C9A84C';
   };
 
+  // Initialize - no automatic room loading
   useEffect(() => {
-    const CACHE_KEY = `rooms_cache_${token}`;
-    try {
-      const cached = localStorage.getItem(CACHE_KEY);
-      if (cached) { setRooms(JSON.parse(cached)); setInitialLoading(false); }
-    } catch { /* ignore */ }
-
-    let cancelled = false;
-    fetchAvailableRooms(token, null, null)
-      .then(data => {
-        if (cancelled || !data) return;
-        setRooms(data);
-        setInitialLoading(false);
-        try { localStorage.setItem(CACHE_KEY, JSON.stringify(data)); } catch { /* quota */ }
-      })
-      .catch(() => { if (!cancelled) setInitialLoading(false); });
-
-    return () => { cancelled = true; };
+    setInitialLoading(false);
   }, [token]);
 
+  // Search rooms with date-based availability
   const searchRooms = async () => {
-    if (!checkIn || !checkOut || new Date(checkOut) <= new Date(checkIn)) {
-      showAlert('Check-out must be after check-in.', 'error');
+    if (!checkIn || !checkOut) {
+      showAlert(t.pleaseSelectDates || 'Please select check-in and check-out dates.', 'error');
       return;
     }
+    
+    const checkInDate = new Date(checkIn);
+    const checkOutDate = new Date(checkOut);
+    
+    if (checkOutDate <= checkInDate) {
+      showAlert(t.checkoutAfterCheckin || 'Check-out must be after check-in.', 'error');
+      return;
+    }
+    
     setLoading(true);
     try {
-      const data = await fetchAvailableRooms(token, checkIn, checkOut);
+      const url = `${API_BASE}/rooms/?checkIn=${checkIn}&checkOut=${checkOut}`;
+      const response = await fetch(url, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch rooms');
+      }
+      
+      const data = await response.json();
       setRooms(data);
-      if (!data.length) showAlert('No rooms available for selected dates.', 'error');
-    } finally { setLoading(false); }
+      
+      const availableCount = data.filter(r => r.available).length;
+      if (availableCount === 0) {
+        showAlert(t.noRoomsAvailable || 'No rooms available for selected dates. Please try different dates.', 'error');
+      } else {
+        showAlert(`${availableCount} ${t.roomsAvailable || 'room(s) available for your selected dates.'}`, 'success');
+      }
+    } catch (err) {
+      console.error(err);
+      showAlert(t.failedToLoadRooms || 'Failed to load rooms. Please try again.', 'error');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const nights    = Math.max(1, Math.ceil((new Date(checkOut) - new Date(checkIn)) / 86400000));
-  const total     = selected ? selected.pricePerNight * nights : 0;
-  const deposit   = total * 0.5;
+  const nights = Math.max(1, Math.ceil((new Date(checkOut) - new Date(checkIn)) / 86400000));
+  const total = selected ? selected.pricePerNight * nights : 0;
+  const deposit = total * 0.5;
   const amountDue = paymentType === 'FULL' ? total : deposit;
 
-  // Detect PayMongo return from redirect (fallback)
   useEffect(() => {
-    const params    = new URLSearchParams(window.location.search);
-    const status    = params.get('status');
+    const params = new URLSearchParams(window.location.search);
+    const status = params.get('status');
     const bookingId = params.get('booking_id');
     if (status === 'success') {
       setBooked({ id: bookingId || '—', fromRedirect: true });
       window.history.replaceState({}, '', window.location.pathname);
     } else if (status === 'failed' || status === 'cancelled') {
-      showAlert('Payment was cancelled or failed. Your booking is saved — you can pay later.', 'error');
+      showAlert(t.paymentCancelled || 'Payment was cancelled or failed. Your booking is saved — you can pay later.', 'error');
       window.history.replaceState({}, '', window.location.pathname);
     }
   }, []);
 
-  // Open PayMongo in iframe popup instead of redirecting
   const openPayPopup = (checkoutUrl, bookingId, bookingRef) => {
     setPayUrl(checkoutUrl);
     setPayBookingId(bookingId);
@@ -643,7 +643,6 @@ export function BookingPage({ token, user }) {
     setShowPayModal(true);
   };
 
-  // Poll booking status when guest closes the payment modal
   const handlePayModalClose = async () => {
     setShowPayModal(false);
     setCheckingPay(true);
@@ -653,9 +652,7 @@ export function BookingPage({ token, user }) {
       });
       if (res.ok) {
         const bookings = await res.json();
-        const b = bookings.find(bk =>
-          bk.id == payBookingId || bk.bookingReference === payBookingRef
-        );
+        const b = bookings.find(bk => bk.id == payBookingId || bk.bookingReference === payBookingRef);
         if (b && (b.paymentStatus === 'PAID' || b.status === 'CONFIRMED')) {
           setBooked({ id: payBookingRef || payBookingId, fromRedirect: true, bookingData: b });
           setBookedData(b);
@@ -677,11 +674,13 @@ export function BookingPage({ token, user }) {
     setGuestName(user?.fullName || user?.username || '');
     setGuestEmail(user?.email || '');
     setGuestPhone('');
-    setPaymentMethod('ONLINE'); setPaymentType('DEPOSIT');
-    setRequests(''); setTouched(false); setModalError('');
+    setPaymentMethod('ONLINE'); 
+    setPaymentType('DEPOSIT');
+    setRequests(''); 
+    setTouched(false); 
+    setModalError('');
   };
 
-  // OTP countdown timer
   useEffect(() => {
     if (otpTimer <= 0) return;
     const t = setTimeout(() => setOtpTimer(s => s - 1), 1000);
@@ -692,7 +691,7 @@ export function BookingPage({ token, user }) {
     setOtpSending(true);
     setOtpError('');
     try {
-      const nights      = Math.max(1, Math.ceil(
+      const nights = Math.max(1, Math.ceil(
         (new Date(pendingPayload.checkOutDate) - new Date(pendingPayload.checkInDate)) / 86400000
       ));
       const totalAmount = pendingPayload.pricePerNight * nights;
@@ -715,7 +714,7 @@ export function BookingPage({ token, user }) {
       });
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
-        throw new Error(d.message || 'Failed to send OTP');
+        throw new Error(d.message || t.failedToSendOtp || 'Failed to send OTP');
       }
       setOtpTimer(60);
       setOtpDigits(['','','','','','']);
@@ -728,8 +727,8 @@ export function BookingPage({ token, user }) {
 
   const handleOtpInput = (idx, val) => {
     const clean = val.replace(/\D/g, '').slice(-1);
-    const next  = [...otpDigits];
-    next[idx]   = clean;
+    const next = [...otpDigits];
+    next[idx] = clean;
     setOtpDigits(next);
     setOtpError('');
     if (clean && idx < 5) {
@@ -746,7 +745,7 @@ export function BookingPage({ token, user }) {
   const handleOtpPaste = (e) => {
     e.preventDefault();
     const text = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
-    const next  = [...otpDigits];
+    const next = [...otpDigits];
     text.split('').forEach((c, i) => { if (i < 6) next[i] = c; });
     setOtpDigits(next);
     document.getElementById(`otp-${Math.min(text.length, 5)}`)?.focus();
@@ -754,7 +753,10 @@ export function BookingPage({ token, user }) {
 
   const verifyOtpAndBook = async () => {
     const otp = otpDigits.join('');
-    if (otp.length < 6) { setOtpError('Please enter all 6 digits.'); return; }
+    if (otp.length < 6) { 
+      setOtpError(t.enterAllDigits || 'Please enter all 6 digits.'); 
+      return; 
+    }
 
     setOtpVerifying(true);
     setOtpError('');
@@ -785,12 +787,11 @@ export function BookingPage({ token, user }) {
 
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
-        throw new Error(d.message || 'Invalid OTP. Please try again.');
+        throw new Error(d.message || t.invalidOtp || 'Invalid OTP. Please try again.');
       }
 
       const data = await res.json();
 
-      // Success - store booking data for QR code
       setBookedData(data);
       setShowOtp(false);
       
@@ -805,14 +806,14 @@ export function BookingPage({ token, user }) {
           depositAmount: data.depositAmount,
           fromRedirect:  false,
         });
-        showAlert('Booking confirmed! Pay at hotel on arrival.', 'success');
+        showAlert(t.bookingConfirmedHotel || 'Booking confirmed! Pay at hotel on arrival.', 'success');
         resetGuestForm();
         setSelected(null);
         setPendingPayload(null);
       }
 
     } catch (e) {
-      setOtpError(e.message || 'Invalid OTP. Please try again.');
+      setOtpError(e.message || t.invalidOtp || 'Invalid OTP. Please try again.');
     } finally {
       setOtpVerifying(false);
       setConfirming(false);
@@ -823,11 +824,11 @@ export function BookingPage({ token, user }) {
     setTouched(true);
     setModalError('');
 
-    if (!guestName.trim())  { setModalError('Full name is required.'); return; }
-    if (!guestEmail.trim()) { setModalError('Email address is required.'); return; }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(guestEmail.trim())) { setModalError('Please enter a valid email address.'); return; }
-    if (!guestPhone.trim()) { setModalError('Phone number is required.'); return; }
-    if (!paymentMethod)     { setModalError('Please select a payment method.'); return; }
+    if (!guestName.trim())  { setModalError(t.fullNameRequired || 'Full name is required.'); return; }
+    if (!guestEmail.trim()) { setModalError(t.emailRequired || 'Email address is required.'); return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(guestEmail.trim())) { setModalError(t.validEmailRequired || 'Please enter a valid email address.'); return; }
+    if (!guestPhone.trim()) { setModalError(t.phoneRequired || 'Phone number is required.'); return; }
+    if (!paymentMethod)     { setModalError(t.paymentMethodRequired || 'Please select a payment method.'); return; }
 
     const payload = {
       roomId:          selected.id,
@@ -849,7 +850,7 @@ export function BookingPage({ token, user }) {
     setOtpError('');
     setOtpDigits(['','','','','','']);
     try {
-      const nights      = Math.max(1, Math.ceil((new Date(checkOut) - new Date(checkIn)) / 86400000));
+      const nights = Math.max(1, Math.ceil((new Date(checkOut) - new Date(checkIn)) / 86400000));
       const totalAmount = selected.pricePerNight * nights;
 
       const res = await fetch(`${API_BASE}/bookings/request-otp/`, {
@@ -870,18 +871,17 @@ export function BookingPage({ token, user }) {
       });
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
-        throw new Error(d.message || 'Failed to send OTP');
+        throw new Error(d.message || t.failedToSendOtp || 'Failed to send OTP');
       }
       setOtpTimer(60);
       setShowOtp(true);
     } catch (e) {
-      setModalError(e.message || 'Failed to send OTP. Please try again.');
+      setModalError(e.message || t.failedToSendOtp || 'Failed to send OTP. Please try again.');
     } finally {
       setOtpSending(false);
     }
   };
 
-  // Download QR code as PNG
   const downloadQRCode = () => {
     const svg = document.querySelector('.bs-qr-code svg');
     if (!svg) return;
@@ -905,7 +905,6 @@ export function BookingPage({ token, user }) {
     img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgData)));
   };
 
-  // Copy QR data to clipboard
   const copyQRData = () => {
     const qrData = bookedData?.bookingReference || '';
     navigator.clipboard.writeText(qrData);
@@ -918,18 +917,16 @@ export function BookingPage({ token, user }) {
       <style>{css}</style>
       <Alert alert={alert}/>
 
-      {/* ══ Page header ══ */}
       <div className="bp-page-header">
-        <div className="bp-page-title">Room Reservations</div>
-        <div className="bp-page-sub">Browse available rooms and book your perfect stay</div>
+        <div className="bp-page-title">{t.roomReservations || 'Room Reservations'}</div>
+        <div className="bp-page-sub">{t.browseRooms || 'Select your dates to see available rooms'}</div>
       </div>
 
-      {/* ══ Search Panel ══ */}
       <div className="bp-search-panel">
-        <div className="bp-search-title">Search Availability</div>
+        <div className="bp-search-title">{t.searchAvailability || 'Search Availability'}</div>
         <div className="bp-search-grid">
           <div className="bp-field">
-            <label className="bp-label">Check-In</label>
+            <label className="bp-label">{t.checkIn || 'Check-In'}</label>
             <input type="date" className="bp-input" min={todayISO()} value={checkIn}
               onChange={e => {
                 setCheckIn(e.target.value);
@@ -939,26 +936,25 @@ export function BookingPage({ token, user }) {
             />
           </div>
           <div className="bp-field">
-            <label className="bp-label">Check-Out</label>
+            <label className="bp-label">{t.checkOut || 'Check-Out'}</label>
             <input type="date" className="bp-input" min={addDays(checkIn, 1)} value={checkOut}
               onChange={e => setCheckOut(e.target.value)}
             />
           </div>
           <div className="bp-field">
-            <label className="bp-label">Guests</label>
+            <label className="bp-label">{t.guests || 'Guests'}</label>
             <select className="bp-select" value={guests} onChange={e => setGuests(Number(e.target.value))}>
               {[1,2,3,4,5,6].map(n => (
-                <option key={n} value={n}>{n} {n === 1 ? 'Guest' : 'Guests'}</option>
+                <option key={n} value={n}>{n} {n === 1 ? (t.guest || 'Guest') : (t.guests || 'Guests')}</option>
               ))}
             </select>
           </div>
           <button className="bp-search-btn" onClick={searchRooms} disabled={loading}>
-            {loading ? <><div className="bp-spinner"/>Searching…</> : <><Search size={15}/>Search Rooms</>}
+            {loading ? <><div className="bp-spinner"/>{t.searching || 'Searching…'}</> : <><Search size={15}/>{t.searchRooms || 'Search Rooms'}</>}
           </button>
         </div>
       </div>
 
-      {/* ══ Room Grid ══ */}
       {initialLoading ? (
         <div className="bp-room-grid">
           {[1,2,3,4,5,6].map(i => (
@@ -980,7 +976,10 @@ export function BookingPage({ token, user }) {
       ) : rooms.length === 0 ? (
         <div className="bp-empty">
           <div className="bp-empty-icon"><Hotel size={44} strokeWidth={1} opacity={0.4}/></div>
-          <div className="bp-empty-text">No rooms to display.<br/>Adjust your dates and search to see availability.</div>
+          <div className="bp-empty-text">
+            {t.noRoomsDisplay || 'No rooms to display.'}<br/>
+            {t.selectDatesAndSearch || 'Please select your check-in and check-out dates above and click "Search Rooms".'}
+          </div>
         </div>
       ) : (
         <div className="bp-room-grid">
@@ -1011,20 +1010,20 @@ export function BookingPage({ token, user }) {
 
                 <div className="bp-room-body">
                   <div className="bp-card-type-row">
-                    <span className="bp-card-type-label" style={{ color: typeColor }}>ROOM</span>
+                    <span className="bp-card-type-label" style={{ color: typeColor }}>{t.room || 'ROOM'}</span>
                     <span className={`bp-avail-badge ${room.available ? '' : 'unavailable'}`}>
-                      {room.available ? 'Available' : 'Booked'}
+                      {room.available ? (t.available || 'Available') : (t.unavailable || 'Not Available')}
                     </span>
                   </div>
 
-                  <div className="bp-room-type">{room.roomType} Room</div>
+                  <div className="bp-room-type">{room.roomType} {t.room || 'Room'}</div>
 
                   <div className="bp-meta-list">
                     <div className="bp-meta-row">
                       <span className="bp-meta-icon"><Users size={13}/></span>
-                      <span>Up to {room.maxOccupancy} guests</span>
+                      <span>{t.upTo || 'Up to'} {room.maxOccupancy} {t.guests || 'guests'}</span>
                       <span className="bp-meta-dot"/>
-                      <span style={{ color: typeColor, fontWeight: 600 }}>{fmt(room.pricePerNight)}/night</span>
+                      <span style={{ color: typeColor, fontWeight: 600 }}>{fmt(room.pricePerNight)}/{t.night || 'night'}</span>
                     </div>
                     {room.description && (
                       <div className="bp-meta-row" style={{ color:'var(--text-muted)', fontSize:'.75rem', lineHeight:1.5 }}>
@@ -1046,7 +1045,7 @@ export function BookingPage({ token, user }) {
                     <div className="bp-status-left">
                       <span className="bp-status-icon"><Hotel size={16}/></span>
                       <div>
-                        <div className="bp-status-label">{guests} {guests === 1 ? 'Guest' : 'Guests'} · {nights} {nights === 1 ? 'night' : 'nights'}</div>
+                        <div className="bp-status-label">{guests} {guests === 1 ? (t.guest || 'Guest') : (t.guests || 'Guests')} · {nights} {nights === 1 ? (t.night || 'night') : (t.nights || 'nights')}</div>
                         <div className="bp-status-time">
                           <Calendar size={11}/>
                           <span>{fmtDate(checkIn)} → {fmtDate(checkOut)}</span>
@@ -1060,14 +1059,14 @@ export function BookingPage({ token, user }) {
                 <div className="bp-card-footer">
                   <span className="bp-footer-note">
                     <Lock size={12}/>
-                    50% deposit required
+                    {room.available ? (t.availableForDates || 'Available for selected dates') : (t.notAvailableForDates || 'Not available for these dates')}
                   </span>
                   <button
-                    className="bp-book-btn"
+                    className={`bp-book-btn ${!room.available ? 'disabled' : ''}`}
                     disabled={!room.available}
                     onClick={() => { setSelected(room); resetGuestForm(); }}
                   >
-                    {room.available ? 'Book Now' : 'Unavailable'}
+                    {room.available ? (t.bookNow || 'Book Now') : (t.unavailable || 'Not Available')}
                   </button>
                 </div>
               </div>
@@ -1076,11 +1075,11 @@ export function BookingPage({ token, user }) {
         </div>
       )}
 
-      {/* ══ Booking Confirmation Modal ══ */}
+      {/* Booking Confirmation Modal */}
       <Modal show={!!selected} onHide={() => { setSelected(null); setModalError(''); }} centered size="lg" className="bm-modal" scrollable>
         <Modal.Header closeButton>
           <Modal.Title>
-            {selected?.roomType} Room — {fmt(selected?.pricePerNight)}/night
+            {selected?.roomType} {t.room || 'Room'} — {fmt(selected?.pricePerNight)}/{t.night || 'night'}
           </Modal.Title>
         </Modal.Header>
 
@@ -1104,15 +1103,15 @@ export function BookingPage({ token, user }) {
                 })()}
               </div>
 
-              <p className="bm-desc">{selected.description}</p>
+              <p className="bm-desc">{selected.description || (t.luxuriousAccommodation || 'Luxurious accommodation with premium amenities.')}</p>
 
-              <div className="bm-section-label">Booking Summary</div>
+              <div className="bm-section-label">{t.bookingSummary || 'Booking Summary'}</div>
               <div className="bm-summary">
                 {[
-                  ['Check-In',  fmtDate(checkIn)],
-                  ['Check-Out', fmtDate(checkOut)],
-                  ['Guests',    `${guests} ${guests === 1 ? 'Guest' : 'Guests'}`],
-                  ['Duration',  `${nights} ${nights === 1 ? 'night' : 'nights'}`],
+                  [t.checkIn || 'Check-In',  fmtDate(checkIn)],
+                  [t.checkOut || 'Check-Out', fmtDate(checkOut)],
+                  [t.guests || 'Guests',    `${guests} ${guests === 1 ? (t.guest || 'Guest') : (t.guests || 'Guests')}`],
+                  [t.duration || 'Duration',  `${nights} ${nights === 1 ? (t.night || 'night') : (t.nights || 'nights')}`],
                 ].map(([label, value]) => (
                   <div key={label}>
                     <div className="bm-summary-label">{label}</div>
@@ -1121,36 +1120,36 @@ export function BookingPage({ token, user }) {
                 ))}
               </div>
 
-              <div className="bm-section-label">Guest Information</div>
+              <div className="bm-section-label">{t.guestInformation || 'Guest Information'}</div>
               <div style={{ marginBottom:'.75rem' }}>
                 <div className="bm-field">
-                  <label className="bm-label">Full Name *</label>
+                  <label className="bm-label">{t.fullName || 'Full Name'} *</label>
                   <input type="text" className={`bm-input${touched && !guestName.trim() ? ' invalid' : ''}`}
-                    value={guestName} onChange={e => setGuestName(e.target.value)} placeholder="Juan Dela Cruz"/>
+                    value={guestName} onChange={e => setGuestName(e.target.value)} placeholder={t.fullName || 'Juan Dela Cruz'}/>
                 </div>
               </div>
 
               <div className="bm-field-grid">
                 <div className="bm-field">
-                  <label className="bm-label">Email *</label>
+                  <label className="bm-label">{t.emailAddress || 'Email'} *</label>
                   <input type="email" className={`bm-input${touched && !guestEmail.trim() ? ' invalid' : ''}`}
                     value={guestEmail} onChange={e => setGuestEmail(e.target.value)} placeholder="juan@example.com"/>
                 </div>
                 <div className="bm-field">
-                  <label className="bm-label">Phone Number *</label>
+                  <label className="bm-label">{t.phoneNumber || 'Phone Number'} *</label>
                   <input type="tel" className={`bm-input${touched && !guestPhone.trim() ? ' invalid' : ''}`}
                     value={guestPhone} onChange={e => setGuestPhone(e.target.value)} placeholder="+63 912 345 6789"/>
                 </div>
               </div>
 
-              <div className="bm-section-label">Payment Options</div>
+              <div className="bm-section-label">{t.howToPay || 'Payment Options'}</div>
 
               <div style={{ marginBottom:'.75rem' }}>
-                <div className="bm-label" style={{ marginBottom:'.5rem' }}>How would you like to pay? *</div>
+                <div className="bm-label" style={{ marginBottom:'.5rem' }}>{t.howToPay || 'How would you like to pay?'} *</div>
                 <div style={{ display:'flex', gap:'.65rem', flexWrap:'wrap' }}>
                   {[
-                    { value:'ONLINE', Icon: CreditCard, label:'Pay Online',   sub:'GCash / Card via PayMongo' },
-                    { value:'HOTEL',  Icon: Hotel,      label:'Pay at Hotel', sub:'Cash upon arrival' },
+                    { value:'ONLINE', Icon: CreditCard, label: t.payOnline || 'Pay Online', sub: t.payOnlineSub || 'GCash / Card via PayMongo' },
+                    { value:'HOTEL',  Icon: Hotel,      label: t.payAtHotel || 'Pay at Hotel', sub: t.payAtHotelSub || 'Cash upon arrival' },
                   ].map(opt => (
                     <button key={opt.value} type="button"
                       className={`bm-pay-card${paymentMethod===opt.value?' sel':''}`}
@@ -1169,16 +1168,16 @@ export function BookingPage({ token, user }) {
               </div>
 
               <div style={{ marginBottom:'.75rem' }}>
-                <div className="bm-label" style={{ marginBottom:'.5rem' }}>How much to pay now? *</div>
+                <div className="bm-label" style={{ marginBottom:'.5rem' }}>{t.howMuchToPay || 'How much to pay now?'} *</div>
                 <div className="bm-pay-options">
                   <button type="button"
                     className={`bm-pay-card${paymentType==='DEPOSIT'?' sel':''}`}
                     onClick={() => setPaymentType('DEPOSIT')}>
                     <div className="bm-pay-radio">{paymentType==='DEPOSIT' && <div className="bm-pay-dot"/>}</div>
                     <div>
-                      <div className="bm-pay-title">50% Deposit</div>
-                      <div className="bm-pay-sub">Pay half now, settle the rest at check-in</div>
-                      <div className="bm-pay-chip deposit">Due now: {fmt(deposit)}</div>
+                      <div className="bm-pay-title">{t.depositOption || '50% Deposit'}</div>
+                      <div className="bm-pay-sub">{t.depositOptionSub || 'Pay half now, settle the rest at check-in'}</div>
+                      <div className="bm-pay-chip deposit">{t.dueNow || 'Due now'}: {fmt(deposit)}</div>
                     </div>
                   </button>
                   <button type="button"
@@ -1186,45 +1185,45 @@ export function BookingPage({ token, user }) {
                     onClick={() => setPaymentType('FULL')}>
                     <div className="bm-pay-radio">{paymentType==='FULL' && <div className="bm-pay-dot"/>}</div>
                     <div>
-                      <div className="bm-pay-title">Full Payment</div>
-                      <div className="bm-pay-sub">Pay the entire amount upfront — nothing due at check-in</div>
-                      <div className="bm-pay-chip full">Due now: {fmt(total)}</div>
+                      <div className="bm-pay-title">{t.fullPaymentOption || 'Full Payment'}</div>
+                      <div className="bm-pay-sub">{t.fullPaymentOptionSub || 'Pay the entire amount upfront — nothing due at check-in'}</div>
+                      <div className="bm-pay-chip full">{t.dueNow || 'Due now'}: {fmt(total)}</div>
                     </div>
                   </button>
                 </div>
               </div>
 
-              <div className="bm-section-label">Special Requests</div>
+              <div className="bm-section-label">{t.specialRequests || 'Special Requests'}</div>
               <div className="bm-field" style={{ marginBottom:'1.1rem' }}>
-                <label className="bm-label">Optional Notes</label>
+                <label className="bm-label">{t.optionalNotes || 'Optional Notes'}</label>
                 <textarea className="bm-textarea" value={requests} onChange={e => setRequests(e.target.value)}
-                  placeholder="e.g. high floor, early check-in, extra pillows…" rows={3}/>
+                  placeholder={t.specialRequestsPlaceholder || "e.g. high floor, early check-in, extra pillows…"} rows={3}/>
               </div>
 
-              <div className="bm-section-label">Pricing Breakdown</div>
+              <div className="bm-section-label">{t.pricing || 'Pricing Breakdown'}</div>
               <div className="bm-pricing">
                 <div className="bm-pricing-row">
-                  <span>{fmt(selected.pricePerNight)} × {nights} {nights === 1 ? 'night' : 'nights'}</span>
+                  <span>{fmt(selected.pricePerNight)} × {nights} {nights === 1 ? (t.night || 'night') : (t.nights || 'nights')}</span>
                   <span>{fmt(total)}</span>
                 </div>
                 <div className="bm-pricing-row total">
-                  <span>Total</span>
+                  <span>{t.total || 'Total'}</span>
                   <span>{fmt(total)}</span>
                 </div>
                 {paymentType === 'DEPOSIT' ? (
                   <>
                     <div className="bm-pricing-row deposit">
-                      <span>50% Deposit (Due Now)</span>
+                      <span>{t.depositDue || '50% Deposit (Due Now)'}</span>
                       <span>{fmt(deposit)}</span>
                     </div>
                     <div className="bm-pricing-row">
-                      <span style={{ color:'var(--text-muted)', fontSize:'.78rem' }}>Remaining at check-in</span>
+                      <span style={{ color:'var(--text-muted)', fontSize:'.78rem' }}>{t.remainingAtCheckin || 'Remaining at check-in'}</span>
                       <span>{fmt(deposit)}</span>
                     </div>
                   </>
                 ) : (
                   <div className="bm-pricing-row deposit">
-                    <span>Full Payment (Due Now)</span>
+                    <span>{t.fullPaymentOption || 'Full Payment (Due Now)'}</span>
                     <span>{fmt(total)}</span>
                   </div>
                 )}
@@ -1234,14 +1233,14 @@ export function BookingPage({ token, user }) {
                 <div>
                   <div className="bm-due-label">
                     {paymentType === 'FULL'
-                      ? <><CheckCircle2 size={12}/> Full Payment</>
-                      : <><Lock size={12}/> Deposit Required</>
+                      ? <><CheckCircle2 size={12}/> {t.fullPaymentOption || 'Full Payment'}</>
+                      : <><Lock size={12}/> {t.depositRequired || 'Deposit Required'}</>
                     }
                   </div>
                   <div className="bm-due-sub">
                     {paymentType === 'FULL'
-                      ? 'Nothing more to pay at check-in'
-                      : `${fmt(deposit)} remaining balance due at check-in`}
+                      ? (t.nothingMoreToPay || 'Nothing more to pay at check-in')
+                      : `${fmt(deposit)} ${t.remainingBalanceDue || 'remaining balance due at check-in'}`}
                   </div>
                 </div>
                 <div className="bm-due-amount">{fmt(amountDue)}</div>
@@ -1251,34 +1250,34 @@ export function BookingPage({ token, user }) {
         </Modal.Body>
 
         <Modal.Footer>
-          <button className="bm-cancel-btn" onClick={() => setSelected(null)}>Cancel</button>
+          <button className="bm-cancel-btn" onClick={() => setSelected(null)}>{t.cancel || 'Cancel'}</button>
           <button className="bm-confirm-btn" disabled={confirming || otpSending} onClick={confirmBooking}>
             {otpSending
-              ? <><div className="bp-spinner"/>Sending OTP…</>
+              ? <><div className="bp-spinner"/>{t.sendingOtp || 'Sending OTP…'}</>
               : confirming
-                ? <><div className="bp-spinner"/>Confirming…</>
+                ? <><div className="bp-spinner"/>{t.confirming || 'Confirming…'}</>
                 : paymentMethod === 'HOTEL'
-                  ? <><Mail size={14}/>Verify & Confirm</>
+                  ? <><Mail size={14}/>{t.verifyAndConfirm || 'Verify & Confirm'}</>
                   : paymentType === 'FULL'
-                    ? <><Mail size={14}/>Verify & Pay Full</>
-                    : <><Mail size={14}/>Verify & Pay Deposit</>
+                    ? <><Mail size={14}/>{t.verifyAndPayFull || 'Verify & Pay Full'}</>
+                    : <><Mail size={14}/>{t.verifyAndPayDeposit || 'Verify & Pay Deposit'}</>
             }
           </button>
         </Modal.Footer>
       </Modal>
 
-      {/* ══ OTP Verification Modal ══ */}
+      {/* OTP Verification Modal */}
       <Modal show={showOtp} onHide={() => { setShowOtp(false); setOtpError(''); setOtpDigits(['','','','','','']); }} centered className="otp-modal">
         <Modal.Header closeButton>
-          <Modal.Title>Verify Your Email</Modal.Title>
+          <Modal.Title>{t.verifyYourEmail || 'Verify Your Email'}</Modal.Title>
         </Modal.Header>
         <Modal.Body>
           <div className="otp-icon"><Mail size={42} strokeWidth={1.5} color="#C9A84C"/></div>
-          <div className="otp-title">Check your inbox</div>
+          <div className="otp-title">{t.checkYourInbox || 'Check your inbox'}</div>
           <p className="otp-sub">
-            We sent a 6-digit code to<br/>
+            {t.weSentCode || 'We sent a 6-digit code to'}<br/>
             <strong>{pendingPayload?.guestEmail}</strong><br/>
-            Enter it below to confirm your booking.
+            {t.enterCodeBelow || 'Enter it below to confirm your booking.'}
           </p>
 
           <div className="otp-inputs" onPaste={handleOtpPaste}>
@@ -1306,23 +1305,23 @@ export function BookingPage({ token, user }) {
 
           <div className="otp-resend">
             {otpTimer > 0
-              ? <>Resend code in <span className="otp-timer">{otpTimer}s</span></>
-              : <>Didn't receive it? <button onClick={() => sendOtp(pendingPayload?.guestEmail)} disabled={otpSending}>{otpSending ? 'Sending…' : 'Resend OTP'}</button></>
+              ? <>{t.resendCodeIn || 'Resend code in'} <span className="otp-timer">{otpTimer}s</span></>
+              : <>{t.didntReceive || "Didn't receive it?"} <button onClick={() => sendOtp(pendingPayload?.guestEmail)} disabled={otpSending}>{otpSending ? (t.sendingOtp || 'Sending…') : (t.resendOtp || 'Resend OTP')}</button></>
             }
           </div>
 
           <button className="otp-verify-btn" disabled={otpVerifying || otpDigits.join('').length < 6} onClick={verifyOtpAndBook}>
             {otpVerifying
-              ? <><div className="bp-spinner"/>Verifying…</>
+              ? <><div className="bp-spinner"/>{t.verifying || 'Verifying…'}</>
               : pendingPayload?.paymentMethod === 'HOTEL'
-                ? <><CheckCircle2 size={15}/>Confirm Booking</>
-                : <><CreditCard size={15}/>Confirm & Proceed to Payment</>
+                ? <><CheckCircle2 size={15}/>{t.confirmBookingAction || 'Confirm Booking'}</>
+                : <><CreditCard size={15}/>{t.confirmAndProceed || 'Confirm & Proceed to Payment'}</>
             }
           </button>
         </Modal.Body>
       </Modal>
 
-      {/* ══ PayMongo Payment Modal (iframe popup) ══ */}
+      {/* PayMongo Payment Modal */}
       <Modal
         show={showPayModal}
         onHide={handlePayModalClose}
@@ -1332,7 +1331,7 @@ export function BookingPage({ token, user }) {
       >
         <Modal.Header closeButton>
           <Modal.Title>
-            <CreditCard size={17}/> Complete Your Payment
+            <CreditCard size={17}/> {t.completeYourPayment || 'Complete Your Payment'}
           </Modal.Title>
         </Modal.Header>
         <Modal.Body>
@@ -1347,34 +1346,34 @@ export function BookingPage({ token, user }) {
         </Modal.Body>
         <div className="pay-modal-footer">
           <div className="pay-modal-note">
-            <ShieldCheck size={13}/> Secured by PayMongo · Your payment info is encrypted
+            <ShieldCheck size={13}/> {t.securedByPayMongo || 'Secured by PayMongo · Your payment info is encrypted'}
           </div>
           <button className="pay-modal-cancel" onClick={handlePayModalClose}>
-            {checkingPay ? 'Checking…' : 'Close'}
+            {checkingPay ? (t.checking || 'Checking…') : (t.close || 'Close')}
           </button>
         </div>
       </Modal>
 
-      {/* ══ Success Modal with QR Code ══ */}
+      {/* Success Modal with QR Code */}
       <Modal show={!!booked} onHide={() => setBooked(null)} centered className="bs-modal">
         <Modal.Header closeButton/>
         <Modal.Body>
           <div className="bs-icon"><CheckCircle2 size={52} strokeWidth={1.5} color="#2d9b6f"/></div>
           <div className="bs-title">
-            {booked?.fromRedirect ? 'Payment Successful!' : 'Booking Confirmed!'}
+            {booked?.fromRedirect ? (t.paymentSuccessful || 'Payment Successful!') : (t.bookingConfirmed || 'Booking Confirmed!')}
           </div>
           <p className="bs-sub">
             {booked?.fromRedirect
-              ? 'Your payment was received and your booking is confirmed.'
-              : 'Your reservation has been successfully placed.'
-            }<br/>A confirmation email has been sent to your inbox.
+              ? (t.paymentReceived || 'Your payment was received and your booking is confirmed.')
+              : (t.reservationPlaced || 'Your reservation has been successfully placed.')
+            }<br/>{t.confirmationEmailSent || 'A confirmation email has been sent to your inbox.'}
           </p>
           
           {/* QR Code Section */}
           {bookedData?.bookingReference && (
             <div className="bs-qr-section">
               <div className="bs-qr-title">
-                <QrCode size={14}/> YOUR CHECK-IN QR CODE
+                <QrCode size={14}/> {t.yourCheckInQrCode || 'YOUR CHECK-IN QR CODE'}
               </div>
               <div className="bs-qr-code">
                 <QRCodeSVG
@@ -1394,32 +1393,32 @@ export function BookingPage({ token, user }) {
               </div>
               <div className="bs-qr-actions">
                 <button className="bs-qr-btn" onClick={downloadQRCode}>
-                  <Download size={12}/> Save QR
+                  <Download size={12}/> {t.saveQr || 'Save QR'}
                 </button>
                 <button className="bs-qr-btn" onClick={copyQRData}>
                   {copied ? <Check size={12}/> : <Copy size={12}/>}
-                  {copied ? 'Copied!' : 'Copy Ref'}
+                  {copied ? (t.copied || 'Copied!') : (t.copyRef || 'Copy Ref')}
                 </button>
               </div>
               <div className="bs-qr-note">
                 <ShieldCheck size={11}/>
-                Show this QR code at reception for quick check-in
+                {t.showQrAtReception || 'Show this QR code at reception for quick check-in'}
               </div>
             </div>
           )}
           
           <div className="bs-detail-box">
             {booked?.fromRedirect
-              ? `Booking #${booked?.id} — Payment received ✓`
-              : `Booking #${bookedData?.bookingReference || booked?.id} — ${
+              ? `${t.bookingRef || 'Booking #'}${booked?.id} — ${t.paymentReceivedCheck || 'Payment received ✓'}`
+              : `${t.bookingRef || 'Booking #'}${bookedData?.bookingReference || booked?.id} — ${
                   paymentType === 'FULL'
-                    ? 'Fully paid'
-                    : `Deposit of ${fmt(booked?.depositAmount || bookedData?.depositAmount)} paid`
-                }${paymentType === 'DEPOSIT' ? ' · Remaining balance due at check-in' : ''}`
+                    ? (t.fullyPaid || 'Fully paid')
+                    : `${t.depositOf || 'Deposit of'} ${fmt(booked?.depositAmount || bookedData?.depositAmount)} ${t.paid || 'paid'}`
+                }${paymentType === 'DEPOSIT' ? ` · ${t.remainingBalanceDueAtCheckin || 'Remaining balance due at check-in'}` : ''}`
             }
           </div>
           
-          <button className="bs-close-btn" onClick={() => setBooked(null)}>Done ✓</button>
+          <button className="bs-close-btn" onClick={() => setBooked(null)}>{t.done || 'Done'} ✓</button>
         </Modal.Body>
       </Modal>
     </div>

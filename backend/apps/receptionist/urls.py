@@ -29,4 +29,6 @@ urlpatterns = [
     path("payments/",               views.ReceptionistPaymentsView.as_view()),
     path("payments/cash/",          views.RecordCashPaymentView.as_view()),
     path('verify-qr-checkin/',      views.VerifyQRCheckInView.as_view(), name='verify_qr_checkin'),
+    path('verify-qr-checkout/', views.VerifyQRCheckOutView.as_view(), name='verify_qr_checkout'),
+    path('process-qr-checkout/', views.ProcessQRCheckOutView.as_view(), name='process_qr_checkout'),
 ]

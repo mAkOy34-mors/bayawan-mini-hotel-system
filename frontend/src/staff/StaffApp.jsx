@@ -8,6 +8,7 @@ import { StaffTasks } from './StaffTasks';
 import { StaffTaskDetail } from './StaffTaskDetail';
 import { StaffEmergency } from './StaffEmergency';
 import { StaffProfile } from './StaffProfile';
+import { StaffServiceTasks } from './StaffServiceTasks'; // ← Add this import
 import { API_BASE } from '../constants/config';
 
 const LAYOUT_CSS = `
@@ -146,6 +147,7 @@ const LAYOUT_CSS = `
 const PAGE_TITLES = {
   dashboard: 'Staff Dashboard',
   tasks: 'My Tasks',
+  'service-tasks': 'Service Tasks', // ← Add this
   emergency: 'Emergency Response',
   profile: 'My Profile',
 };
@@ -171,7 +173,10 @@ function StaffLogin({ onLogin }) {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Login failed');
-      if (data.user?.role !== 'STAFF') {
+      
+      // ✅ ALLOW ALL STAFF ROLES
+      const allowedStaffRoles = ['STAFF', 'HOUSEKEEPER', 'MAINTENANCE', 'SECURITY', 'FRONT_DESK', 'MANAGEMENT'];
+      if (!allowedStaffRoles.includes(data.user?.role)) {
         throw new Error('Access denied. Staff account required.');
       }
       onLogin(data.user, data.access || data.token);
@@ -215,6 +220,8 @@ function StaffShell({ user, token, onLogout }) {
         return <StaffDashboard user={user} token={token} />;
       case 'tasks':
         return <StaffTasks user={user} token={token} />;
+      case 'service-tasks':
+        return <StaffServiceTasks user={user} token={token} />; // ← Add this case
       case 'emergency':
         return <StaffEmergency user={user} token={token} />;
       case 'profile':

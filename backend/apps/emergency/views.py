@@ -21,12 +21,10 @@ class SendEmergencyAlertView(APIView):
     def post(self, request):
         emergency_type = request.data.get('emergencyType')
         emergency_type_name = request.data.get('emergencyTypeName')
+
+        # Get data from frontend
         room_number = request.data.get('roomNumber', '')
         guest_name = request.data.get('guestName', '')
-
-        # Ensure room_number is not too long
-        if len(room_number) > 50:
-            room_number = room_number[:50]
 
         # Get user's current booking
         today = timezone.now().date()
@@ -37,9 +35,43 @@ class SendEmergencyAlertView(APIView):
             check_out_date__gte=today
         ).first()
 
-        # Get guest phone from user profile if available
+        # DEBUG: Print to console to see what's happening
+        print(f"=== Emergency Alert Debug ===")
+        print(f"User: {request.user.username}")
+        print(f"Today: {today}")
+        print(f"Found booking: {booking}")
+
+        if booking:
+            print(f"Booking ID: {booking.id}")
+            print(f"Booking status: {booking.status}")
+            print(f"Booking check_in: {booking.check_in_date}")
+            print(f"Booking check_out: {booking.check_out_date}")
+            print(f"Booking has room: {booking.room}")
+            if booking.room:
+                print(f"Room ID: {booking.room.id}")
+                print(f"Room number: {booking.room.room_number}")
+
+        # 🔑 Get room number from booking if not provided or if it's 'Not assigned'
+        if booking and booking.room and booking.room.room_number:
+            room_number = booking.room.room_number
+            print(f"Using room from booking: {room_number}")
+        elif not room_number or room_number == 'Not assigned':
+            room_number = 'Unknown'
+            print(f"No valid room found, using: {room_number}")
+
+        # Also try to get guest name from booking if not provided
+        if not guest_name and booking and booking.user:
+            guest_name = booking.user.get_full_name() or booking.user.username
+
+        # Ensure room_number is not too long
+        if room_number and len(room_number) > 50:
+            room_number = room_number[:50]
+
+        # Get guest phone from guest information if available
         guest_phone = None
-        if hasattr(request.user, 'guest_information'):
+        if booking and booking.guest_information:
+            guest_phone = booking.guest_information.contact_number
+        elif hasattr(request.user, 'guest_information'):
             guest_phone = request.user.guest_information.contact_number
 
         # Create emergency alert
@@ -49,9 +81,12 @@ class SendEmergencyAlertView(APIView):
             emergency_type=emergency_type,
             emergency_type_name=emergency_type_name,
             room_number=room_number,
-            guest_name=guest_name,
+            guest_name=guest_name or request.user.username,
             guest_phone=guest_phone
         )
+
+        print(f"Created alert #{alert.id} with room number: {alert.room_number}")
+        print(f"=================================")
 
         # Broadcast to WebSocket
         try:
@@ -75,9 +110,9 @@ class SendEmergencyAlertView(APIView):
         return Response({
             'success': True,
             'alert_id': alert.id,
-            'message': 'Emergency alert sent successfully'
+            'message': 'Emergency alert sent successfully',
+            'room_number': alert.room_number  # Return to frontend
         })
-
 
 class MyEmergencyAlertsView(APIView):
     """GET /api/v1/emergency/my-alerts/"""
@@ -94,6 +129,7 @@ class MyEmergencyAlertsView(APIView):
                 'id': a.id,
                 'emergencyType': a.emergency_type,
                 'emergencyTypeName': a.emergency_type_name,
+                'roomNumber': a.room_number,
                 'status': a.status,
                 'createdAt': a.created_at,
                 'resolvedAt': a.resolved_at
@@ -107,12 +143,15 @@ class MyEmergencyAlertsView(APIView):
 
 
 class AllEmergencyAlertsView(APIView):
-    """GET /api/v1/emergency/all/ - For receptionist/admin dashboard"""
+    """GET /api/v1/emergency/all/ - For staff dashboard"""
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        # Only allow staff/receptionist/admin
-        if not (request.user.is_staff or request.user.role in ['ADMIN', 'RECEPTIONIST']):
+        # Allow all staff roles to view emergencies
+        allowed_roles = ['ADMIN', 'RECEPTIONIST', 'HOUSEKEEPER', 'MAINTENANCE', 'SECURITY', 'STAFF', 'MANAGEMENT',
+                         'FRONT_DESK']
+
+        if not (request.user.is_staff or request.user.role in allowed_roles):
             return Response({'error': 'Unauthorized'}, status=403)
 
         alerts = EmergencyAlert.objects.all()
@@ -149,8 +188,11 @@ class ResolveEmergencyView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, emergency_id):
-        # Only allow staff/receptionist/admin
-        if not (request.user.is_staff or request.user.role in ['ADMIN', 'RECEPTIONIST']):
+        # Allow all staff roles to resolve emergencies
+        allowed_roles = ['ADMIN', 'RECEPTIONIST', 'HOUSEKEEPER', 'MAINTENANCE', 'SECURITY', 'STAFF', 'MANAGEMENT',
+                         'FRONT_DESK']
+
+        if not (request.user.is_staff or request.user.role in allowed_roles):
             return Response({'error': 'Unauthorized'}, status=403)
 
         try:

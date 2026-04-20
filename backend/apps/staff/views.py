@@ -8,10 +8,10 @@ from django.db import transaction
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 
-from .models import Task, TaskHistory, StaffProfile
-from .serializers import TaskSerializer, TaskHistorySerializer, StaffProfileSerializer, CreateTaskSerializer
+from .models import Task, TaskHistory
+from .serializers import TaskSerializer, TaskHistorySerializer, CreateTaskSerializer
 from apps.rooms.models import Room
-from apps.bookings.models import Booking
+from apps.employees.models import EmployeeInformation
 
 logger = logging.getLogger(__name__)
 
@@ -21,8 +21,9 @@ class StaffTaskListView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        # Only staff members can access
-        if request.user.role != 'STAFF':
+        # Check if user has staff role
+        if request.user.role not in ['ADMIN', 'RECEPTIONIST', 'STAFF', 'HOUSEKEEPER', 'MAINTENANCE', 'SECURITY',
+                                     'FRONT_DESK', 'MANAGEMENT']:
             return Response({'error': 'Access denied. Staff only.'}, status=403)
 
         tasks = Task.objects.filter(assigned_to=request.user)
@@ -45,68 +46,101 @@ class AllTasksView(APIView):
 
 
 class CreateTaskView(APIView):
-    """POST /api/v1/staff/tasks/create/ - Create a new task"""
-    permission_classes = [IsAuthenticated]
+        """POST /api/v1/staff/tasks/create/ - Create a new task"""
+        permission_classes = [IsAuthenticated]
 
-    @transaction.atomic
-    def post(self, request):
-        # Only admin or receptionist can create tasks
-        if request.user.role not in ['ADMIN', 'RECEPTIONIST']:
-            return Response({'error': 'Access denied'}, status=403)
+        @transaction.atomic
+        def post(self, request):
+            # Only admin or receptionist can create tasks
+            if request.user.role not in ['ADMIN', 'RECEPTIONIST']:
+                return Response({'error': 'Access denied'}, status=403)
 
-        serializer = CreateTaskSerializer(data=request.data)
-        if not serializer.is_valid():
-            return Response({'errors': serializer.errors}, status=400)
+            print("=" * 50)
+            print("Received data:", request.data)
+            print("=" * 50)
 
-        data = serializer.validated_data
+            serializer = CreateTaskSerializer(data=request.data)
+            if not serializer.is_valid():
+                print("Serializer errors:", serializer.errors)
+                return Response({'errors': serializer.errors}, status=400)
 
-        # Get room number from room object or direct input
-        room_number = data.get('room_number', '')
-        if data.get('room'):
-            try:
-                room = Room.objects.get(id=data['room'].id)
-                room_number = room.room_number
-            except Room.DoesNotExist:
-                pass
+            data = serializer.validated_data
 
-        task = Task.objects.create(
-            title=data['title'],
-            description=data['description'],
-            task_type=data['task_type'],
-            priority=data.get('priority', 'MEDIUM'),
-            room=data.get('room'),
-            room_number=room_number,
-            assigned_to=data.get('assigned_to'),
-            assigned_by=request.user,
-            note=data.get('note', '')
-        )
+            # Get room number
+            room_number = data.get('room_number', '')
+            if data.get('room'):
+                try:
+                    room = Room.objects.get(id=data['room'].id)
+                    room_number = room.room_number
+                except Room.DoesNotExist:
+                    pass
 
-        # Create history record
-        TaskHistory.objects.create(
-            task=task,
-            previous_status='',
-            new_status='PENDING',
-            changed_by=request.user,
-            note=f"Task created by {request.user.username}"
-        )
+            # Handle assigned_to
+            assigned_to = None
+            if data.get('assigned_to'):
+                from django.contrib.auth import get_user_model
+                User = get_user_model()
+                try:
+                    assigned_to = User.objects.get(id=int(data['assigned_to']))
+                    print(f"Found assigned_to user: {assigned_to.username}")
+                except (User.DoesNotExist, ValueError, TypeError) as e:
+                    print(f"Error finding assigned_to: {e}")
+                    assigned_to = None
 
-        # Send WebSocket notification to assigned staff
-        if task.assigned_to:
-            try:
-                channel_layer = get_channel_layer()
-                async_to_sync(channel_layer.group_send)(
-                    f'staff_{task.assigned_to.id}',
-                    {
-                        'type': 'new_task',
-                        'task_id': task.id,
-                        'task_title': task.title,
-                        'room_number': task.room_number,
-                    }
-                )
-            except Exception as e:
-                logger.error(f"WebSocket notification error: {e}")
+            # Handle complaint reference
+            complaint = None
+            complaint_id = data.get('complaint_id')
+            if complaint_id:
+                from apps.complaints.models import Complaint
+                try:
+                    complaint = Complaint.objects.get(id=complaint_id)
+                    print(f"Found complaint: #{complaint.id} - {complaint.title}")
+                except Complaint.DoesNotExist:
+                    print(f"Complaint #{complaint_id} not found")
+                    pass
 
-        return Response(TaskSerializer(task).data, status=201)
+            # Create the task
+            task = Task.objects.create(
+                title=data['title'],
+                description=data['description'],
+                task_type=data.get('task_type', 'ASSISTANCE'),
+                priority=data.get('priority', 'MEDIUM'),
+                room=data.get('room'),
+                room_number=room_number,
+                assigned_to=assigned_to,
+                assigned_by=request.user,
+                note=data.get('note', ''),
+                complaint=complaint
+            )
+
+            print(f"Task created successfully with ID: {task.id}")
+
+            # Create history record
+            TaskHistory.objects.create(
+                task=task,
+                previous_status='',
+                new_status='PENDING',
+                changed_by=request.user,
+                note=f"Task created by {request.user.username}"
+            )
+
+            # Send WebSocket notification
+            if task.assigned_to:
+                try:
+                    channel_layer = get_channel_layer()
+                    async_to_sync(channel_layer.group_send)(
+                        f'staff_{task.assigned_to.id}',
+                        {
+                            'type': 'new_task',
+                            'task_id': task.id,
+                            'task_title': task.title,
+                            'room_number': task.room_number,
+                        }
+                    )
+                except Exception as e:
+                    logger.error(f"WebSocket notification error: {e}")
+
+            return Response(TaskSerializer(task).data, status=201)
 
 
 class UpdateTaskStatusView(APIView):
@@ -120,7 +154,7 @@ class UpdateTaskStatusView(APIView):
         except Task.DoesNotExist:
             return Response({'error': 'Task not found'}, status=404)
 
-        # Check permission: staff can update their own tasks, admin can update any
+        # Check permission
         if request.user.role not in ['ADMIN', 'RECEPTIONIST'] and task.assigned_to != request.user:
             return Response({'error': 'Access denied'}, status=403)
 
@@ -131,6 +165,12 @@ class UpdateTaskStatusView(APIView):
             return Response({'error': 'Status required'}, status=400)
 
         old_status = task.status
+
+        print("=" * 50)
+        print(f"Updating task {task_id}: {old_status} -> {new_status}")
+        print(f"Task has complaint: {task.complaint is not None}")
+        if task.complaint:
+            print(f"Complaint ID: {task.complaint.id}, current status: {task.complaint.status}")
 
         # Update task
         task.status = new_status
@@ -153,8 +193,36 @@ class UpdateTaskStatusView(APIView):
             note=note
         )
 
-        return Response(TaskSerializer(task).data)
+        # If task is completed and has a complaint, update complaint status to RESOLVED
+        if new_status == 'COMPLETED' and task.complaint:
+            print(f"Completing task - updating complaint #{task.complaint.id}")
 
+            # Only update if not already resolved or closed
+            if task.complaint.status not in ['RESOLVED', 'CLOSED']:
+                task.complaint.status = 'RESOLVED'
+                task.complaint.response = note or f"Task '{task.title}' has been completed by staff."
+                task.complaint.resolved_at = timezone.now()
+                task.complaint.resolved_by = request.user
+                task.complaint.save()
+                print(f"Complaint #{task.complaint.id} updated to RESOLVED")
+
+                # Add timeline entry for complaint
+                from apps.complaints.models import ComplaintTimeline
+                ComplaintTimeline.objects.create(
+                    complaint=task.complaint,
+                    status='RESOLVED',
+                    note=f"Resolved via task #{task.id}: {task.title}",
+                    created_by=request.user
+                )
+                print(f"Timeline entry added for complaint #{task.complaint.id}")
+            else:
+                print(f"Complaint #{task.complaint.id} already {task.complaint.status}, skipping update")
+        else:
+            print(f"Task status is {new_status} or no complaint linked")
+
+        print("=" * 50)
+
+        return Response(TaskSerializer(task).data)
 
 class TaskDetailView(APIView):
     """GET /api/v1/staff/tasks/<id>/ - Get task details"""
@@ -193,50 +261,17 @@ class TaskHistoryView(APIView):
         return Response(serializer.data)
 
 
-class StaffProfileView(APIView):
-    """GET/PUT /api/v1/staff/profile/ - Get or update staff profile"""
-    permission_classes = [IsAuthenticated]
-
-    def get(self, request):
-        if request.user.role != 'STAFF':
-            return Response({'error': 'Access denied'}, status=403)
-
-        try:
-            profile = StaffProfile.objects.get(user=request.user)
-        except StaffProfile.DoesNotExist:
-            return Response({'error': 'Profile not found'}, status=404)
-
-        serializer = StaffProfileSerializer(profile)
-        return Response(serializer.data)
-
-    def put(self, request):
-        if request.user.role != 'STAFF':
-            return Response({'error': 'Access denied'}, status=403)
-
-        try:
-            profile = StaffProfile.objects.get(user=request.user)
-        except StaffProfile.DoesNotExist:
-            return Response({'error': 'Profile not found'}, status=404)
-
-        profile.department = request.data.get('department', profile.department)
-        profile.phone_number = request.data.get('phone_number', profile.phone_number)
-        profile.skills = request.data.get('skills', profile.skills)
-        profile.save()
-
-        serializer = StaffProfileSerializer(profile)
-        return Response(serializer.data)
-
-
 class StaffStatsView(APIView):
     """GET /api/v1/staff/stats/ - Get staff statistics"""
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        if request.user.role not in ['ADMIN', 'RECEPTIONIST', 'STAFF']:
+        if request.user.role not in ['ADMIN', 'RECEPTIONIST', 'STAFF', 'HOUSEKEEPER', 'MAINTENANCE', 'SECURITY',
+                                     'FRONT_DESK', 'MANAGEMENT']:
             return Response({'error': 'Access denied'}, status=403)
 
         # For staff, show their own stats
-        if request.user.role == 'STAFF':
+        if request.user.role in ['STAFF', 'HOUSEKEEPER', 'MAINTENANCE', 'SECURITY', 'FRONT_DESK', 'MANAGEMENT']:
             tasks = Task.objects.filter(assigned_to=request.user)
             stats = {
                 'pending': tasks.filter(status='PENDING').count(),
@@ -259,7 +294,7 @@ class StaffStatsView(APIView):
 
 
 class AvailableStaffView(APIView):
-    """GET /api/v1/staff/available/ - Get list of available staff members"""
+    """GET /api/v1/staff/available/ - Get list of available staff members by department"""
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
@@ -267,32 +302,55 @@ class AvailableStaffView(APIView):
         if request.user.role not in ['ADMIN', 'RECEPTIONIST']:
             return Response({'error': 'Access denied'}, status=403)
 
-        staff_users = []
-        # Get all users with role STAFF
-        from django.contrib.auth import get_user_model
-        User = get_user_model()
+        department = request.query_params.get('department', '')
 
-        staff_users_qs = User.objects.filter(role='STAFF', is_active=True)
+        print(f"Looking for department: {department}")
 
-        for user in staff_users_qs:
-            try:
-                profile = StaffProfile.objects.get(user=user)
-                staff_users.append({
-                    'id': user.id,
-                    'username': user.username,
-                    'email': user.email,
-                    'department': profile.department,
-                    'is_on_duty': profile.is_on_duty,
-                    'employee_id': profile.employee_id,
-                })
-            except StaffProfile.DoesNotExist:
-                staff_users.append({
-                    'id': user.id,
-                    'username': user.username,
-                    'email': user.email,
-                    'department': 'MAINTENANCE',
-                    'is_on_duty': True,
-                    'employee_id': None,
-                })
+        # Get employees from EmployeeInformation
+        employees = EmployeeInformation.objects.filter(
+            department__iexact=department,
+            is_active=True,
+            is_on_duty=True
+        ).select_related('user')
 
-        return Response(staff_users)
+        print(f"Found {employees.count()} employees")
+
+        staff_list = []
+        for emp in employees:
+            staff_list.append({
+                'id': emp.user.id,
+                'username': emp.user.username,
+                'email': emp.email,
+                'first_name': emp.first_name,
+                'last_name': emp.last_name,
+                'full_name': emp.full_name,
+                'department': emp.department,
+                'position': emp.position,
+                'is_on_duty': emp.is_on_duty,
+                'employee_id': emp.employee_id,
+            })
+
+        return Response(staff_list)
+
+
+class TaskDeleteView(APIView):
+    """DELETE /api/v1/staff/tasks/<id>/delete/ - Delete a task"""
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request, task_id):
+        # Only admin or receptionist can delete tasks
+        if request.user.role not in ['ADMIN', 'RECEPTIONIST']:
+            return Response({'error': 'Access denied. Only admin or receptionist can delete tasks.'}, status=403)
+
+        try:
+            task = Task.objects.get(id=task_id)
+        except Task.DoesNotExist:
+            return Response({'error': 'Task not found'}, status=404)
+
+        # Delete history records first (due to foreign key constraint)
+        TaskHistory.objects.filter(task=task).delete()
+
+        # Delete the task
+        task.delete()
+
+        return Response({'message': 'Task deleted successfully'}, status=200)

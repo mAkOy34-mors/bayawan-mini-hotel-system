@@ -10,7 +10,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .models import Payment
-from apps.bookings.models import Booking
+from apps.bookings.models import Booking, BookingChangeRequest
 
 logger = logging.getLogger(__name__)
 
@@ -19,51 +19,86 @@ logger = logging.getLogger(__name__)
 class PayMongoWebhookView(APIView):
     """
     POST /api/v1/payments/webhook/
-    PayMongo calls this when a payment link is paid.
     """
     permission_classes = [AllowAny]
 
     def post(self, request):
         try:
-            payload    = json.loads(request.body)
+            payload = json.loads(request.body)
             event_type = payload.get("data", {}).get("attributes", {}).get("type")
             logger.info("PayMongo webhook received: %s", event_type)
-            logger.info("Full webhook payload: %s", json.dumps(payload, indent=2))
 
             if event_type == "link.payment.paid":
-                data       = payload.get("data", {})
-                attributes = data.get("attributes", {})
-
-                # Correct path from webhook payload:
-                # data → attributes → data → id  =  "link_xxxxxx"
+                attributes = payload.get("data", {}).get("attributes", {})
                 link_id = attributes.get("data", {}).get("id", "")
                 amount_paid = attributes.get("data", {}).get("attributes", {}).get("amount", 0) / 100
 
-                logger.info("Extracted link_id: %s", link_id)
+                logger.info("Extracted link_id: %s, amount: %s", link_id, amount_paid)
 
                 # Update payment record
                 try:
                     payment = Payment.objects.get(paymongo_link_id=link_id)
-                    payment.status  = "PAID"
+                    payment.status = "PAID"
                     payment.paid_at = timezone.now()
                     payment.save(update_fields=["status", "paid_at"])
                     logger.info("Payment %s marked as PAID", link_id)
 
-                    # Update booking
+                    # Handle booking update
                     if payment.booking_id:
                         try:
                             booking = Booking.objects.get(id=payment.booking_id)
-                            if payment.type in ["DEPOSIT", "ROOM_BOOKING"]:
-                                booking.payment_status  = Booking.PaymentStatus.DEPOSIT_PAID
-                                booking.status          = Booking.BookingStatus.CONFIRMED
+
+                            if payment.type == "ADDITIONAL_DEPOSIT":
+                                # Find the change request
+                                change_request = BookingChangeRequest.objects.filter(
+                                    booking=booking,
+                                    payment_link_id=link_id
+                                ).first()
+
+                                if change_request:
+                                    # Apply the changes to booking
+                                    if change_request.requested_checkin and change_request.requested_checkout:
+                                        booking.check_in_date = change_request.requested_checkin
+                                        booking.check_out_date = change_request.requested_checkout
+                                        booking.number_of_nights = change_request.new_nights
+                                        booking.total_amount = change_request.new_total
+                                        booking.deposit_amount += change_request.additional_deposit
+                                        booking.remaining_amount = booking.total_amount - booking.deposit_amount
+                                        booking.save()
+
+                                    if change_request.requested_room_type:
+                                        from apps.rooms.models import Room
+                                        new_room = Room.objects.get(room_type=change_request.requested_room_type)
+                                        booking.room = new_room
+                                        booking.save()
+
+                                    # Mark change request as approved
+                                    change_request.status = "APPROVED"
+                                    change_request.payment_completed = True
+                                    change_request.reviewed_at = timezone.now()
+                                    change_request.save()
+
+                                    logger.info("Change request %s completed after payment", change_request.id)
+
+                            elif payment.type in ["DEPOSIT", "ROOM_BOOKING"]:
+                                booking.payment_status = Booking.PaymentStatus.DEPOSIT_PAID
+                                booking.status = Booking.BookingStatus.CONFIRMED
                                 booking.deposit_paid_at = timezone.now()
+                                booking.save()
                             elif payment.type == "BALANCE":
-                                booking.payment_status  = Booking.PaymentStatus.FULLY_PAID
+                                booking.payment_status = Booking.PaymentStatus.FULLY_PAID
                                 booking.balance_paid_at = timezone.now()
-                            booking.save()
+                                booking.save()
+
+                            # Clear caches
+                            from django.core.cache import cache
+                            cache.delete(f"my_bookings_{booking.user_id}")
                             logger.info("Booking %s updated after payment", booking.booking_reference)
+
                         except Booking.DoesNotExist:
                             logger.warning("Booking %s not found", payment.booking_id)
+                        except Exception as e:
+                            logger.error("Error updating booking: %s", e)
 
                 except Payment.DoesNotExist:
                     logger.warning("Payment link %s not found in DB", link_id)
@@ -72,7 +107,6 @@ class PayMongoWebhookView(APIView):
             logger.error("Webhook processing error: %s", e)
 
         return Response({"received": True})
-
 
 class PaymentSuccessView(APIView):
     """GET /api/v1/payments/success/?reference=<booking_reference>"""

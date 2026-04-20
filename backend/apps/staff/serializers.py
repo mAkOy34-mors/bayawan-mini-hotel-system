@@ -1,6 +1,6 @@
 # apps/staff/serializers.py
 from rest_framework import serializers
-from .models import Task, TaskHistory, StaffProfile
+from .models import Task, TaskHistory
 from apps.rooms.models import Room
 from apps.bookings.models import Booking
 
@@ -9,6 +9,9 @@ class TaskSerializer(serializers.ModelSerializer):
     assigned_to_name = serializers.SerializerMethodField()
     assigned_by_name = serializers.SerializerMethodField()
     room_number_display = serializers.SerializerMethodField()
+    complaint_id = serializers.IntegerField(source='complaint.id', read_only=True)
+    complaint_status = serializers.CharField(source='complaint.status', read_only=True)
+    complaint_title = serializers.CharField(source='complaint.title', read_only=True)
 
     class Meta:
         model = Task
@@ -16,7 +19,8 @@ class TaskSerializer(serializers.ModelSerializer):
             'id', 'title', 'description', 'task_type', 'priority', 'status',
             'room', 'room_number', 'room_number_display', 'booking',
             'assigned_to', 'assigned_to_name', 'assigned_by', 'assigned_by_name',
-            'created_at', 'updated_at', 'started_at', 'completed_at', 'note'
+            'created_at', 'updated_at', 'started_at', 'completed_at', 'note',
+            'complaint_id', 'complaint_status', 'complaint_title'
         ]
 
     def get_assigned_to_name(self, obj):
@@ -48,28 +52,47 @@ class TaskHistorySerializer(serializers.ModelSerializer):
         return None
 
 
-class StaffProfileSerializer(serializers.ModelSerializer):
-    username = serializers.SerializerMethodField()
-    email = serializers.SerializerMethodField()
-
-    class Meta:
-        model = StaffProfile
-        fields = [
-            'id', 'user', 'username', 'email', 'department', 'employee_id',
-            'phone_number', 'is_on_duty', 'skills', 'created_at'
-        ]
-
-    def get_username(self, obj):
-        return obj.user.username
-
-    def get_email(self, obj):
-        return obj.user.email
-
-
 class CreateTaskSerializer(serializers.ModelSerializer):
+    complaint_id = serializers.IntegerField(required=False, allow_null=True)
+    assigned_to = serializers.IntegerField(required=False, allow_null=True)
+
     class Meta:
         model = Task
         fields = [
             'title', 'description', 'task_type', 'priority', 'room', 'room_number',
-            'assigned_to', 'note'
+            'assigned_to', 'note', 'complaint_id'
         ]
+
+    def validate_title(self, value):
+        if not value or not value.strip():
+            raise serializers.ValidationError("Title is required")
+        return value.strip()
+
+    def validate_description(self, value):
+        if not value or not value.strip():
+            raise serializers.ValidationError("Description is required")
+        return value.strip()
+
+    def validate_task_type(self, value):
+        valid_types = ['MAINTENANCE', 'DELIVERY', 'ASSISTANCE', 'EMERGENCY', 'CLEANING', 'REPAIR', 'SECURITY', 'HOUSEKEEPING']
+        if value:
+            upper_value = value.upper()
+            if upper_value in valid_types:
+                return upper_value
+        return 'ASSISTANCE'
+
+    def validate_priority(self, value):
+        valid_priorities = ['HIGH', 'MEDIUM', 'LOW']
+        if value:
+            upper_value = value.upper()
+            if upper_value in valid_priorities:
+                return upper_value
+        return 'MEDIUM'
+
+    def validate_assigned_to(self, value):
+        if value:
+            from django.contrib.auth import get_user_model
+            User = get_user_model()
+            if not User.objects.filter(id=value).exists():
+                return None
+        return value

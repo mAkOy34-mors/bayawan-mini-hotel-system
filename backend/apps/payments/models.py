@@ -7,6 +7,7 @@ from django.conf import settings
 from django.db import models
 
 
+# apps/payments/models.py
 class Payment(models.Model):
     class PaymentStatus(models.TextChoices):
         PENDING = "PENDING", "Pending"
@@ -19,6 +20,8 @@ class Payment(models.Model):
         CHECK_IN     = "CHECK_IN",     "Check In"
         DEPOSIT      = "DEPOSIT",      "Deposit"
         BALANCE      = "BALANCE",      "Balance"
+        SERVICE      = "SERVICE",      "Service Charge"  # ← Add this
+        REFUND       = "REFUND",       "Refund"
         OTHER        = "OTHER",        "Other"
 
     # Long id @GeneratedValue IDENTITY
