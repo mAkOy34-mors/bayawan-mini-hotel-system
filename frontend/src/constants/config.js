@@ -1,5 +1,5 @@
 // constants/config.js
-export const API_BASE =`http://127.0.0.1:8000/api/v1`;
+export const API_BASE =`https://cebu-mini-hotel-system.onrender.com/api/v1`;
 
 export const LANGUAGES = [
   { code: 'en',  flag: '🇺🇸', label: 'English' },

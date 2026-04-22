@@ -177,7 +177,7 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:5173",
     "http://127.0.0.1:3000",
-    "https://treasure-beneath-address-delicious.trycloudflare.com ",
+    "https://cebu-mini-hotel-system-o0hqil6mh-michomoreno34-1569s-projects.vercel.app",
 ]
 
 CORS_ALLOW_ALL_ORIGINS = True   # ← allows all origins including ngrok
@@ -260,7 +260,7 @@ EMAIL_HOST          = 'smtp.gmail.com'
 EMAIL_PORT          = 587
 EMAIL_USE_TLS       = True
 EMAIL_HOST_USER     = env('EMAIL_HOST_USER', default='michomoreno34@gmail.com')
-EMAIL_HOST_PASSWORD = env('EMAIL_HOST_PASSWORD', default='ewha ngym merc fsef')
+EMAIL_HOST_PASSWORD = env('EMAIL_HOST_PASSWORD')
 DEFAULT_FROM_EMAIL  = f'Bayawan Mini Hotel <{EMAIL_HOST_USER}>'
 
 from corsheaders.defaults import default_headers
