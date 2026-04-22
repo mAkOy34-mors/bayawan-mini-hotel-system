@@ -42,6 +42,8 @@ THIRD_PARTY_APPS = [
     "django_filters",
     "rest_framework_simplejwt",
     "channels",
+    "cloudinary_storage",   # ← add this BEFORE staticfiles
+    "cloudinary",
     "apps.admin_panel",
     "apps.rewards",
     "apps.support",
@@ -270,5 +272,15 @@ CORS_ALLOW_HEADERS = list(default_headers) + [
     'ngrok-skip-browser-warning',
 ]
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Media — Cloudinary (production) / local (dev)
+# ─────────────────────────────────────────────────────────────────────────────
+CLOUDINARY_STORAGE = {
+    'CLOUD_NAME': env('CLOUDINARY_CLOUD_NAME'),
+    'API_KEY':    env('CLOUDINARY_API_KEY'),
+    'API_SECRET': env('CLOUDINARY_API_SECRET'),
+}
+DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
+
 MEDIA_URL = '/media/'
-MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')  # still needed as fallback
