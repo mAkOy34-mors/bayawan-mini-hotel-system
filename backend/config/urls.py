@@ -30,7 +30,6 @@ api_v1_patterns = [
     path("rewards/",  include("apps.rewards.urls")),      # ← fixed
     path("support/",  include("apps.support.urls")),      # ← fixed
     path("reports/",  include("apps.reports.urls")),
-    path("payments/", include("apps.payments.urls")),# ← fixed
     path("receptionist/", include("apps.receptionist.urls")),
     path("emergency/", include("apps.emergency.urls")),
     path("staff/", include("apps.staff.urls")),
