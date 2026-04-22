@@ -40,6 +40,8 @@ class GuestInformation(models.Model):
     visa_type = models.CharField(max_length=50, null=True, blank=True, db_column="visa_type")
     # LocalDate visaExpiryDate nullable
     visa_expiry_date = models.DateField(null=True, blank=True, db_column="visa_expiry_date")
+    # Add this line with the other fields
+    profile_picture = models.TextField(null=True, blank=True, db_column="profile_picture")
     # @ManyToOne UserModel user
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -62,3 +64,16 @@ class GuestInformation(models.Model):
     @property
     def full_name(self):
         return f"{self.first_name} {self.last_name}"
+
+class GuestProfilePicture(models.Model):
+    """Separate table for profile pictures — Django managed, avoids touching guest_information."""
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="profile_picture",
+    )
+    image_base64 = models.TextField()  # stores base64 encoded image
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "guest_profile_picture"

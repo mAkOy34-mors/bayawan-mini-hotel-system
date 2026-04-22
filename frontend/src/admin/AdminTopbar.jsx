@@ -1,7 +1,7 @@
 // AdminTopbar.jsx
 import {
   LayoutDashboard, BedDouble, Hotel, Users, CreditCard,
-  Star, MessageCircle, Settings, Menu, ShieldCheck,
+  Star, MessageCircle, Settings, Menu, ShieldCheck, AlertTriangle, FileText, Building2, BarChart3
 } from 'lucide-react';
 
 const css = `
@@ -14,6 +14,7 @@ const css = `
   .atb-av{width:32px;height:32px;border-radius:9px;background:linear-gradient(135deg,#9a7a2e,#C9A84C);display:flex;align-items:center;justify-content:center;font-family:'Cormorant Garamond',serif;font-size:.88rem;font-weight:600;color:#fff;cursor:pointer;flex-shrink:0}
 `;
 
+// AdminTopbar.jsx - Update PAGE_CONFIG
 const PAGE_CONFIG = {
   dashboard:       { label:'Dashboard',       Icon: LayoutDashboard },
   bookings:        { label:'Bookings',         Icon: BedDouble },
@@ -24,6 +25,14 @@ const PAGE_CONFIG = {
   rewards:         { label:'Rewards',          Icon: Star },
   support:         { label:'Support',          Icon: MessageCircle },
   settings:        { label:'Settings',         Icon: Settings },
+  users:           { label:'User Management',  Icon: Users },
+  feedback:        { label:'Guest Feedback',   Icon: MessageCircle },
+  emergency:       { label:'Emergency Alerts', Icon: AlertTriangle },
+  'emergency-log': { label:'Emergency Log',    Icon: FileText },
+  
+  // ✅ Add new page titles
+  'partner-management': { label:'Partner Management', Icon: Building2 },
+  'commission-dashboard': { label:'Commission Analytics', Icon: BarChart3 },
 };
 
 export function AdminTopbar({ page, user, onMenuClick }) {

@@ -5,6 +5,7 @@ from datetime import date, datetime
 
 from django.core.cache import cache
 from django.db.models import Q, OuterRef, Exists
+from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -134,3 +135,51 @@ class AvailableRoomsView(APIView):
 
         cache.set(cache_key, result, timeout=60)
         return Response(result)
+
+
+# apps/rooms/views.py - Corrected PublicRoomsView
+class PublicRoomsView(APIView):
+    """GET /api/v1/rooms/public/ - Public endpoint for room browsing (no auth required)"""
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        """Return all available rooms for public viewing"""
+        # Use 'available' instead of 'is_active'
+        rooms = Room.objects.filter(available=True).order_by("price_per_night")
+
+        # Optional: Get dates for availability check
+        check_in_str = request.query_params.get("checkIn")
+        check_out_str = request.query_params.get("checkOut")
+
+        if check_in_str and check_out_str:
+            try:
+                check_in = date.fromisoformat(check_in_str)
+                check_out = date.fromisoformat(check_out_str)
+
+                # Find conflicting bookings
+                conflicting_room_ids = set(
+                    Booking.objects.filter(
+                        status__in=[
+                            Booking.BookingStatus.PENDING_DEPOSIT,
+                            Booking.BookingStatus.CONFIRMED,
+                            Booking.BookingStatus.CHECKED_IN,
+                        ],
+                        check_in_date__lt=check_out,
+                        check_out_date__gt=check_in,
+                    ).values_list("room_id", flat=True)
+                )
+
+                # Add availability info
+                result = []
+                for room in rooms:
+                    room_data = RoomSerializer(room).data
+                    room_data['available'] = room.id not in conflicting_room_ids
+                    result.append(room_data)
+                return Response(result)
+
+            except ValueError:
+                pass
+
+        # Return all rooms without availability check
+        serializer = RoomSerializer(rooms, many=True)
+        return Response(serializer.data)

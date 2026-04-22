@@ -5,7 +5,14 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   server: {
+    host: true, // Allow external access (required for tunnel)
     port: 5173,
+    strictPort: false,
+    allowedHosts: [
+      'localhost',
+      'sells-relax-usa-urls.trycloudflare.com',  // Your frontend tunnel URL
+      '.trycloudflare.com',  // Allow all cloudflare tunnels
+    ],
     proxy: {
       '/api': {
         target: 'http://localhost:8000',

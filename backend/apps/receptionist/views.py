@@ -25,6 +25,8 @@ import json
 import random
 import string
 from datetime import date
+from decimal import Decimal
+
 from apps.utils.email import send_walkin_welcome_email
 from django.core.cache import cache
 from django.db.models import Q
@@ -78,6 +80,55 @@ def receptionist_check(request):
     return None
 
 
+def _booking_payload(booking):
+    """Shared booking dict returned in check-in/out responses."""
+    # Get guest name from GuestInformation if available
+    guest_name = None
+    try:
+        if booking.guest_information and booking.guest_information.first_name:
+            guest_name = f"{booking.guest_information.first_name} {booking.guest_information.last_name}".strip()
+    except:
+        pass
+
+    # Fallback to username if no GuestInformation
+    if not guest_name:
+        guest_name = booking.user.username
+
+    return {
+        "id": booking.id,
+        "reference": booking.booking_reference,
+        "guestName": guest_name,
+        "roomType": booking.room.room_type if booking.room else None,
+        "roomNumber": booking.room.room_number if booking.room else None,
+        "checkInDate": str(booking.check_in_date),
+        "checkOutDate": str(booking.check_out_date),
+        "totalAmount": float(booking.total_amount),
+        "depositAmount": float(booking.deposit_amount),
+        "remainingAmount": float(booking.remaining_amount),
+        "paymentStatus": booking.payment_status,
+        "status": booking.status,
+    }
+
+
+def _booking_is_fully_paid(booking) -> bool:
+    """
+    Returns True when the guest owes nothing more.
+    """
+    if booking.payment_status == Booking.PaymentStatus.FULLY_PAID:
+        return True
+
+    # Check remaining_amount
+    remaining = getattr(booking, "remaining_amount", None)
+    if remaining is not None:
+        from decimal import Decimal
+        try:
+            if Decimal(str(remaining)) <= Decimal("0"):
+                return True
+        except:
+            if float(remaining) <= 0:
+                return True
+
+    return False
 # ── Dashboard ─────────────────────────────────────────────────────────────────
 
 class ReceptionistDashboardView(APIView):
@@ -303,52 +354,73 @@ class ReceptionistBookingDetailView(APIView):
 
 
 class CheckInView(APIView):
-    """POST /api/v1/receptionist/bookings/<pk>/checkin/"""
+    """
+    POST /api/v1/receptionist/bookings/<pk>/checkin/
+
+    Optional body: { "force": true }
+      - force=true skips the payment gate (used when receptionist has
+        already collected payment via PaymentModal)
+    """
 
     def post(self, request, pk):
-        err = receptionist_check(request)
-        if err:
-            return err
-
         try:
-            booking = Booking.objects.select_related("room").get(pk=pk)
+            booking = (
+                Booking.objects
+                .select_related("room", "user")
+                .get(pk=pk)
+            )
         except Booking.DoesNotExist:
-            return Response({"message": "Booking not found."}, status=404)
-
-        if booking.status not in [
-            Booking.BookingStatus.CONFIRMED,
-            Booking.BookingStatus.PENDING_DEPOSIT,
-        ]:
             return Response(
-                {"message": f"Cannot check in a booking with status {booking.status}."},
+                {"success": False, "error": "Booking not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        force = request.data.get("force", False)
+
+        # ── Status checks ────────────────────────────────────────────
+        if booking.status == Booking.BookingStatus.CHECKED_IN:
+            return Response(
+                {"success": False, "error": "Guest is already checked in."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        # ── Payment gate (skippable with force=True) ─────────────────
+        if not force and not _booking_is_fully_paid(booking):
+            return Response(
+                {
+                    "success": False,
+                    "payment_required": True,
+                    "booking": _booking_payload(booking),
+                    "message": "Balance must be paid before check-in.",
+                },
+                status=status.HTTP_402_PAYMENT_REQUIRED,
+            )
+
+        # ── Perform check-in ─────────────────────────────────────────
         booking.status = Booking.BookingStatus.CHECKED_IN
+
+        # ✅ Remove these lines - check_in_time doesn't exist in your model
+        # booking.check_in_time = timezone.now()
+
+        # Update room status
+        if booking.room:
+            booking.room.status = "OCCUPIED"
+            booking.room.save(update_fields=["status"])
+
+        # ✅ Save only the status field
         booking.save(update_fields=["status"])
 
-        room           = booking.room
-        room.available = False
-        room.save(update_fields=["available"])
+        # Clear caches
+        cache.delete(f"receptionist_booking_{booking.id}")
+        cache.delete("receptionist_bookings_all")
 
-        _clear_booking_cache()
-        _clear_room_cache()
-        cache.delete(f"receptionist_booking_{pk}")
-
-        logger.info(
-            "Guest checked in: booking %s, room %s, by receptionist %s",
-            booking.booking_reference, room.room_number, request.user.id,
-        )
+        logger.info("Check-in (manual/forced): %s", booking.booking_reference)
 
         return Response({
-            "message":          f"Guest checked in to Room {room.room_number} successfully.",
-            "bookingReference": booking.booking_reference,
-            "roomNumber":       room.room_number,
-            "status":           booking.status,
-            "checkInDate":      str(booking.check_in_date),
-            "checkOutDate":     str(booking.check_out_date),
+            "success": True,
+            "message": "Check-in successful.",
+            "booking": _booking_payload(booking),
         })
-
 
 class CheckOutView(APIView):
     """POST /api/v1/receptionist/bookings/<pk>/checkout/"""
@@ -896,66 +968,92 @@ class ReceptionistPaymentsView(APIView):
 
 
 class RecordCashPaymentView(APIView):
-    """POST /api/v1/receptionist/payments/cash/"""
+    """
+    POST /api/v1/receptionist/payments/cash/
+
+    Body:
+        {
+            "booking_id":  <int>,
+            "amount":      <float>,
+            "description": <str>,
+            "type":        "BALANCE" | "DEPOSIT" | "ROOM_BOOKING"
+        }
+
+    Records a cash payment, marks booking as FULLY_PAID, and returns
+    the updated booking payload.
+    """
 
     def post(self, request):
-        err = receptionist_check(request)
-        if err:
-            return err
-
-        booking_id  = request.data.get("bookingId")
-        amount      = request.data.get("amount")
-        description = request.data.get("description", "Cash payment at front desk")
+        booking_id = request.data.get("booking_id")
+        amount = request.data.get("amount")
+        description = request.data.get("description", "Cash payment")
+        pay_type = request.data.get("type", "BALANCE")
 
         if not booking_id or not amount:
             return Response(
-                {"message": "bookingId and amount are required."},
+                {"success": False, "error": "booking_id and amount are required."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
         try:
-            booking = Booking.objects.get(id=booking_id)
+            booking = Booking.objects.select_related("room", "user").get(pk=booking_id)
         except Booking.DoesNotExist:
-            return Response({"message": "Booking not found."}, status=404)
+            return Response(
+                {"success": False, "error": "Booking not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
 
+        amount_decimal = Decimal(str(amount))
+
+        # ✅ FIX: Use guest's email from booking.user.email, NOT request.user.email
+        guest_email = booking.user.email
+
+        logger.info(f"Recording cash payment for booking {booking.booking_reference} - Guest email: {guest_email}")
+
+        # ── Create payment record with guest's email ─────────────────
         payment = Payment.objects.create(
-            paymongo_link_id = f"CASH-{booking.booking_reference}-{uuid.uuid4().hex[:6].upper()}",
-            checkout_url     = "",
-            email            = booking.user.email,
-            description      = description,
-            amount           = float(amount),
-            status           = "PAID",
-            type             = "BALANCE",
-            booking_id       = booking.id,
-            paid_at          = timezone.now(),
+            paymongo_link_id=f"CASH-{booking.booking_reference}-{uuid.uuid4().hex[:6].upper()}",
+            checkout_url="",
+            email=guest_email,  # ← Use guest's email here
+            description=description,
+            amount=amount_decimal,
+            status=Payment.PaymentStatus.PAID,
+            type=pay_type,
+            booking_id=booking.id,
+            paid_at=timezone.now(),
         )
 
-        remaining = float(booking.remaining_amount or 0) - float(amount)
-        if remaining <= 0:
-            booking.payment_status   = Booking.PaymentStatus.FULLY_PAID
-            booking.remaining_amount = 0
-            booking.balance_paid_at  = timezone.now()
-        else:
-            booking.remaining_amount = remaining
-        booking.save()
+        # ── Update booking ───────────────────────────────────────────
+        if pay_type == "BALANCE":
+            booking.payment_status = Booking.PaymentStatus.FULLY_PAID
+            booking.balance_paid_at = timezone.now()
+            booking.remaining_amount = Decimal("0")
+            booking.save(update_fields=["payment_status", "balance_paid_at", "remaining_amount"])
 
-        cache.delete(f"receptionist_booking_{booking_id}")
-        cache.delete("receptionist_payments_all")
-        _clear_booking_cache()
+        elif pay_type in ["DEPOSIT", "ROOM_BOOKING"]:
+            booking.payment_status = Booking.PaymentStatus.DEPOSIT_PAID
+            booking.deposit_paid_at = timezone.now()
+            booking.deposit_amount = amount_decimal
+            booking.remaining_amount = booking.total_amount - amount_decimal
+            booking.save(update_fields=["payment_status", "deposit_paid_at", "deposit_amount", "remaining_amount"])
+
+        # ── Invalidate caches ────────────────────────────────────────
+        cache.delete(f"my_payments_{guest_email}")  # Use guest email for cache key
+        cache.delete(f"my_bookings_{booking.user.id}")
+        cache.delete(f"receptionist_booking_{booking.id}")
+        cache.delete("receptionist_bookings_all")
 
         logger.info(
-            "Cash payment ₱%.2f recorded for booking %s by receptionist %s",
-            float(amount), booking.booking_reference, request.user.id,
+            "Cash payment recorded: booking=%s amount=%s type=%s by receptionist=%s for guest=%s",
+            booking.booking_reference, amount, pay_type, request.user.email, guest_email,
         )
 
         return Response({
-            "message":          f"Cash payment of ₱{float(amount):.2f} recorded.",
-            "paymentId":        payment.id,
-            "bookingReference": booking.booking_reference,
-            "remainingBalance": float(booking.remaining_amount),
-            "paymentStatus":    booking.payment_status,
-        }, status=status.HTTP_201_CREATED)
-
+            "success": True,
+            "id": payment.id,
+            "message": "Cash payment recorded successfully.",
+            "booking": _booking_payload(booking),
+        })
 
 # ── Helper ────────────────────────────────────────────────────────────────────
 
@@ -998,168 +1096,125 @@ def _booking_detail(booking):
 class VerifyQRCheckInView(APIView):
     """
     POST /api/v1/receptionist/verify-qr-checkin/
-
-    Receptionist scans guest's QR code to check them in.
-
-    Expected QR data format (JSON):
-    {
-        "bookingReference": "CGH-ABC123XYZ",
-        "guestName": "John Doe",
-        "checkInDate": "2026-04-05",
-        "roomType": "DELUXE",
-        "roomNumber": "301"
-    }
-
-    Or just a plain string with the booking reference.
     """
 
     def post(self, request):
-        # Check if user is receptionist or admin
-        err = receptionist_check(request)
-        if err:
-            return err
-
-        # Get QR data from request
-        qr_data = request.data.get('qr_data')
+        qr_data = request.data.get("qr_data", "").strip()
         if not qr_data:
             return Response(
-                {"error": "QR data is required"},
-                status=status.HTTP_400_BAD_REQUEST
+                {"success": False, "error": "No QR data provided."},
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Parse QR data - could be JSON string or plain text
+        # ── Parse QR data (could be JSON or plain text) ──────────────
         booking_ref = None
-        try:
-            # Try to parse as JSON first
-            if isinstance(qr_data, str):
-                if qr_data.strip().startswith('{'):
-                    parsed = json.loads(qr_data)
-                    booking_ref = parsed.get('bookingReference')
-                else:
-                    # Plain text - assume it's the booking reference
-                    booking_ref = qr_data
-            else:
-                # Already a dict
-                booking_ref = qr_data.get('bookingReference')
-        except json.JSONDecodeError:
-            # Not JSON, use as is
+
+        # Try to parse as JSON first
+        if qr_data.startswith('{'):
+            try:
+                import json
+                parsed = json.loads(qr_data)
+                booking_ref = parsed.get('bookingReference') or parsed.get('booking_reference')
+            except json.JSONDecodeError:
+                pass
+
+        # If not JSON or no bookingReference found, use the raw string
+        if not booking_ref:
             booking_ref = qr_data
 
-        if not booking_ref:
-            return Response(
-                {"error": "Invalid QR code: No booking reference found"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+        logger.info(f"QR check-in attempt for booking_ref: {booking_ref}")
 
-        # Find the booking by reference
-        try:
-            booking = Booking.objects.select_related('room', 'user', 'guest_information').get(
-                booking_reference=booking_ref
-            )
-        except Booking.DoesNotExist:
-            return Response(
-                {"error": f"Booking {booking_ref} not found"},
-                status=status.HTTP_404_NOT_FOUND
-            )
-
-        # Check if booking can be checked in
-        today = timezone.now().date()
-        check_in_date = booking.check_in_date
-
-        # Validation checks
-        if booking.status == 'CHECKED_IN':
-            return Response({
-                "error": "Already checked in",
-                "booking": {
-                    "reference": booking.booking_reference,
-                    "guestName": booking.user.username,
-                    "status": booking.status
-                }
-            }, status=status.HTTP_400_BAD_REQUEST)
-
-        if booking.status == 'CHECKED_OUT':
-            return Response({
-                "error": "Guest has already checked out",
-                "booking": {
-                    "reference": booking.booking_reference,
-                    "status": booking.status
-                }
-            }, status=status.HTTP_400_BAD_REQUEST)
-
-        if booking.status == 'CANCELLED':
-            return Response({
-                "error": "Booking has been cancelled",
-                "booking": {
-                    "reference": booking.booking_reference,
-                    "status": booking.status
-                }
-            }, status=status.HTTP_400_BAD_REQUEST)
-
-        # Check if check-in date is today or past (allow early check-in?)
-        if check_in_date > today:
-            return Response({
-                "error": f"Check-in date is {check_in_date}, not today",
-                "booking": {
-                    "reference": booking.booking_reference,
-                    "checkInDate": str(check_in_date)
-                }
-            }, status=status.HTTP_400_BAD_REQUEST)
-
-        # For online payments, check if payment is completed
-        if hasattr(booking, 'payment_method') and booking.payment_method == 'ONLINE':
-            if booking.payment_status not in ['DEPOSIT_PAID', 'FULLY_PAID']:
-                return Response({
-                    "error": "Payment not completed yet",
-                    "booking": {
-                        "reference": booking.booking_reference,
-                        "paymentStatus": booking.payment_status
-                    }
-                }, status=status.HTTP_400_BAD_REQUEST)
-
-        # Perform the check-in using your existing logic
-        old_status = booking.status
-
-        # Update booking status
-        booking.status = 'CHECKED_IN'
-        booking.save(update_fields=["status"])
-
-        # Update room availability
-        if booking.room:
-            booking.room.available = False
-            booking.room.save(update_fields=["available"])
-
-        # Clear caches
-        _clear_booking_cache()
-        _clear_room_cache()
-        cache.delete(f"receptionist_booking_{booking.id}")
-
-        logger.info(
-            "QR Check-in: Guest %s checked in to room %s via QR scan by receptionist %s",
-            booking.user.email, booking.room.room_number, request.user.id,
+        # ── Find booking by reference ────────────────────────────────
+        # IMPORTANT: Use select_related to fetch guest_information in the same query
+        booking = (
+            Booking.objects
+            .select_related("room", "user", "guest_information")
+            .filter(booking_reference=booking_ref)
+            .first()
         )
 
-        # Return success response
+        if not booking:
+            return Response(
+                {"success": False, "error": f"Booking '{booking_ref}' not found. Please verify the QR code."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # ── Status checks ────────────────────────────────────────────
+        if booking.status == Booking.BookingStatus.CHECKED_IN:
+            return Response(
+                {"success": False, "error": "Guest is already checked in.", "booking": _booking_payload(booking)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if booking.status == Booking.BookingStatus.CHECKED_OUT:
+            return Response(
+                {"success": False, "error": "This booking has already been checked out.",
+                 "booking": _booking_payload(booking)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if booking.status not in [
+            Booking.BookingStatus.CONFIRMED,
+            Booking.BookingStatus.PENDING_DEPOSIT,
+        ]:
+            return Response(
+                {"success": False, "error": f"Booking status '{booking.status}' is not valid for check-in.",
+                 "booking": _booking_payload(booking)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # ── Date check (allow same-day or past check-in) ─────────────
+        from django.utils import timezone
+        today = timezone.localdate()
+        if booking.check_in_date > today:
+            return Response(
+                {"success": False,
+                 "error": f"Check-in date is {booking.check_in_date}. Early check-in requires manager approval.",
+                 "booking": _booking_payload(booking)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # ── PAYMENT GATE ─────────────────────────────────────────────
+        if not _booking_is_fully_paid(booking):
+            logger.info(
+                "Check-in blocked for booking %s — balance owed: %s",
+                booking.booking_reference,
+                booking.remaining_amount,
+            )
+            return Response(
+                {
+                    "success": False,
+                    "payment_required": True,
+                    "booking": _booking_payload(booking),
+                    "message": f"Guest has an outstanding balance of ₱{float(booking.remaining_amount or 0):,.2f}. Please collect payment before checking in.",
+                },
+                status=status.HTTP_402_PAYMENT_REQUIRED,
+            )
+
+        # ── Perform check-in ─────────────────────────────────────────
+        booking.status = Booking.BookingStatus.CHECKED_IN
+        booking.save(update_fields=["status"])
+
+        # Update room status if room exists
+        if booking.room:
+            booking.room.status = "OCCUPIED"
+            booking.room.save(update_fields=["status"])
+
+        # Clear caches
+        from django.core.cache import cache
+        cache.delete(f"receptionist_booking_{booking.id}")
+        cache.delete("receptionist_bookings_all")
+        _clear_booking_cache()
+        _clear_room_cache()
+
+        logger.info("QR check-in successful: %s", booking.booking_reference)
+
         return Response({
             "success": True,
-            "message": f"{booking.user.username} checked in successfully",
-            "booking": {
-                "id": booking.id,
-                "reference": booking.booking_reference,
-                "guestName": booking.user.username,
-                "guestEmail": booking.user.email,
-                "roomType": booking.room.room_type if booking.room else None,
-                "roomNumber": booking.room.room_number if booking.room else None,
-                "checkInDate": str(booking.check_in_date),
-                "checkOutDate": str(booking.check_out_date),
-                "status": booking.status,
-                "remainingAmount": float(booking.remaining_amount or 0),
-                "depositAmount": float(booking.deposit_amount or 0),
-                "totalAmount": float(booking.total_amount or 0)
-            }
+            "message": f"Check-in successful! Welcome, {_booking_payload(booking)['guestName']}.",
+            "booking": _booking_payload(booking),
         })
 
-
-# apps/receptionist/views.py - Updated VerifyQRCheckOutView
 # apps/receptionist/views.py - Complete VerifyQRCheckOutView and ProcessQRCheckOutView
 
 class VerifyQRCheckOutView(APIView):
@@ -1516,4 +1571,32 @@ class ProcessQRCheckOutView(APIView):
             "early_checkout": check_out_date > today if check_out_date else False,
             "late_checkout": check_out_date < today if check_out_date else False,
             "days_difference": days_difference
+        })
+
+
+class PaymentStatusView(APIView):
+    """
+    GET /api/v1/payments/status/<payment_id>/
+
+    Returns the current status of a payment record.
+    Frontend polls this every 3 s to detect when online payment is confirmed.
+
+    Response:
+        { "id": 1, "status": "PAID" | "PENDING" | "FAILED", "bookingId": 42 }
+    """
+
+    def get(self, request, pk):
+        try:
+            payment = Payment.objects.get(pk=pk)
+        except Payment.DoesNotExist:
+            return Response(
+                {"error": "Payment not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        return Response({
+            "id": payment.id,
+            "status": payment.status,
+            "bookingId": payment.booking_id,
+            "paidAt": payment.paid_at.isoformat() if payment.paid_at else None,
         })

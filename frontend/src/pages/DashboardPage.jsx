@@ -348,6 +348,9 @@ function RatingStars({ rating, onRate, size = 16, permanent = false }) {
 }
 
 function FeedbackItem({ feedback, showBookingInfo = false }) {
+  // Get rating from overall_rating field
+  const rating = feedback.overall_rating || feedback.rating || 0;
+  
   return (
     <div className={`feedback-card ${feedback.highlighted ? 'feedback-highlight' : ''}`}>
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:'8px' }}>
@@ -366,7 +369,7 @@ function FeedbackItem({ feedback, showBookingInfo = false }) {
             </div>
           </div>
         </div>
-        <RatingStars rating={feedback.rating} size={14} permanent />
+        <RatingStars rating={Number(rating)} size={14} permanent />
       </div>
       {feedback.comment && (
         <p style={{ fontSize:'.8rem', color:'var(--text-sub)', margin:'8px 0 0 0', lineHeight:1.5 }}>
@@ -445,20 +448,35 @@ export function DashboardPage({ user, token, t, setPage }) {
     .filter(b => b.status !== 'CANCELLED')
     .reduce((s, b) => s + Math.floor((b.totalAmount || 0) / 100) * 10, 0);
 
-  // Calculate average rating from feedback
-  const avgRating = feedbackList.length > 0
-    ? (feedbackList.reduce((sum, f) => sum + f.rating, 0) / feedbackList.length).toFixed(1)
-    : 0;
-
+  // Calculate average rating from feedback - with safety checks
+  const avgRating = (() => {
+    if (!feedbackList || feedbackList.length === 0) return '0.0';
+    
+    let total = 0;
+    let validCount = 0;
+    
+    feedbackList.forEach(f => {
+      // Use overall_rating from backend, not rating
+      const rating = Number(f.overall_rating) || Number(f.rating) || 0;
+      if (!isNaN(rating) && rating > 0) {
+        total += rating;
+        validCount++;
+      }
+    });
+    
+    if (validCount === 0) return '0.0';
+    return (total / validCount).toFixed(1);
+  })();
+  
   const statusCounts = { COMPLETED:0, CONFIRMED:0, PENDING:0, CANCELLED:0 };
   bookings.forEach(b => { if (statusCounts[b.status] !== undefined) statusCounts[b.status]++; });
 
   const statCards = [
-    { Icon: Hotel,        label:'Total Bookings',  value: bookings.length,               color:'gold'   },
-    { Icon: CheckCircle2, label:'Completed Stays', value: completed,                     color:'green'  },
-    { Icon: DollarSign,   label:'Net Spent',       value: fmt(netSpentFinal),            color:'blue'   },
-    { Icon: Star,         label:'Avg Rating',      value: feedbackList.length > 0 ? `${avgRating} ★` : '—', color:'purple' },
-  ];
+  { Icon: Hotel,        label:'Total Bookings',  value: bookings.length,               color:'gold'   },
+  { Icon: CheckCircle2, label:'Completed Stays', value: completed,                     color:'green'  },
+  { Icon: DollarSign,   label:'Net Spent',       value: fmt(netSpentFinal),            color:'blue'   },
+  { Icon: Star,         label:'Avg Rating',      value: feedbackList.length > 0 ? `${avgRating} ★` : '—', color:'purple' },
+];
 
   const quickActions = [
     { Icon: BedDouble,  label:'Book a Room',    sub:'Check availability',     act: () => setPage('bookings') },
@@ -810,11 +828,11 @@ export function DashboardPage({ user, token, t, setPage }) {
                 </span>
               </div>
               {feedbackList.length > 0 && (
-                <div className="db-panel-sub">
-                  <RatingStars rating={parseFloat(avgRating)} size={12} permanent />
-                  <span style={{ marginLeft:'6px' }}>({feedbackList.length})</span>
-                </div>
-              )}
+  <div className="db-panel-sub">
+    <RatingStars rating={parseFloat(avgRating)} size={12} permanent />
+    <span style={{ marginLeft:'6px' }}>({feedbackList.length})</span>
+  </div>
+)}
             </div>
             <div className="db-panel-body">
               {loading ? (

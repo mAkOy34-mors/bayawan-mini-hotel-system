@@ -177,7 +177,7 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:5173",
     "http://127.0.0.1:3000",
-    "https://yamaha-milk-balanced-coaching.trycloudflare.com ",
+    "https://treasure-beneath-address-delicious.trycloudflare.com ",
 ]
 
 CORS_ALLOW_ALL_ORIGINS = True   # ← allows all origins including ngrok

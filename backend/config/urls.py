@@ -11,7 +11,7 @@ from drf_spectacular.views import (
 )
 from django.conf import settings
 from django.conf.urls.static import static
-
+from apps.services import third_party_views
 # ── OpenAPI schema endpoints ──────────────────────────────────────────────────
 schema_patterns = [
     path("schema/", SpectacularAPIView.as_view(), name="schema"),
@@ -39,6 +39,7 @@ api_v1_patterns = [
     path("complaints/", include("apps.complaints.urls")),
     path('services/', include('apps.services.urls')),
     path('feedback/', include('apps.feedback.urls')),
+
     *schema_patterns,
 ]
 

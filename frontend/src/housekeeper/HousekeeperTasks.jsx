@@ -1,68 +1,83 @@
 // housekeeper/HousekeeperTasks.jsx
 import { useState, useEffect } from 'react';
 import { 
-  getMyTasks,           // Housekeeper endpoint
+  getMyTasks,           // Housekeeper cleaning tasks
   updateTaskStatus, 
   getTaskChecklist, 
   updateChecklistItem,
   getMyStats,
-  getStaffTasks,        // NEW: Staff endpoint
-  updateStaffTaskStatus, // NEW: Staff endpoint
-  getStaffStats         // NEW: Staff endpoint
+  getStaffTasks,        // Staff tasks
+  updateStaffTaskStatus,
+  getStaffStats,
+  getMyServiceRequests, // ← NEW: Service requests
+  updateServiceRequestStatus // ← NEW: Update service request status
 } from './housekeeperService';
 import { 
   Clock, PlayCircle, CheckCircle, AlertTriangle, RefreshCw, 
   ChevronDown, ChevronUp, MessageCircle, Sparkles, Wrench, 
   Package, Users, Heart, BedDouble, Calendar, TrendingUp,
-  Briefcase, Hotel
+  Briefcase, Hotel, Coffee, Tv, Shirt, Bath, ClipboardList,XCircle
 } from 'lucide-react';
 
 export function HousekeeperTasks({ token }) {
   const [housekeeperTasks, setHousekeeperTasks] = useState([]);
   const [staffTasks, setStaffTasks] = useState([]);
+  const [serviceRequests, setServiceRequests] = useState([]);
   const [allTasks, setAllTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
   const [expandedTask, setExpandedTask] = useState(null);
   const [checklist, setChecklist] = useState({});
   const [updating, setUpdating] = useState(false);
-  const [taskSource, setTaskSource] = useState('all'); // 'all', 'housekeeper', 'staff'
+  const [taskSource, setTaskSource] = useState('all'); // 'all', 'housekeeper', 'staff', 'service'
   const [stats, setStats] = useState({ 
     pending: 0, 
     in_progress: 0, 
     completed: 0,
     total: 0,
     housekeeperCount: 0,
-    staffCount: 0
+    staffCount: 0,
+    serviceCount: 0
   });
 
-  // Fetch from both endpoints
+  // Fetch from all endpoints
   const loadTasks = async () => {
     setLoading(true);
     try {
-      // Fetch from Housekeeper endpoint
+      // Fetch from Housekeeper endpoint (cleaning tasks)
       const housekeeperData = await getMyTasks(token);
       const housekeeperList = Array.isArray(housekeeperData) ? housekeeperData : (housekeeperData.tasks || []);
-      setHousekeeperTasks(housekeeperList);
+      setHousekeeperTasks(housekeeperList.map(task => ({ ...task, source: 'housekeeper' })));
       
       // Fetch from Staff endpoint (tasks assigned to this housekeeper)
       const staffData = await getStaffTasks(token);
       const staffList = Array.isArray(staffData) ? staffData : (staffData.tasks || []);
-      setStaffTasks(staffList);
+      setStaffTasks(staffList.map(task => ({ ...task, source: 'staff' })));
       
-      // Combine both lists (remove duplicates by ID)
-      const combinedMap = new Map();
-      housekeeperList.forEach(task => combinedMap.set(task.id, { ...task, source: 'housekeeper' }));
-      staffList.forEach(task => {
-        if (!combinedMap.has(task.id)) {
-          combinedMap.set(task.id, { ...task, source: 'staff' });
+      // ← NEW: Fetch service requests assigned to this housekeeper
+      const serviceData = await getMyServiceRequests(token);
+      setServiceRequests(serviceData.map(req => ({ ...req, source: 'service' })));
+      
+      // Combine all lists
+      const allItems = [
+        ...housekeeperList.map(task => ({ ...task, source: 'housekeeper' })),
+        ...staffList.map(task => ({ ...task, source: 'staff' })),
+        ...serviceData.map(req => ({ ...req, source: 'service' }))
+      ];
+      
+      // Remove duplicates by ID (if any)
+      const uniqueMap = new Map();
+      allItems.forEach(item => {
+        if (!uniqueMap.has(item.id)) {
+          uniqueMap.set(item.id, item);
         }
       });
-      const combined = Array.from(combinedMap.values());
+      const combined = Array.from(uniqueMap.values());
       setAllTasks(combined);
       
       console.log('Housekeeper tasks:', housekeeperList.length);
       console.log('Staff tasks:', staffList.length);
+      console.log('Service requests:', serviceData.length);
       console.log('Combined tasks:', combined.length);
       
       // Calculate stats
@@ -72,7 +87,8 @@ export function HousekeeperTasks({ token }) {
         completed: combined.filter(t => t.status === 'COMPLETED').length,
         total: combined.length,
         housekeeperCount: housekeeperList.length,
-        staffCount: staffList.length
+        staffCount: staffList.length,
+        serviceCount: serviceData.length
       });
       
     } catch (err) {
@@ -99,6 +115,8 @@ export function HousekeeperTasks({ token }) {
       // Use the appropriate update function based on task source
       if (task.source === 'staff') {
         await updateStaffTaskStatus(token, task.id, newStatus);
+      } else if (task.source === 'service') {
+        await updateServiceRequestStatus(token, task.id, newStatus);
       } else {
         await updateTaskStatus(token, task.id, newStatus);
       }
@@ -146,6 +164,8 @@ export function HousekeeperTasks({ token }) {
     displayedTasks = housekeeperTasks;
   } else if (taskSource === 'staff') {
     displayedTasks = staffTasks;
+  } else if (taskSource === 'service') {
+    displayedTasks = serviceRequests;
   } else {
     displayedTasks = allTasks;
   }
@@ -154,7 +174,22 @@ export function HousekeeperTasks({ token }) {
     ? displayedTasks 
     : displayedTasks.filter(t => t.status === filter);
 
-  const getTaskIcon = (taskType) => {
+  const getTaskIcon = (taskType, source) => {
+    // For service requests, show appropriate icon based on service type
+    if (source === 'service') {
+      switch (taskType?.toUpperCase()) {
+        case 'CLEANING': return <Sparkles size={14} />;
+        case 'MAINTENANCE': return <Wrench size={14} />;
+        case 'LAUNDRY': return <Shirt size={14} />;
+        case 'DELIVERY': return <Package size={14} />;
+        case 'EXTRA_PILLOWS': return <BedDouble size={14} />;
+        case 'EXTRA_TOWELS': return <Bath size={14} />;
+        case 'MINI_BAR': return <Coffee size={14} />;
+        case 'TECH_SUPPORT': return <Tv size={14} />;
+        default: return <ClipboardList size={14} />;
+      }
+    }
+    
     switch (taskType?.toUpperCase()) {
       case 'CLEANING':
       case 'HOUSEKEEPING':
@@ -174,6 +209,7 @@ export function HousekeeperTasks({ token }) {
 
   const getPriorityColor = (priority) => {
     switch (priority?.toUpperCase()) {
+      case 'URGENT': return '#dc2626';
       case 'HIGH': return '#dc2626';
       case 'MEDIUM': return '#f59e0b';
       default: return '#10b981';
@@ -185,6 +221,7 @@ export function HousekeeperTasks({ token }) {
       PENDING: { icon: <Clock size={12} />, color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.1)', label: 'Pending' },
       IN_PROGRESS: { icon: <PlayCircle size={12} />, color: '#3b82f6', bg: 'rgba(59, 130, 246, 0.1)', label: 'In Progress' },
       COMPLETED: { icon: <CheckCircle size={12} />, color: '#10b981', bg: 'rgba(16, 185, 129, 0.1)', label: 'Completed' },
+      CANCELLED: { icon: <XCircle size={12} />, color: '#ef4444', bg: 'rgba(239, 68, 68, 0.1)', label: 'Cancelled' },
     };
     return config[status] || config.PENDING;
   };
@@ -198,12 +235,35 @@ export function HousekeeperTasks({ token }) {
         bg: 'rgba(59, 130, 246, 0.1)' 
       };
     }
+    if (source === 'service') {
+      return { 
+        icon: <ClipboardList size={10} />, 
+        label: 'Service Request', 
+        color: '#8b5cf6', 
+        bg: 'rgba(139, 92, 246, 0.1)' 
+      };
+    }
     return { 
       icon: <Hotel size={10} />, 
       label: 'Housekeeping', 
       color: '#10b981', 
       bg: 'rgba(16, 185, 129, 0.1)' 
     };
+  };
+
+  const getServiceTypeLabel = (serviceType) => {
+    const labels = {
+      'CLEANING': 'Cleaning',
+      'MAINTENANCE': 'Maintenance',
+      'LAUNDRY': 'Laundry',
+      'DELIVERY': 'Delivery',
+      'EXTRA_PILLOWS': 'Extra Pillows',
+      'EXTRA_TOWELS': 'Extra Towels',
+      'MINI_BAR': 'Mini Bar',
+      'TECH_SUPPORT': 'Tech Support',
+      'OTHER': 'Other',
+    };
+    return labels[serviceType] || serviceType;
   };
 
   const formatDate = (dateString) => {
@@ -220,14 +280,14 @@ export function HousekeeperTasks({ token }) {
           My Tasks
         </h1>
         <p style={{ fontSize: '0.8rem', color: '#8a96a8', margin: 0 }}>
-          Tasks from Housekeeping and Staff assignments
+          Tasks from Housekeeping, Staff, and Service Requests
         </p>
       </div>
 
       {/* Stats Cards */}
       <div style={{ 
         display: 'grid', 
-        gridTemplateColumns: 'repeat(5, 1fr)', 
+        gridTemplateColumns: 'repeat(6, 1fr)', 
         gap: '1rem', 
         marginBottom: '1.5rem'
       }}>
@@ -248,10 +308,12 @@ export function HousekeeperTasks({ token }) {
           <div style={{ fontSize: '1.6rem', fontWeight: 700, color: '#10b981' }}>{stats.completed}</div>
         </div>
         <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: '0.85rem', textAlign: 'center' }}>
-          <div style={{ fontSize: '0.6rem', color: '#8a96a8', marginBottom: '0.2rem' }}>SOURCES</div>
-          <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#3b82f6' }}>
-            H: {stats.housekeeperCount} | S: {stats.staffCount}
-          </div>
+          <div style={{ fontSize: '0.6rem', color: '#8a96a8', marginBottom: '0.2rem' }}>HOUSEKEEPING</div>
+          <div style={{ fontSize: '1.2rem', fontWeight: 700, color: '#10b981' }}>{stats.housekeeperCount}</div>
+        </div>
+        <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: '0.85rem', textAlign: 'center' }}>
+          <div style={{ fontSize: '0.6rem', color: '#8a96a8', marginBottom: '0.2rem' }}>SERVICES</div>
+          <div style={{ fontSize: '1.2rem', fontWeight: 700, color: '#8b5cf6' }}>{stats.serviceCount}</div>
         </div>
       </div>
 
@@ -261,7 +323,8 @@ export function HousekeeperTasks({ token }) {
         {[
           { key: 'all', label: 'All Tasks', icon: null },
           { key: 'housekeeper', label: 'Housekeeping', icon: <Hotel size={12} /> },
-          { key: 'staff', label: 'Staff Tasks', icon: <Briefcase size={12} /> }
+          { key: 'staff', label: 'Staff Tasks', icon: <Briefcase size={12} /> },
+          { key: 'service', label: 'Service Requests', icon: <ClipboardList size={12} /> }
         ].map(s => (
           <button
             key={s.key}
@@ -329,9 +392,10 @@ export function HousekeeperTasks({ token }) {
           const statusBadge = getStatusBadge(task.status);
           const sourceBadge = getSourceBadge(task.source);
           const isCompleted = task.status === 'COMPLETED';
+          const isService = task.source === 'service';
           
           return (
-            <div key={task.id} style={{ 
+            <div key={`${task.source}-${task.id}`} style={{ 
               background: '#fff', 
               border: `1px solid ${isCompleted ? '#10b981' : '#e2e8f0'}`, 
               borderRadius: 14, 
@@ -346,13 +410,13 @@ export function HousekeeperTasks({ token }) {
                       width: 36,
                       height: 36,
                       borderRadius: 10,
-                      background: 'rgba(16,185,129,0.1)',
+                      background: isService ? 'rgba(139,92,246,0.1)' : 'rgba(16,185,129,0.1)',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      color: '#10b981'
+                      color: isService ? '#8b5cf6' : '#10b981'
                     }}>
-                      {getTaskIcon(task.task_type)}
+                      {getTaskIcon(task.task_type || task.service_type, task.source)}
                     </div>
                     <div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
@@ -387,6 +451,20 @@ export function HousekeeperTasks({ token }) {
                           {task.priority} PRIORITY
                         </span>
                       )}
+                      {isService && task.service_type && (
+                        <span style={{ 
+                          fontSize: '0.65rem', 
+                          padding: '0.2rem 0.5rem', 
+                          borderRadius: 99, 
+                          background: 'rgba(139,92,246,0.1)', 
+                          color: '#8b5cf6', 
+                          fontWeight: 600, 
+                          display: 'inline-block',
+                          marginLeft: '0.5rem'
+                        }}>
+                          {getServiceTypeLabel(task.service_type)}
+                        </span>
+                      )}
                     </div>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -415,7 +493,28 @@ export function HousekeeperTasks({ token }) {
                 </div>
 
                 <div style={{ fontWeight: 700, fontSize: '1rem', marginBottom: '0.25rem', color: '#1a1f2e' }}>{task.title}</div>
-                <div style={{ fontSize: '0.85rem', color: '#4a5568', marginBottom: '0.75rem', lineHeight: 1.5 }}>{task.description}</div>
+                <div style={{ fontSize: '0.85rem', color: '#4a5568', marginBottom: '0.75rem', lineHeight: 1.5 }}>
+                  {task.description}
+                  {isService && task.service_charge > 0 && (
+                    <div style={{ marginTop: '0.5rem', fontSize: '0.7rem', color: '#f59e0b' }}>
+                      💰 Service Charge: ₱{task.service_charge.toLocaleString()}
+                    </div>
+                  )}
+                </div>
+
+                {task.guest_name && (
+                  <div style={{ 
+                    background: 'rgba(201,168,76,0.08)', 
+                    borderRadius: 8, 
+                    padding: '0.5rem 0.75rem', 
+                    marginBottom: '0.75rem', 
+                    fontSize: '0.75rem',
+                    borderLeft: '3px solid #C9A84C'
+                  }}>
+                    <div style={{ fontWeight: 600, marginBottom: '0.2rem' }}>Guest Request</div>
+                    <div style={{ color: '#4a5568' }}>{task.guest_name} (Room {task.room_number})</div>
+                  </div>
+                )}
 
                 {task.created_at && (
                   <div style={{ fontSize: '0.7rem', color: '#8a96a8', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
@@ -456,8 +555,8 @@ export function HousekeeperTasks({ token }) {
                   )}
                 </div>
 
-                {/* Expanded Section */}
-                {expandedTask === task.id && !isCompleted && checklist[task.id] && checklist[task.id].length > 0 && (
+                {/* Expanded Section - Checklist (only for cleaning tasks) */}
+                {expandedTask === task.id && !isCompleted && !isService && checklist[task.id] && checklist[task.id].length > 0 && (
                   <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid #e2e8f0' }}>
                     <div style={{ fontSize: '0.75rem', fontWeight: 600, marginBottom: '0.5rem', color: '#4a5568', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
                       <Sparkles size={12} /> Task Checklist

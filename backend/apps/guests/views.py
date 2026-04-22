@@ -14,8 +14,8 @@ from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import GuestInformation
-from .serializers import GuestInformationSerializer
+from .models import GuestInformation, GuestProfilePicture
+from .serializers import GuestInformationSerializer, ProfilePictureSerializer
 
 logger = logging.getLogger(__name__)
 
@@ -91,3 +91,24 @@ class CompleteProfileView(APIView):
 
         logger.info("Guest profile updated for user %s", request.user.id)
         return Response(data)
+
+class ProfilePictureView(APIView):
+    """GET / POST (upsert) the user's profile picture."""
+
+    def get(self, request):
+        try:
+            pic = GuestProfilePicture.objects.get(user=request.user)
+            return Response(ProfilePictureSerializer(pic).data)
+        except GuestProfilePicture.DoesNotExist:
+            return Response(None, status=status.HTTP_404_NOT_FOUND)
+
+    def post(self, request):
+        image_base64 = request.data.get("imageBase64")
+        if not image_base64:
+            return Response({"error": "imageBase64 is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        pic, _ = GuestProfilePicture.objects.update_or_create(
+            user=request.user,
+            defaults={"image_base64": image_base64},
+        )
+        return Response(ProfilePictureSerializer(pic).data)

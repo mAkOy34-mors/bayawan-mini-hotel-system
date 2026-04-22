@@ -179,8 +179,6 @@ class VerifyOtpView(APIView):
         # Activate user account after verification
         try:
             user = User.objects.get(email=d["email"])
-            user.is_active = True
-            user.save(update_fields=["is_active"])
         except User.DoesNotExist:
             pass
 

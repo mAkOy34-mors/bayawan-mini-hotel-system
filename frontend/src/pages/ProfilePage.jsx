@@ -42,16 +42,13 @@ const css = `
   }
   @media(max-width:768px){ .pf-root { padding:1.25rem 1rem; } }
 
-  /* ── Page header ── */
   .pf-hd { margin-bottom:1.6rem; animation:fadeUp .4s cubic-bezier(.22,1,.36,1) both; }
   .pf-title { font-family:'Cormorant Garamond',serif; font-size:1.9rem; font-weight:600; color:var(--text); margin:0 0 .18rem; }
   .pf-sub   { font-size:.82rem; color:var(--text-muted); }
 
-  /* ── Grid ── */
   .pf-grid { display:grid; grid-template-columns:272px 1fr; gap:1.1rem; }
   @media(max-width:1024px){ .pf-grid { grid-template-columns:1fr; } }
 
-  /* ── Panel — same as BookingPage's .bp-search-panel ── */
   .pf-panel {
     background:var(--surface); border:1px solid var(--border); border-radius:14px;
     overflow:hidden; box-shadow:0 1px 6px rgba(0,0,0,.05); animation:fadeUp .45s cubic-bezier(.22,1,.36,1) both;
@@ -64,23 +61,44 @@ const css = `
   .pf-panel-sub   { font-size:.72rem; color:var(--text-muted); margin-top:.08rem; }
   .pf-panel-body  { padding:1.25rem; }
 
-  /* ── Left card ── */
+  /* ── Avatar ── */
   .pf-avatar {
     width:76px; height:76px; border-radius:16px; margin:0 auto .9rem;
     background:linear-gradient(135deg,#9a7a2e,#C9A84C);
     display:flex; align-items:center; justify-content:center;
     font-family:'Cormorant Garamond',serif; font-size:1.8rem; font-weight:600; color:#fff;
     box-shadow:0 4px 14px rgba(201,168,76,0.28); position:relative;
+    transition:box-shadow .2s;
+  }
+  .pf-avatar.editable { cursor:pointer; }
+  .pf-avatar.editable:hover { box-shadow:0 6px 20px rgba(201,168,76,0.42); }
+
+  /* ALL children must never capture pointer events so parent onClick always fires */
+  .pf-avatar * { pointer-events:none; }
+
+  .pf-avatar-img {
+    width:100%; height:100%; object-fit:cover; border-radius:14px; display:block;
+  }
+  .pf-avatar-overlay {
+    position:absolute; inset:0; border-radius:14px;
+    background:rgba(0,0,0,0.38);
+    display:flex; align-items:center; justify-content:center;
+    font-size:1.3rem; opacity:0; transition:opacity .18s;
+  }
+  .pf-avatar.editable:hover .pf-avatar-overlay { opacity:1; }
+  .pf-avatar-hint {
+    font-size:.62rem; color:var(--text-muted); text-align:center;
+    margin-top:-.5rem; margin-bottom:.75rem; letter-spacing:.03em;
   }
   .pf-avatar-badge {
     position:absolute; bottom:-4px; right:-4px; width:22px; height:22px; border-radius:6px;
     background:var(--green); border:2px solid var(--surface);
     display:flex; align-items:center; justify-content:center; font-size:.6rem; color:#fff;
   }
+
   .pf-name  { font-family:'Cormorant Garamond',serif; font-size:1.2rem; font-weight:600; color:var(--text); text-align:center; margin-bottom:.18rem; }
   .pf-email { font-size:.74rem; color:var(--text-muted); text-align:center; margin-bottom:1.1rem; }
 
-  /* Completion bar — matching bp-status-box style */
   .pf-comp { margin-bottom:.95rem; }
   .pf-comp-row { display:flex; justify-content:space-between; margin-bottom:.38rem; }
   .pf-comp-lbl { font-size:.73rem; font-weight:600; color:var(--text-sub); }
@@ -96,7 +114,6 @@ const css = `
   .pf-info-val { font-size:.81rem; color:var(--text-sub); font-weight:500; }
   .pf-info-val.green { color:var(--green); }
 
-  /* Verify button — matching bp-book-btn (available state) */
   .pf-verify-btn {
     width:100%; margin-top:.85rem; padding:.62rem 1rem; border-radius:8px;
     border:1.5px solid rgba(201,168,76,0.35); background:var(--gold-bg);
@@ -119,7 +136,6 @@ const css = `
   }
   .pf-delete-btn:hover { background:rgba(220,53,69,0.1); border-color:rgba(220,53,69,0.35); }
 
-  /* ── Form controls — matches BookingPage .bp-input / .bp-select ── */
   .pf-edit-btn {
     padding:.38rem .88rem; border-radius:8px; border:1.5px solid var(--border);
     background:#fff; color:var(--text-sub); font-size:.75rem;
@@ -184,13 +200,11 @@ const css = `
   .pf-save-btn:disabled { opacity:.5; cursor:not-allowed; }
   .pf-spin { width:14px; height:14px; border:2px solid rgba(255,255,255,.3); border-top-color:#fff; border-radius:50%; animation:spin .7s linear infinite; }
 
-  /* ── Verification modal ── */
   .pf-modal .modal-content { background:#fff; border:1px solid var(--border); border-radius:16px; box-shadow:0 20px 60px rgba(0,0,0,.15); }
   .pf-modal .modal-header  { background:var(--surface2); border-bottom:1px solid var(--border); padding:1.1rem 1.45rem; }
   .pf-modal .modal-body    { background:#fff; padding:1.5rem; }
   .pf-modal .modal-title   { font-family:'Cormorant Garamond',serif; font-size:1.1rem; color:var(--text); font-weight:600; }
 
-  /* Steps */
   .vrf-steps { display:flex; align-items:center; justify-content:center; margin-bottom:.45rem; }
   .vrf-dot {
     width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center;
@@ -203,7 +217,6 @@ const css = `
   .vrf-lbl { width:78px; text-align:center; font-size:.66rem; letter-spacing:.04em; color:var(--text-muted); }
   .vrf-lbl.active { color:var(--gold-dark); font-weight:700; }
 
-  /* Scan viewport — matching bp-room-img style */
   .vrf-viewport {
     border-radius:10px; overflow:hidden; position:relative; background:var(--surface2);
     min-height:240px; display:flex; align-items:center; justify-content:center;
@@ -225,22 +238,18 @@ const css = `
     background:#fff; color:var(--text-sub); transition:all .18s;
   }
   .vrf-btn-ghost:hover { border-color:var(--gold); color:var(--gold-dark); }
-
   .vrf-overlay { position:absolute; inset:0; background:rgba(0,0,0,0.3); z-index:2; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; padding-bottom:.75rem; }
   .vrf-scan-line { position:absolute; width:100%; height:2px; background:linear-gradient(to right,transparent,#C9A84C,transparent); animation:scanLine 1.8s ease-in-out infinite; }
   .vrf-status-pill { background:rgba(255,255,255,0.92); color:var(--gold-dark); padding:.3rem .85rem; border-radius:99px; font-size:.72rem; font-weight:600; z-index:3; border:1px solid rgba(201,168,76,0.2); display:flex; align-items:center; gap:.4rem; }
   .vrf-pulse { width:6px; height:6px; border-radius:50%; background:var(--gold-dark); animation:pulse 1s ease-in-out infinite; }
   .vrf-cam-err { font-size:.74rem; color:var(--orange,#f59e0b); background:rgba(245,158,11,0.08); border:1px solid rgba(245,158,11,0.2); padding:.45rem .75rem; border-radius:8px; margin-bottom:.65rem; text-align:center; }
-
   .vrf-captured { text-align:center; padding:1rem; }
   .vrf-captured img { border:2px solid var(--green); border-radius:9px; max-height:180px; max-width:100%; object-fit:cover; }
   .vrf-check { position:absolute; top:-8px; right:-8px; width:24px; height:24px; border-radius:50%; background:var(--green); border:2px solid #fff; display:flex; align-items:center; justify-content:center; font-size:.65rem; color:#fff; animation:checkPop .4s both; }
   .vrf-retake { margin-top:.6rem; padding:.36rem .8rem; border-radius:7px; border:1px solid var(--border); background:#fff; color:var(--text-muted); font-size:.74rem; font-family:'DM Sans',sans-serif; cursor:pointer; transition:all .18s; }
   .vrf-retake:hover { border-color:var(--gold); color:var(--gold-dark); }
-
   .vrf-heading { font-family:'Cormorant Garamond',serif; font-size:1.35rem; font-weight:600; color:var(--text); text-align:center; margin-bottom:.28rem; }
   .vrf-desc    { font-size:.79rem; color:var(--text-muted); text-align:center; margin-bottom:1.25rem; line-height:1.6; }
-
   .vrf-next-btn {
     display:block; width:100%; max-width:230px; margin:.65rem auto 0; padding:.68rem 1rem;
     border:none; border-radius:8px; font-size:.875rem; font-family:'DM Sans',sans-serif;
@@ -249,14 +258,12 @@ const css = `
   }
   .vrf-next-btn:hover:not(:disabled) { background:linear-gradient(135deg,#b09038,#dfc06e); }
   .vrf-next-btn:disabled { opacity:.4; cursor:not-allowed; }
-
   .vrf-thumbs { display:flex; justify-content:center; gap:1rem; margin:1rem 0; }
   .vrf-thumb-id   { border:2px solid var(--gold); border-radius:9px; width:105px; height:70px; object-fit:cover; }
   .vrf-thumb-face { border:2px solid var(--green); border-radius:50%; width:68px; height:68px; object-fit:cover; }
   .vrf-thumb-lbl  { font-size:.67rem; color:var(--text-muted); text-align:center; margin-top:.3rem; }
   .vrf-success-box { padding:.65rem 1rem; border-radius:8px; background:var(--green-bg); border:1px solid rgba(45,155,111,0.22); color:var(--green); font-size:.8rem; text-align:center; margin-bottom:1rem; }
 
-  /* Delete modal */
   .del-modal .modal-content { background:#fff; border:1px solid rgba(220,53,69,0.2); border-radius:14px; }
   .del-modal .modal-header  { background:var(--surface2); border-bottom:1px solid var(--border); padding:1rem 1.3rem; }
   .del-modal .modal-body    { background:#fff; padding:1.3rem; }
@@ -329,30 +336,34 @@ function ScanView({ type, videoRef, canvasRef, active, scanStatus, captured, cam
   );
 }
 
-export function ProfilePage({ user, token }) {
-  const [profile, setProfile] = useState({
+export function ProfilePage({ user, token, onProfileSave, initialProfile = null }) {
+  // Seed state from initialProfile passed by App.jsx — no fetch needed on mount
+  const [profile, setProfile] = useState(() => initialProfile || {
     firstName:'', lastName:'', gender:'', dateOfBirth:'',
     nationality:'', contactNumber:'', homeAddress:'',
     idType:'', idNumber:'', passportNumber:'', visaType:'', visaExpiryDate:'',
+    profilePicture: null,
   });
-  const [editing, setEditing] = useState(false);
-  const [saving,  setSaving]  = useState(false);
-  const { alert, showAlert }  = useAlert();
+  const [editing, setEditing]   = useState(false);
+  const [saving,  setSaving]    = useState(false);
+  const { alert, showAlert }    = useAlert();
 
-  const [showVerif, setShowVerif]   = useState(false);
-  const [verifStep, setVerifStep]   = useState(1);
-  const [idImg,  setIdImg]          = useState(null);
-  const [faceImg,setFaceImg]        = useState(null);
-  const [verified,setVerified]      = useState(false);
+  // ── Profile picture — seed from initialProfile if available ──
+  const [profilePic, setProfilePic] = useState(initialProfile?.profilePicture || null);
+  const picInputRef = useRef(null);
 
-  const [idCamActive,   setIdCamActive]   = useState(false);
-  const [idScanStatus,  setIdScanStatus]  = useState('');
-  const [idCamErr,      setIdCamErr]      = useState(null);
-  const [faceCamActive, setFaceCamActive] = useState(false);
-  const [faceScanStatus,setFaceScanStatus]= useState('');
-  const [faceCamErr,    setFaceCamErr]    = useState(null);
-
-  const [showDelete, setShowDelete] = useState(false);
+  const [showVerif,      setShowVerif]      = useState(false);
+  const [verifStep,      setVerifStep]      = useState(1);
+  const [idImg,          setIdImg]          = useState(null);
+  const [faceImg,        setFaceImg]        = useState(null);
+  const [verified,       setVerified]       = useState(false);
+  const [idCamActive,    setIdCamActive]    = useState(false);
+  const [idScanStatus,   setIdScanStatus]   = useState('');
+  const [idCamErr,       setIdCamErr]       = useState(null);
+  const [faceCamActive,  setFaceCamActive]  = useState(false);
+  const [faceScanStatus, setFaceScanStatus] = useState('');
+  const [faceCamErr,     setFaceCamErr]     = useState(null);
+  const [showDelete,     setShowDelete]     = useState(false);
 
   const idVideoRef   = useRef(null); const idCanvasRef   = useRef(null); const idStreamRef   = useRef(null);
   const faceVideoRef = useRef(null); const faceCanvasRef = useRef(null); const faceStreamRef = useRef(null);
@@ -363,8 +374,17 @@ export function ProfilePage({ user, token }) {
   useEffect(()=>()=>{ stopId(); stopFace(); },[stopId,stopFace]);
   useEffect(()=>{ if(!showVerif){ stopId(); stopFace(); } },[showVerif,stopId,stopFace]);
 
+  // ── Load profile ──
+  // If App.jsx already passed initialProfile, skip the fetch entirely — instant load.
+  // Only fetch if no initialProfile was provided (e.g. direct navigation).
   useEffect(()=>{
-    fetchProfile(token).then(data=>{ if(data) setProfile(data); }).catch(err=>{ if(!err.message?.includes('404')) showAlert('Error loading profile','error'); });
+    if (initialProfile) return; // already have data, nothing to do
+    fetchProfile(token).then(data=>{
+      if (data) {
+        setProfile(data);
+        setProfilePic(data.profilePicture || null);
+      }
+    }).catch(err=>{ if(!err.message?.includes('404')) showAlert('Error loading profile','error'); });
   },[token]);
 
   const completion = (() => {
@@ -372,11 +392,45 @@ export function ProfilePage({ user, token }) {
     return Math.round(fs.filter(Boolean).length/fs.length*100);
   })();
 
-  const save = async()=>{
+  // ── Profile picture upload ──
+  // Key fix: reset e.target.value AFTER the FileReader finishes, not before
+  const handlePicUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      showAlert('Image must be under 2MB', 'error');
+      e.target.value = '';
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const base64 = ev.target.result;
+      setProfilePic(base64);
+      setProfile(prev => ({ ...prev, profilePicture: base64 }));
+      e.target.value = ''; // reset after read so same file can be picked again
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // ── Save ──
+  const save = async () => {
     setSaving(true);
-    try{ await saveProfile(token,profile); showAlert('Profile saved!','success'); setEditing(false); }
-    catch(err){ showAlert(err.message||'Failed to save','error'); }
-    finally{ setSaving(false); }
+    try {
+      const savedProfile = await saveProfile(token, profile);
+      showAlert('Profile saved!', 'success');
+      setEditing(false);
+      if (savedProfile) {
+        setProfile(savedProfile);
+        setProfilePic(savedProfile.profilePicture || null);
+        // Notify App.jsx so Sidebar & Topbar update immediately
+        onProfileSave?.(savedProfile);
+      }
+    } catch(err) {
+      console.error('Save error:', err);
+      showAlert(err.message || 'Failed to save', 'error');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const captureId = useCallback(()=>{
@@ -442,19 +496,29 @@ export function ProfilePage({ user, token }) {
   const fullName = [profile.firstName,profile.lastName].filter(Boolean).join(' ') || getUsername(user);
   const isPassport = profile.idType==='PASSPORT';
 
-  const field = (key,label,type='text',required=false,placeholder='') => (
+  const field = (key, label, type='text', required=false, placeholder='') => (
     <div className="pf-f">
-      <label className="pf-lbl">{label}{required&&<span className="req">*</span>}</label>
+      <label className="pf-lbl">{label}{required && <span className="req">*</span>}</label>
       {editing
-        ? <input className="pf-input" type={type} value={profile[key]||''} onChange={e=>setProfile({...profile,[key]:e.target.value})} placeholder={placeholder||`Enter ${label.toLowerCase()}`}/>
-        : <div className={`pf-view-val${!profile[key]?' empty':''}`}>{profile[key]||'Not provided'}</div>
+        ? <input
+            className="pf-input"
+            type={type}
+            value={profile[key] || ''}
+            onChange={e => setProfile({ ...profile, [key]: e.target.value })}
+            placeholder={placeholder || `Enter ${label.toLowerCase()}`}
+          />
+        : <div className={`pf-view-val${!profile[key] ? ' empty' : ''}`}>
+            {type==='date' && profile[key]
+              ? new Date(profile[key]).toLocaleDateString()
+              : profile[key] || 'Not provided'}
+          </div>
       }
     </div>
   );
 
-  const select = (key,label,opts,placeholder,required=false) => (
+  const select = (key, label, opts, placeholder, required=false) => (
     <div className="pf-f">
-      <label className="pf-lbl">{label}{required&&<span className="req">*</span>}</label>
+      <label className="pf-lbl">{label}{required && <span className="req">*</span>}</label>
       {editing
         ? <select className="pf-select" value={profile[key]||''} onChange={e=>setProfile({...profile,[key]:e.target.value})}>
             <option value="">{placeholder}</option>
@@ -476,14 +540,48 @@ export function ProfilePage({ user, token }) {
       </div>
 
       <div className="pf-grid">
-        {/* Left column */}
+        {/* ── Left column ── */}
         <div style={{ display:'flex', flexDirection:'column', gap:'1rem' }}>
           <div className="pf-panel">
             <div className="pf-panel-body" style={{ textAlign:'center', paddingTop:'1.5rem' }}>
-              <div className="pf-avatar">
-                {getInitials(user)}
-                {verified&&<div className="pf-avatar-badge">✓</div>}
+
+              {/*
+                Hidden file input lives OUTSIDE the avatar div.
+                This is critical — if it were inside, the browser may not
+                open the picker when .click() is called programmatically.
+              */}
+              <input
+                ref={picInputRef}
+                type="file"
+                accept="image/*"
+                style={{ display:'none' }}
+                onChange={handlePicUpload}
+              />
+
+              {/*
+                Avatar — clickable only in edit mode.
+                CSS rule `.pf-avatar * { pointer-events:none }` ensures
+                the img, overlay div, and badge never swallow the click
+                so it always bubbles up to this onClick handler.
+              */}
+              <div
+                className={`pf-avatar${editing ? ' editable' : ''}`}
+                onClick={() => editing && picInputRef.current?.click()}
+                title={editing ? 'Click to change photo' : ''}
+              >
+                {profilePic
+                  ? <img src={profilePic} alt="Profile" className="pf-avatar-img"/>
+                  : <span>{getInitials(user)}</span>
+                }
+                {editing && <div className="pf-avatar-overlay">📷</div>}
+                {verified && <div className="pf-avatar-badge">✓</div>}
               </div>
+
+              {/* Hint only visible in edit mode */}
+              {editing && (
+                <div className="pf-avatar-hint">Click photo to change</div>
+              )}
+
               <div className="pf-name">{fullName}</div>
               <div className="pf-email">{user?.email}</div>
 
@@ -501,11 +599,11 @@ export function ProfilePage({ user, token }) {
                 ['Username', getUsername(user)],
                 ['Email',    user?.email],
                 ['Role',     'Guest'],
-                ['Status',   verified?'✅ Verified':'⏳ Pending'],
+                ['Status',   verified ? '✅ Verified' : '⏳ Pending'],
               ].map(([lbl,val])=>(
                 <div key={lbl} className="pf-info-row">
                   <span className="pf-info-lbl">{lbl}</span>
-                  <span className={`pf-info-val${val?.startsWith('✅')?' green':''}`}>{val||'—'}</span>
+                  <span className={`pf-info-val${val?.startsWith('✅') ? ' green' : ''}`}>{val||'—'}</span>
                 </div>
               ))}
 
@@ -518,16 +616,20 @@ export function ProfilePage({ user, token }) {
           </div>
         </div>
 
-        {/* Right column — form */}
+        {/* ── Right column — form ── */}
         <div className="pf-panel" style={{ animationDelay:'.07s' }}>
           <div className="pf-panel-hd">
             <div>
               <div className="pf-panel-title">Personal Information</div>
-              <div className="pf-panel-sub">{editing?'Editing — save when done':'View your details'}</div>
+              <div className="pf-panel-sub">{editing ? 'Editing — save when done' : 'View your details'}</div>
             </div>
             <div style={{ display:'flex', gap:'.4rem' }}>
               {editing
-                ? <button className="pf-cancel-btn" onClick={()=>setEditing(false)}>Cancel</button>
+                ? <button className="pf-cancel-btn" onClick={()=>{
+                    setEditing(false);
+                    // Revert unsaved picture preview on cancel
+                    setProfilePic(profile.profilePicture || null);
+                  }}>Cancel</button>
                 : <button className="pf-edit-btn" onClick={()=>setEditing(true)}>✏️ Edit</button>
               }
             </div>
@@ -574,18 +676,17 @@ export function ProfilePage({ user, token }) {
 
             {editing && (
               <button className="pf-save-btn" disabled={saving} onClick={save}>
-                {saving?<><div className="pf-spin"/>Saving…</>:<>💾 Save Changes</>}
+                {saving ? <><div className="pf-spin"/>Saving…</> : <>💾 Save Changes</>}
               </button>
             )}
           </div>
         </div>
       </div>
 
-      {/* Verification Modal */}
+      {/* ── Verification Modal ── */}
       <Modal show={showVerif} onHide={()=>{ stopId(); stopFace(); setShowVerif(false); }} size="lg" centered className="pf-modal">
         <Modal.Header closeButton><Modal.Title>🔐 Identity Verification</Modal.Title></Modal.Header>
         <Modal.Body>
-          {/* Steps */}
           <div className="vrf-steps">
             {[1,2,3,4].map(s=>{
               const st = verifStep>s?'done':verifStep===s?'active':'idle';
@@ -617,7 +718,6 @@ export function ProfilePage({ user, token }) {
               <button className="vrf-next-btn" disabled={!profile.idType} onClick={()=>goStep(2)}>Start Verification →</button>
             </div>
           )}
-
           {verifStep===2&&(
             <div>
               <div className="vrf-heading">Scan Your {ID_TYPE_LABELS[profile.idType]||'ID'}</div>
@@ -626,7 +726,6 @@ export function ProfilePage({ user, token }) {
               {idImg&&<button className="vrf-next-btn" onClick={()=>goStep(3)}>Next: Take Selfie →</button>}
             </div>
           )}
-
           {verifStep===3&&(
             <div>
               <div className="vrf-heading">Take a Selfie</div>
@@ -635,7 +734,6 @@ export function ProfilePage({ user, token }) {
               {faceImg&&!verified&&<p style={{ textAlign:'center', color:'var(--text-muted)', fontSize:'.76rem', marginTop:'.65rem' }}>⏳ Verifying…</p>}
             </div>
           )}
-
           {verifStep===4&&(
             <div style={{ textAlign:'center', paddingBottom:'1rem' }}>
               <div style={{ fontSize:'3rem', marginBottom:'.55rem', animation:'checkPop .5s both' }}>✅</div>
@@ -652,7 +750,7 @@ export function ProfilePage({ user, token }) {
         </Modal.Body>
       </Modal>
 
-      {/* Delete Modal */}
+      {/* ── Delete Modal ── */}
       <Modal show={showDelete} onHide={()=>setShowDelete(false)} centered className="del-modal">
         <Modal.Header closeButton><Modal.Title>Delete Account</Modal.Title></Modal.Header>
         <Modal.Body>

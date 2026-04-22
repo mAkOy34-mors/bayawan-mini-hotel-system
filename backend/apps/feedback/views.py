@@ -72,10 +72,17 @@ class GetFeedbackView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        feedbacks = Feedback.objects.filter(user=request.user).select_related('booking', 'room')
+        # Get feedback where user matches OR booking user matches
+        from django.db.models import Q
+
+        feedbacks = Feedback.objects.filter(
+            Q(user=request.user) | Q(booking__user=request.user)
+        ).select_related('booking', 'room', 'user').order_by('-created_at')
+
+        print(f"Found {feedbacks.count()} feedback records for user {request.user.id}")
+
         serializer = FeedbackSerializer(feedbacks, many=True)
         return Response(serializer.data)
-
 
 class GetBookingFeedbackView(APIView):
     """GET /api/v1/feedback/booking/<booking_id>/ - Get feedback for a booking"""

@@ -1,16 +1,22 @@
 """
 apps/payments/paymongo.py
 
-PayMongo integration — Create Payment Link.
+PayMongo integration — Checkout Session (replaces Payment Links).
 
-Docs: https://developers.paymongo.com/reference/create-a-link
+WHY CHECKOUT SESSION instead of /v1/links:
+    - /v1/links only supports QR PH — you cannot test with cards
+    - /v1/checkout_sessions supports ALL payment methods:
+      card, gcash, grab_pay, paymaya, qrph, dob, etc.
+    - Webhooks fire correctly for checkout sessions
+    - Test cards work in sandbox mode
 
-Flow:
-    1. Frontend calls POST /api/v1/payments/create-link
-    2. Django calls PayMongo API → gets checkoutUrl
-    3. Django saves Payment row in DB
-    4. Returns checkoutUrl to frontend
-    5. Frontend redirects user to checkoutUrl to pay
+Test card (sandbox):
+    Number:  4343 4343 4343 4343
+    Expiry:  any future date (e.g. 12/26)
+    CVV:     any 3 digits
+    Name:    any name
+
+Docs: https://developers.paymongo.com/reference/create-a-checkout-session
 """
 
 import logging
@@ -42,18 +48,22 @@ def create_payment_link(
     booking_reference: str = "",
 ) -> dict:
     """
-    Creates a PayMongo Payment Link.
+    Creates a PayMongo Checkout Session.
+
+    Supports all payment methods including test cards.
 
     Args:
-        amount:      Amount in PHP (e.g. 1500.00)
-        description: Shown to customer on checkout page
-        remarks:     Optional extra notes
+        amount:            Amount in PHP (e.g. 1500.00)
+        description:       Shown to customer on checkout page
+        remarks:           Optional extra notes
+        booking_id:        Internal booking ID (stored in metadata)
+        booking_reference: Booking reference code for redirect URLs
 
     Returns:
         {
-            "paymongo_link_id": "link_xxxxx",
+            "paymongo_link_id": "cs_xxxxx",     ← checkout session id
             "checkout_url":     "https://pm.link/...",
-            "status":           "unpaid",
+            "status":           "active",
         }
 
     Raises:
@@ -67,13 +77,40 @@ def create_payment_link(
     payload = {
         "data": {
             "attributes": {
-                "amount": amount_centavos,
-                "description": description,
-                "remarks": remarks,
-                "redirect": {
-                        "success": f"{frontend_url}/payment-success?reference={booking_reference}",
-                        "failed":  f"{frontend_url}/payment-failed?reference={booking_reference}",
+                "billing": {
+                    "name":  "Guest",
+                    "email": "",   # filled dynamically if needed
                 },
+                "line_items": [
+                    {
+                        "currency":   "PHP",
+                        "amount":     amount_centavos,
+                        "description": description,
+                        "name":       description,
+                        "quantity":   1,
+                    }
+                ],
+                # ── ALL payment methods — cards work for testing ──
+                "payment_method_types": [
+                    "card",
+                    "gcash",
+                    "grab_pay",
+                    "paymaya",
+                    "qrph",
+                ],
+                "description": description,
+                "remarks":     remarks or "",
+                "metadata": {
+                    "booking_id":        str(booking_id or ""),
+                    "booking_reference": booking_reference or "",
+                },
+                "redirect": {
+                    "success": f"{frontend_url}/payment-success?reference={booking_reference}",
+                    "failed":  f"{frontend_url}/payment-failed?reference={booking_reference}",
+                },
+                "send_email_receipt": False,
+                "show_description":   True,
+                "show_line_items":    True,
             }
         }
     }
@@ -86,21 +123,24 @@ def create_payment_link(
 
     with httpx.Client(timeout=30) as client:
         response = client.post(
-            f"{PAYMONGO_BASE_URL}/links",
+            f"{PAYMONGO_BASE_URL}/checkout_sessions",   # ← switched from /links
             json=payload,
             headers=headers,
         )
 
     if response.status_code not in (200, 201):
-        error_detail = response.json().get("errors", [{}])[0].get("detail", "PayMongo error.")
+        try:
+            error_detail = response.json().get("errors", [{}])[0].get("detail", "PayMongo error.")
+        except Exception:
+            error_detail = f"PayMongo HTTP {response.status_code}"
         logger.error("PayMongo error: %s", error_detail)
         raise Exception(error_detail)
 
-    data = response.json()["data"]
+    data       = response.json()["data"]
     attributes = data["attributes"]
 
     return {
-        "paymongo_link_id": data["id"],
+        "paymongo_link_id": data["id"],                   # cs_xxxxx
         "checkout_url":     attributes["checkout_url"],
-        "status":           attributes["status"],
+        "status":           attributes["status"],          # "active"
     }

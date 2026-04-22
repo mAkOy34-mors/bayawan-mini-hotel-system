@@ -1,5 +1,5 @@
 // constants/config.js
-export const API_BASE = `http://127.0.0.1:8000/api/v1`;
+export const API_BASE =`http://127.0.0.1:8000/api/v1`;
 
 export const LANGUAGES = [
   { code: 'en',  flag: '🇺🇸', label: 'English' },
@@ -25,4 +25,9 @@ export const PAGE_TITLES = {
   emergency: 'Emergency Assistance',
   complaints: 'Guest Complaints',
   services: 'Hotel Services',
+  'partner-services': 'Partner Services',
+  'partner-services-spa': 'Spa & Wellness',
+  'partner-services-tours': 'Tours & Guides',
+  'partner-services-transport': 'Transportation',
+  'partner-services-dining': 'Dining',
 };

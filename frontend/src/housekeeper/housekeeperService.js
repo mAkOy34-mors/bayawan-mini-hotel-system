@@ -182,3 +182,31 @@ export const getStaffStats = async (token) => {
   if (!response.ok) throw new Error('Failed to fetch staff stats');
   return response.json();
 };
+
+// housekeeper/housekeeperService.js - Add these functions
+
+// ── Service Requests (for housekeeper) ──
+export const getMyServiceRequests = async (token) => {
+  try {
+    const response = await fetch(`${API_BASE}/services/tasks/`, {
+      headers: getHeaders(token),
+    });
+    if (!response.ok) throw new Error('Failed to fetch service requests');
+    const data = await response.json();
+    // Add source identifier
+    return data.map(task => ({ ...task, source: 'service' }));
+  } catch (err) {
+    console.error('Error fetching service requests:', err);
+    return [];
+  }
+};
+
+export const updateServiceRequestStatus = async (token, serviceId, status, notes = '') => {
+  const response = await fetch(`${API_BASE}/services/tasks/${serviceId}/status/`, {
+    method: 'PATCH',
+    headers: getHeaders(token),
+    body: JSON.stringify({ status, notes }),
+  });
+  if (!response.ok) throw new Error('Failed to update service request');
+  return response.json();
+};

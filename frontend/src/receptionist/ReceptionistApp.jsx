@@ -25,6 +25,7 @@ import { ReceptionistTasks }       from './ReceptionistTasks';
 import { ReceptionServiceList }    from './ReceptionServiceList'; // ← Add this import
 import { ReceptionistQRCheckOut }  from './ReceptionistQRCheckOut'; // ← Add this component for QR Checkout
 import { ReceptionistEmergencyLog } from './ReceptionistEmergencyLog';
+import { ReceptionistPartnerPayments } from './ReceptionistPartnerPayments';
 import { StaffEmergency } from '../staff/StaffEmergency';
 import FeedbackManager from './FeedbackManager'; 
 import { API_BASE as BASE } from '../constants/config';
@@ -114,6 +115,7 @@ const NAV = [
   { key:'guests',      label:'Guest Profiles',  Icon: Users,           section:'Guests & Rooms' },
   { key:'roomboard',   label:'Room Board',      Icon: BedDouble },
   { key:'payments',    label:'Payments',        Icon: CreditCard,      section:'Payments' },
+  { key: 'partner-payments', label: 'Partner Payments', Icon: CreditCard, section: 'Payments' },
   { key:'inhouse',     label:'In-House Guests', Icon: Users,           section:"Current Guests" },
 ];
 
@@ -254,6 +256,7 @@ function ReceptionistShell({ user, token, onLogout }) {
     guests:     <ReceptionistGuests     token={token} />,
     roomboard:  <ReceptionistRoomBoard  token={token} />,
     payments:   <ReceptionistPayments   token={token} />, 
+    'partner-payments': <ReceptionistPartnerPayments token={token} />,
     inhouse:    <ReceptionistInHouse    token={token} setPage={setPage} />,
   };
 

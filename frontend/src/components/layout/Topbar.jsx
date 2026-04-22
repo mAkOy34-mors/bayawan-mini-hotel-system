@@ -57,6 +57,7 @@ const css = `
   }
   .tb-lang:focus { border-color: #C9A84C; background-color: #fff; }
 
+  /* Avatar in topbar — shows profile pic or initials */
   .tb-av {
     width: 32px; height: 32px; border-radius: 9px;
     background: linear-gradient(135deg, #9a7a2e, #C9A84C);
@@ -65,10 +66,14 @@ const css = `
     font-size: .85rem; font-weight: 600; color: #fff;
     cursor: default; user-select: none;
     box-shadow: 0 1px 6px rgba(201,168,76,0.25);
+    overflow: hidden; flex-shrink: 0;
+  }
+  .tb-av-img {
+    width: 100%; height: 100%; object-fit: cover;
+    display: block; border-radius: 9px;
   }
 `;
 
-// Full language list with flags and names
 const FULL_LANGUAGE_LIST = [
   { code: 'en',  flag: '🇺🇸', label: 'English' },
   { code: 'es',  flag: '🇪🇸', label: 'Español' },
@@ -89,7 +94,8 @@ function initials(user) {
 
 export function Topbar({ title, user, onMenuClick }) {
   const { lang, setLang } = useLang();
-  
+  const profilePic = user?.profilePicture || null;
+
   return (
     <header className="tb-wrap">
       <style>{css}</style>
@@ -103,7 +109,14 @@ export function Topbar({ title, user, onMenuClick }) {
             <option key={l.code} value={l.code}>{l.flag} {l.label}</option>
           ))}
         </select>
-        <div className="tb-av">{initials(user)}</div>
+
+        {/* Avatar — profile picture if set, otherwise initials */}
+        <div className="tb-av">
+          {profilePic
+            ? <img src={profilePic} alt="Profile" className="tb-av-img"/>
+            : initials(user)
+          }
+        </div>
       </div>
     </header>
   );

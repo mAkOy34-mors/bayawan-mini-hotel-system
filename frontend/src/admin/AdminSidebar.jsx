@@ -3,7 +3,7 @@ import { Offcanvas } from 'react-bootstrap';
 import {
   LayoutDashboard, BedDouble, Hotel, Users, CreditCard,
   Star, MessageCircle, Settings, LogOut, RefreshCw, ShieldCheck,
-  AlertTriangle, FileText  // ← Added AlertTriangle and FileText
+  AlertTriangle, FileText , Building2, BarChart3, Percent // ← Added AlertTriangle and FileText
 } from 'lucide-react';
 
 const css = `
@@ -51,6 +51,10 @@ const NAV = [
   { key: 'feedback', label: 'Guest Feedback', Icon: MessageCircle, section: 'Operations', badge: 'pendingFeedback' },
   { key: 'rewards', label: 'Rewards', Icon: Star },
   { key: 'support', label: 'Support', Icon: MessageCircle, badge: 'pendingTickets' },
+
+   { key: 'partner-management', label: 'Partner Management', Icon: Building2, section: 'Partners' },
+  { key: 'commission-dashboard', label: 'Commission Analytics', Icon: BarChart3 },
+  
   // ✅ Emergency Section - Added
   { key: 'emergency', label: '🚨 Live Alerts', Icon: AlertTriangle, section: 'Emergency' },
   { key: 'emergency-log', label: '📋 Emergency Log', Icon: FileText },

@@ -1,4 +1,5 @@
 // Sidebar.jsx – Light card UI with Lucide icons and translations
+import { useState } from 'react';
 import { Offcanvas } from 'react-bootstrap';
 import { useLang } from '../../context/LangContext';
 
@@ -16,6 +17,12 @@ import {
   AlertTriangle,
   Flag,
   Sparkles,
+  Heart,
+  Map,
+  Car,
+  UtensilsCrossed,
+  Scissors,
+  ChevronDown,
 } from 'lucide-react';
 
 const css = `
@@ -35,6 +42,16 @@ const css = `
   .sb-wrap::-webkit-scrollbar { width: 4px; }
   .sb-wrap::-webkit-scrollbar-track { background: #f4f6f8; }
   .sb-wrap::-webkit-scrollbar-thumb { background: rgba(201,168,76,0.4); border-radius: 99px; }
+
+  .sb-offcanvas .offcanvas-body {
+    padding: 0;
+    overflow-y: auto !important;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(201,168,76,0.3) #f4f6f8;
+  }
+  .sb-offcanvas .offcanvas-body::-webkit-scrollbar { width: 4px; }
+  .sb-offcanvas .offcanvas-body::-webkit-scrollbar-track { background: #f4f6f8; }
+  .sb-offcanvas .offcanvas-body::-webkit-scrollbar-thumb { background: rgba(201,168,76,0.4); border-radius: 99px; }
 
   .sb-logo { padding: 1.3rem 1.2rem 1rem; border-bottom: 1px solid #e2e8f0; }
   .sb-logo-row { display: flex; align-items: center; gap: .55rem; }
@@ -60,6 +77,10 @@ const css = `
     background: linear-gradient(135deg, #9a7a2e, #C9A84C);
     display: flex; align-items: center; justify-content: center;
     font-family: 'Cormorant Garamond', serif; font-size: .95rem; font-weight: 600; color: #fff;
+    overflow: hidden;
+  }
+  .sb-av-img {
+    width: 100%; height: 100%; object-fit: cover; display: block; border-radius: 10px;
   }
   .sb-uname { font-size: .84rem; font-weight: 600; color: #1a1f2e; line-height: 1.3; }
   .sb-urole { font-size: .66rem; color: #8a96a8; text-transform: uppercase; letter-spacing: .08em; margin-top: .05rem; }
@@ -97,6 +118,66 @@ const css = `
     background: rgba(201,168,76,0.15); border-color: rgba(201,168,76,0.2); color: #9a7a2e;
   }
   .sb-btn:hover:not(.active) .sb-icon { background: #e2e8f0; color: #1a1f2e; }
+
+  .sb-submenu {
+    margin-left: 2.5rem;
+    margin-top: 0.25rem;
+    margin-bottom: 0.25rem;
+  }
+  .sb-submenu-btn {
+    width: 100%; display: flex; align-items: center; gap: .65rem;
+    padding: .4rem .75rem; border-radius: 8px;
+    border: 1px solid transparent; background: transparent;
+    font-family: 'DM Sans', sans-serif; font-size: .78rem; font-weight: 500;
+    color: #4a5568; cursor: pointer; transition: all .16s;
+    text-align: left; margin-bottom: .05rem;
+  }
+  .sb-submenu-btn:hover { background: #f4f6f8; color: #1a1f2e; }
+  .sb-submenu-btn.active {
+    background: rgba(201,168,76,0.08); color: #9a7a2e; font-weight: 600;
+  }
+  .sb-submenu-icon {
+    width: 22px; height: 22px; border-radius: 6px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: #f1f5f9; color: #64748b;
+  }
+  .sb-submenu-btn.active .sb-submenu-icon {
+    background: rgba(201,168,76,0.12); color: #9a7a2e;
+  }
+  .sb-expand-icon {
+    margin-left: auto;
+    transition: transform 0.2s;
+    color: #8a96a8;
+  }
+  .sb-expand-icon.open {
+    transform: rotate(180deg);
+  }
+
+  .sb-btn-partner {
+    width: 100%; display: flex; align-items: center; gap: .65rem;
+    padding: .54rem .75rem; border-radius: 9px;
+    font-family: 'DM Sans', sans-serif; font-size: .84rem; font-weight: 600;
+    cursor: pointer; transition: all .16s;
+    text-align: left; margin-bottom: .05rem;
+    background: rgba(201,168,76,0.08);
+    border: 1px solid rgba(201,168,76,0.2);
+    color: #9a7a2e;
+  }
+  .sb-btn-partner:hover {
+    background: rgba(201,168,76,0.12);
+    border-color: rgba(201,168,76,0.3);
+    transform: translateX(2px);
+  }
+  .sb-btn-partner.active {
+    background: rgba(201,168,76,0.12);
+    border-color: rgba(201,168,76,0.3);
+    color: #9a7a2e;
+  }
+  .sb-btn-partner .sb-icon {
+    background: rgba(201,168,76,0.08);
+    color: #9a7a2e;
+    border-color: rgba(201,168,76,0.15);
+  }
 
   .sb-btn-services {
     width: 100%; display: flex; align-items: center; gap: .65rem;
@@ -195,7 +276,6 @@ const css = `
     font-size: .64rem; color: #cbd5e1; text-align: center; letter-spacing: .05em;
   }
 
-  .sb-offcanvas .offcanvas-body { padding: 0; overflow: hidden; }
   .sb-offcanvas.offcanvas { background: #ffffff !important; }
   .sb-offcanvas .offcanvas-header { padding: 1rem 1.2rem; border-bottom: 1px solid #e2e8f0; }
 `;
@@ -210,23 +290,49 @@ function uname(user) {
   return user?.fullName || user?.username || user?.email?.split('@')[0] || 'Guest';
 }
 
+function Avatar({ user, size = 36, radius = 10, fontSize = '.95rem', className = 'sb-av' }) {
+  const profilePic = user?.profilePicture || null;
+  return (
+    <div
+      className={className}
+      style={{ width: size, height: size, borderRadius: radius, fontSize }}
+    >
+      {profilePic
+        ? <img src={profilePic} alt="Profile" className="sb-av-img" style={{ borderRadius: radius }}/>
+        : initials(user)
+      }
+    </div>
+  );
+}
+
 function SidebarContent({ page, setPage, user, onLogout }) {
   const { t } = useLang();
+  const [partnerOpen, setPartnerOpen] = useState(false);
 
   const NAV_MAIN = [
     { key: 'dashboard', label: t.dashboard, Icon: LayoutDashboard },
-    { key: 'bookings', label: t.bookings, Icon: BedDouble },
-    { key: 'mybookings', label: t.mybookings, Icon: ClipboardList },
-    { key: 'rewards', label: t.rewards, Icon: Star },
-    { key: 'payments', label: t.payments, Icon: CreditCard },
-    { key: 'services', label: t.services, Icon: Sparkles },
+    { key: 'bookings',  label: t.bookings,  Icon: BedDouble },
+    { key: 'mybookings',label: t.mybookings,Icon: ClipboardList },
+    { key: 'rewards',   label: t.rewards,   Icon: Star },
+    { key: 'payments',  label: t.payments,  Icon: CreditCard },
   ];
 
   const NAV_ACCOUNT = [
-    { key: 'profile', label: t.profile, Icon: User },
+    { key: 'profile',  label: t.profile,  Icon: User },
     { key: 'settings', label: t.settings, Icon: Settings },
-    { key: 'support', label: t.support, Icon: MessageCircle },
+    { key: 'support',  label: t.support,  Icon: MessageCircle },
   ];
+
+  // Partner Services submenu items with their specific page keys
+  const PARTNER_SUBMENU = [
+    { key: 'partner-services-spa', label: 'Spa & Wellness', Icon: Heart },
+    { key: 'partner-services-tours', label: 'Tours & Guides', Icon: Map },
+    { key: 'partner-services-transport', label: 'Transportation', Icon: Car },
+    { key: 'partner-services-dining', label: 'Dining', Icon: UtensilsCrossed },
+    { key: 'partner-services-salon', label: 'Salon', Icon: Scissors },
+  ];
+
+  const isPartnerPage = page?.startsWith('partner-services');
 
   return (
     <>
@@ -244,7 +350,7 @@ function SidebarContent({ page, setPage, user, onLogout }) {
       </div>
 
       <div className="sb-user">
-        <div className="sb-av">{initials(user)}</div>
+        <Avatar user={user} size={36} radius={10} fontSize=".95rem" />
         <div>
           <div className="sb-uname">{uname(user)}</div>
           <div className="sb-urole">Guest</div>
@@ -259,6 +365,43 @@ function SidebarContent({ page, setPage, user, onLogout }) {
             {label}
           </button>
         ))}
+
+        <button
+          className={`sb-btn-services${page === 'services' ? ' active' : ''}`}
+          onClick={() => setPage('services')}
+        >
+          <span className="sb-icon"><Sparkles size={15} /></span>
+          {t.services}
+        </button>
+
+        {/* Partner Services with Submenu */}
+        <div>
+          <button
+            className={`sb-btn-partner${isPartnerPage ? ' active' : ''}`}
+            onClick={() => setPartnerOpen(!partnerOpen)}
+          >
+            <span className="sb-icon"><Sparkles size={15} /></span>
+            Partner Services
+            <span className={`sb-expand-icon ${partnerOpen ? 'open' : ''}`}>
+              <ChevronDown size={14} />
+            </span>
+          </button>
+          
+          {partnerOpen && (
+            <div className="sb-submenu">
+              {PARTNER_SUBMENU.map(({ key, label, Icon }) => (
+                <button
+                  key={key}
+                  className={`sb-submenu-btn${page === key ? ' active' : ''}`}
+                  onClick={() => setPage(key)}
+                >
+                  <span className="sb-submenu-icon"><Icon size={12} /></span>
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
 
         <button
           className={`sb-btn-complaint${page === 'complaints' ? ' active' : ''}`}
@@ -302,6 +445,7 @@ export function Sidebar({ page, setPage, user, onLogout, open, onClose }) {
       <aside className="sb-wrap d-none d-md-flex flex-column">
         <SidebarContent page={page} setPage={setPage} user={user} onLogout={onLogout} />
       </aside>
+
       <Offcanvas show={open} onHide={onClose} placement="start" className="sb-offcanvas" style={{ width: 252 }}>
         <Offcanvas.Header closeButton>
           <div style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: '1.05rem', fontWeight: 600, color: '#1a1f2e', display: 'flex', alignItems: 'center', gap: '.45rem' }}>
@@ -311,7 +455,7 @@ export function Sidebar({ page, setPage, user, onLogout, open, onClose }) {
             Guest Panel
           </div>
         </Offcanvas.Header>
-        <Offcanvas.Body>
+        <Offcanvas.Body style={{ padding: 0, overflowY: 'auto' }}>
           <SidebarContent page={page} setPage={nav} user={user} onLogout={onLogout} />
         </Offcanvas.Body>
       </Offcanvas>

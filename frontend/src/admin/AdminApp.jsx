@@ -17,7 +17,8 @@ import { AdminSettings }        from './AdminSettings';
 import { AdminChangeRequests }  from './AdminChangeRequests';
 import { AdminUsers }           from './AdminUsers';
 import AdminFeedbackManager     from './FeedbackManager';
-// ✅ Import Emergency Components
+import AdminCommissionDashboard from './AdminCommissionDashboard';
+import AdminPartnerManagement from './AdminPartnerManagement';
 import { AdminEmergency } from './AdminEmergency';
 import { AdminEmergencyLog } from './AdminEmergencyLog';
 
@@ -151,6 +152,8 @@ function AdminShell({ user, token, onLogout }) {
     settings:          <AdminSettings       token={token} />,
     users:             <AdminUsers          token={token} />,
     feedback:          <AdminFeedbackManager token={token} user={user} />,
+     'partner-management': <AdminPartnerManagement token={token} />,
+  'commission-dashboard': <AdminCommissionDashboard token={token} />,
     // ✅ Emergency pages
     emergency:         <AdminEmergency      token={token} user={user} />,
     'emergency-log':   <AdminEmergencyLog   token={token} />,

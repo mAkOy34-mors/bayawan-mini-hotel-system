@@ -1,6 +1,7 @@
 # apps/services/urls.py
 from django.urls import path
 from . import views
+from .third_party_urls import third_party_urlpatterns
 
 urlpatterns = [
     # Guest endpoints
@@ -20,4 +21,7 @@ urlpatterns = [
 
     # Admin
     path('admin/dashboard/', views.AdminServiceDashboardView.as_view(), name='admin-service-dashboard'),
+
+    # Third-party partners
+    *third_party_urlpatterns,
 ]
