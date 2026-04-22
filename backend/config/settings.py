@@ -177,6 +177,7 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:5173",
     "http://127.0.0.1:3000",
+    "https://cebu-mini-hotel-system.onrender.com"
     "https://cebu-mini-hotel-system-o0hqil6mh-michomoreno34-1569s-projects.vercel.app",
 ]
 
