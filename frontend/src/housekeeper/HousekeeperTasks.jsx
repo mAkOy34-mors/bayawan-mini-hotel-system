@@ -1,35 +1,33 @@
 // housekeeper/HousekeeperTasks.jsx
 import { useState, useEffect } from 'react';
 import { 
-  getMyTasks,           // Housekeeper cleaning tasks
+  getMyTasks,
   updateTaskStatus, 
   getTaskChecklist, 
   updateChecklistItem,
   getMyStats,
-  getStaffTasks,        // Staff tasks
+  getStaffTasks,
   updateStaffTaskStatus,
   getStaffStats,
-  getMyServiceRequests, // ← NEW: Service requests
-  updateServiceRequestStatus // ← NEW: Update service request status
 } from './housekeeperService';
 import { 
   Clock, PlayCircle, CheckCircle, AlertTriangle, RefreshCw, 
   ChevronDown, ChevronUp, MessageCircle, Sparkles, Wrench, 
   Package, Users, Heart, BedDouble, Calendar, TrendingUp,
-  Briefcase, Hotel, Coffee, Tv, Shirt, Bath, ClipboardList,XCircle
+  Briefcase, Hotel, Coffee, Tv, Shirt, Bath, ClipboardList, XCircle
 } from 'lucide-react';
 
 export function HousekeeperTasks({ token }) {
   const [housekeeperTasks, setHousekeeperTasks] = useState([]);
   const [staffTasks, setStaffTasks] = useState([]);
-  const [serviceRequests, setServiceRequests] = useState([]);
   const [allTasks, setAllTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
   const [expandedTask, setExpandedTask] = useState(null);
   const [checklist, setChecklist] = useState({});
-  const [updating, setUpdating] = useState(false);
-  const [taskSource, setTaskSource] = useState('all'); // 'all', 'housekeeper', 'staff', 'service'
+  // FIX: track loading per task using composite key "source-id"
+  const [updatingTask, setUpdatingTask] = useState(null);
+  const [taskSource, setTaskSource] = useState('all');
   const [stats, setStats] = useState({ 
     pending: 0, 
     in_progress: 0, 
@@ -37,50 +35,34 @@ export function HousekeeperTasks({ token }) {
     total: 0,
     housekeeperCount: 0,
     staffCount: 0,
-    serviceCount: 0
   });
 
-  // Fetch from all endpoints
   const loadTasks = async () => {
     setLoading(true);
     try {
-      // Fetch from Housekeeper endpoint (cleaning tasks)
       const housekeeperData = await getMyTasks(token);
       const housekeeperList = Array.isArray(housekeeperData) ? housekeeperData : (housekeeperData.tasks || []);
       setHousekeeperTasks(housekeeperList.map(task => ({ ...task, source: 'housekeeper' })));
       
-      // Fetch from Staff endpoint (tasks assigned to this housekeeper)
       const staffData = await getStaffTasks(token);
       const staffList = Array.isArray(staffData) ? staffData : (staffData.tasks || []);
       setStaffTasks(staffList.map(task => ({ ...task, source: 'staff' })));
       
-      // ← NEW: Fetch service requests assigned to this housekeeper
-      const serviceData = await getMyServiceRequests(token);
-      setServiceRequests(serviceData.map(req => ({ ...req, source: 'service' })));
-      
-      // Combine all lists
       const allItems = [
         ...housekeeperList.map(task => ({ ...task, source: 'housekeeper' })),
         ...staffList.map(task => ({ ...task, source: 'staff' })),
-        ...serviceData.map(req => ({ ...req, source: 'service' }))
       ];
       
-      // Remove duplicates by ID (if any)
       const uniqueMap = new Map();
       allItems.forEach(item => {
-        if (!uniqueMap.has(item.id)) {
-          uniqueMap.set(item.id, item);
+        const compositeKey = `${item.source}-${item.id}`;
+        if (!uniqueMap.has(compositeKey)) {
+          uniqueMap.set(compositeKey, item);
         }
       });
       const combined = Array.from(uniqueMap.values());
       setAllTasks(combined);
       
-      console.log('Housekeeper tasks:', housekeeperList.length);
-      console.log('Staff tasks:', staffList.length);
-      console.log('Service requests:', serviceData.length);
-      console.log('Combined tasks:', combined.length);
-      
-      // Calculate stats
       setStats({
         pending: combined.filter(t => t.status === 'PENDING').length,
         in_progress: combined.filter(t => t.status === 'IN_PROGRESS').length,
@@ -88,7 +70,6 @@ export function HousekeeperTasks({ token }) {
         total: combined.length,
         housekeeperCount: housekeeperList.length,
         staffCount: staffList.length,
-        serviceCount: serviceData.length
       });
       
     } catch (err) {
@@ -110,25 +91,23 @@ export function HousekeeperTasks({ token }) {
   };
 
   const handleUpdateStatus = async (task, newStatus) => {
-    setUpdating(true);
+    const taskKey = `${task.source}-${task.id}`;
+    setUpdatingTask(taskKey);
     try {
-      // Use the appropriate update function based on task source
-      if (task.source === 'staff') {
+      if (task.source === 'staff' || task.service_request_id) {
+        // Staff endpoint — triggers ServiceRequest/RoomIssue sync
         await updateStaffTaskStatus(token, task.id, newStatus);
-      } else if (task.source === 'service') {
-        await updateServiceRequestStatus(token, task.id, newStatus);
       } else {
         await updateTaskStatus(token, task.id, newStatus);
       }
-      await loadTasks(); // Reload all tasks
+      await loadTasks();
     } catch (err) {
       console.error('Error updating task:', err);
       alert('Failed to update task status. Please try again.');
     } finally {
-      setUpdating(false);
+      setUpdatingTask(null);
     }
   };
-
   const handleChecklistUpdate = async (itemId, isCompleted) => {
     try {
       await updateChecklistItem(token, itemId, !isCompleted);
@@ -158,14 +137,11 @@ export function HousekeeperTasks({ token }) {
     }
   }, [token]);
 
-  // Filter tasks based on selected source and status
   let displayedTasks = [];
   if (taskSource === 'housekeeper') {
     displayedTasks = housekeeperTasks;
   } else if (taskSource === 'staff') {
     displayedTasks = staffTasks;
-  } else if (taskSource === 'service') {
-    displayedTasks = serviceRequests;
   } else {
     displayedTasks = allTasks;
   }
@@ -174,22 +150,7 @@ export function HousekeeperTasks({ token }) {
     ? displayedTasks 
     : displayedTasks.filter(t => t.status === filter);
 
-  const getTaskIcon = (taskType, source) => {
-    // For service requests, show appropriate icon based on service type
-    if (source === 'service') {
-      switch (taskType?.toUpperCase()) {
-        case 'CLEANING': return <Sparkles size={14} />;
-        case 'MAINTENANCE': return <Wrench size={14} />;
-        case 'LAUNDRY': return <Shirt size={14} />;
-        case 'DELIVERY': return <Package size={14} />;
-        case 'EXTRA_PILLOWS': return <BedDouble size={14} />;
-        case 'EXTRA_TOWELS': return <Bath size={14} />;
-        case 'MINI_BAR': return <Coffee size={14} />;
-        case 'TECH_SUPPORT': return <Tv size={14} />;
-        default: return <ClipboardList size={14} />;
-      }
-    }
-    
+  const getTaskIcon = (taskType) => {
     switch (taskType?.toUpperCase()) {
       case 'CLEANING':
       case 'HOUSEKEEPING':
@@ -228,49 +189,36 @@ export function HousekeeperTasks({ token }) {
 
   const getSourceBadge = (source) => {
     if (source === 'staff') {
-      return { 
-        icon: <Briefcase size={10} />, 
-        label: 'Staff Task', 
-        color: '#3b82f6', 
-        bg: 'rgba(59, 130, 246, 0.1)' 
-      };
+      return { icon: <Briefcase size={10} />, label: 'Staff Task', color: '#3b82f6', bg: 'rgba(59, 130, 246, 0.1)' };
     }
-    if (source === 'service') {
-      return { 
-        icon: <ClipboardList size={10} />, 
-        label: 'Service Request', 
-        color: '#8b5cf6', 
-        bg: 'rgba(139, 92, 246, 0.1)' 
-      };
-    }
-    return { 
-      icon: <Hotel size={10} />, 
-      label: 'Housekeeping', 
-      color: '#10b981', 
-      bg: 'rgba(16, 185, 129, 0.1)' 
-    };
+    return { icon: <Hotel size={10} />, label: 'Housekeeping', color: '#10b981', bg: 'rgba(16, 185, 129, 0.1)' };
   };
 
   const getServiceTypeLabel = (serviceType) => {
     const labels = {
-      'CLEANING': 'Cleaning',
-      'MAINTENANCE': 'Maintenance',
-      'LAUNDRY': 'Laundry',
-      'DELIVERY': 'Delivery',
-      'EXTRA_PILLOWS': 'Extra Pillows',
-      'EXTRA_TOWELS': 'Extra Towels',
-      'MINI_BAR': 'Mini Bar',
-      'TECH_SUPPORT': 'Tech Support',
-      'OTHER': 'Other',
+      'CLEANING': 'Cleaning', 'MAINTENANCE': 'Maintenance', 'LAUNDRY': 'Laundry',
+      'DELIVERY': 'Delivery', 'EXTRA_PILLOWS': 'Extra Pillows', 'EXTRA_TOWELS': 'Extra Towels',
+      'MINI_BAR': 'Mini Bar', 'TECH_SUPPORT': 'Tech Support', 'OTHER': 'Other',
     };
     return labels[serviceType] || serviceType;
   };
 
   const formatDate = (dateString) => {
     if (!dateString) return '';
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-PH', { month: 'short', day: 'numeric' });
+    return new Date(dateString).toLocaleDateString('en-PH', { month: 'short', day: 'numeric' });
   };
+
+  // Spinner component for button loading state
+  const ButtonSpinner = () => (
+    <span style={{
+      width: 12, height: 12,
+      border: '2px solid rgba(255,255,255,0.4)',
+      borderTopColor: '#fff',
+      borderRadius: '50%',
+      display: 'inline-block',
+      animation: 'spin 0.7s linear infinite'
+    }} />
+  );
 
   return (
     <div>
@@ -280,17 +228,12 @@ export function HousekeeperTasks({ token }) {
           My Tasks
         </h1>
         <p style={{ fontSize: '0.8rem', color: '#8a96a8', margin: 0 }}>
-          Tasks from Housekeeping, Staff, and Service Requests
+          Tasks from Housekeeping and Staff
         </p>
       </div>
 
       {/* Stats Cards */}
-      <div style={{ 
-        display: 'grid', 
-        gridTemplateColumns: 'repeat(6, 1fr)', 
-        gap: '1rem', 
-        marginBottom: '1.5rem'
-      }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '1rem', marginBottom: '1.5rem' }}>
         <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: '0.85rem', textAlign: 'center' }}>
           <div style={{ fontSize: '0.6rem', color: '#8a96a8', marginBottom: '0.2rem' }}>TOTAL TASKS</div>
           <div style={{ fontSize: '1.6rem', fontWeight: 700, color: '#C9A84C' }}>{stats.total}</div>
@@ -312,8 +255,6 @@ export function HousekeeperTasks({ token }) {
           <div style={{ fontSize: '1.2rem', fontWeight: 700, color: '#10b981' }}>{stats.housekeeperCount}</div>
         </div>
         <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: '0.85rem', textAlign: 'center' }}>
-          <div style={{ fontSize: '0.6rem', color: '#8a96a8', marginBottom: '0.2rem' }}>SERVICES</div>
-          <div style={{ fontSize: '1.2rem', fontWeight: 700, color: '#8b5cf6' }}>{stats.serviceCount}</div>
         </div>
       </div>
 
@@ -324,23 +265,16 @@ export function HousekeeperTasks({ token }) {
           { key: 'all', label: 'All Tasks', icon: null },
           { key: 'housekeeper', label: 'Housekeeping', icon: <Hotel size={12} /> },
           { key: 'staff', label: 'Staff Tasks', icon: <Briefcase size={12} /> },
-          { key: 'service', label: 'Service Requests', icon: <ClipboardList size={12} /> }
         ].map(s => (
           <button
             key={s.key}
             onClick={() => setTaskSource(s.key)}
             style={{
-              padding: '0.3rem 0.8rem',
-              borderRadius: 99,
-              border: '1px solid #e2e8f0',
+              padding: '0.3rem 0.8rem', borderRadius: 99, border: '1px solid #e2e8f0',
               background: taskSource === s.key ? 'linear-gradient(135deg, #C9A84C, #9a7a2e)' : '#fff',
               color: taskSource === s.key ? '#fff' : '#4a5568',
-              cursor: 'pointer',
-              fontSize: '0.7rem',
-              fontWeight: 600,
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.3rem'
+              cursor: 'pointer', fontSize: '0.7rem', fontWeight: 600,
+              display: 'flex', alignItems: 'center', gap: '0.3rem'
             }}
           >
             {s.icon} {s.label}
@@ -356,14 +290,10 @@ export function HousekeeperTasks({ token }) {
               key={f}
               onClick={() => setFilter(f)}
               style={{
-                padding: '0.3rem 0.8rem',
-                borderRadius: 99,
-                border: '1px solid #e2e8f0',
+                padding: '0.3rem 0.8rem', borderRadius: 99, border: '1px solid #e2e8f0',
                 background: filter === f ? 'linear-gradient(135deg, #10b981, #34d399)' : '#fff',
                 color: filter === f ? '#fff' : '#4a5568',
-                cursor: 'pointer',
-                fontSize: '0.75rem',
-                fontWeight: 600,
+                cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600,
               }}
             >
               {f === 'all' ? 'All Status' : f.replace('_', ' ')}
@@ -392,10 +322,12 @@ export function HousekeeperTasks({ token }) {
           const statusBadge = getStatusBadge(task.status);
           const sourceBadge = getSourceBadge(task.source);
           const isCompleted = task.status === 'COMPLETED';
-          const isService = task.source === 'service';
-          
+          // FIX: use composite key to match updatingTask state
+          const taskKey = `${task.source}-${task.id}`;
+          const isThisTaskUpdating = updatingTask === taskKey;
+
           return (
-            <div key={`${task.source}-${task.id}`} style={{ 
+            <div key={taskKey} style={{ 
               background: '#fff', 
               border: `1px solid ${isCompleted ? '#10b981' : '#e2e8f0'}`, 
               borderRadius: 14, 
@@ -407,16 +339,12 @@ export function HousekeeperTasks({ token }) {
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '0.75rem' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     <div style={{
-                      width: 36,
-                      height: 36,
-                      borderRadius: 10,
-                      background: isService ? 'rgba(139,92,246,0.1)' : 'rgba(16,185,129,0.1)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      color: isService ? '#8b5cf6' : '#10b981'
+                      width: 36, height: 36, borderRadius: 10,
+                      background: 'rgba(16,185,129,0.1)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      color: '#10b981'
                     }}>
-                      {getTaskIcon(task.task_type || task.service_type, task.source)}
+                      {getTaskIcon(task.task_type)}
                     </div>
                     <div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
@@ -424,60 +352,32 @@ export function HousekeeperTasks({ token }) {
                           Room {task.room_number || task.room?.room_number || 'N/A'}
                         </span>
                         <span style={{ 
-                          display: 'inline-flex', 
-                          alignItems: 'center', 
-                          gap: '0.3rem', 
-                          padding: '0.15rem 0.5rem', 
-                          borderRadius: 99, 
-                          background: sourceBadge.bg, 
-                          color: sourceBadge.color, 
-                          fontSize: '0.6rem', 
-                          fontWeight: 600 
+                          display: 'inline-flex', alignItems: 'center', gap: '0.3rem',
+                          padding: '0.15rem 0.5rem', borderRadius: 99,
+                          background: sourceBadge.bg, color: sourceBadge.color,
+                          fontSize: '0.6rem', fontWeight: 600
                         }}>
                           {sourceBadge.icon} {sourceBadge.label}
                         </span>
                       </div>
                       {task.priority && (
                         <span style={{ 
-                          fontSize: '0.65rem', 
-                          padding: '0.2rem 0.5rem', 
-                          borderRadius: 99, 
-                          background: `${getPriorityColor(task.priority)}20`, 
-                          color: getPriorityColor(task.priority), 
-                          fontWeight: 600, 
-                          display: 'inline-block',
-                          marginTop: '0.25rem'
+                          fontSize: '0.65rem', padding: '0.2rem 0.5rem', borderRadius: 99,
+                          background: `${getPriorityColor(task.priority)}20`,
+                          color: getPriorityColor(task.priority),
+                          fontWeight: 600, display: 'inline-block', marginTop: '0.25rem'
                         }}>
                           {task.priority} PRIORITY
                         </span>
                       )}
-                      {isService && task.service_type && (
-                        <span style={{ 
-                          fontSize: '0.65rem', 
-                          padding: '0.2rem 0.5rem', 
-                          borderRadius: 99, 
-                          background: 'rgba(139,92,246,0.1)', 
-                          color: '#8b5cf6', 
-                          fontWeight: 600, 
-                          display: 'inline-block',
-                          marginLeft: '0.5rem'
-                        }}>
-                          {getServiceTypeLabel(task.service_type)}
-                        </span>
-                      )}
-                    </div>
+                      </div>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     <span style={{ 
-                      display: 'inline-flex', 
-                      alignItems: 'center', 
-                      gap: '0.3rem', 
-                      padding: '0.2rem 0.6rem', 
-                      borderRadius: 99, 
-                      background: statusBadge.bg, 
-                      color: statusBadge.color, 
-                      fontSize: '0.7rem', 
-                      fontWeight: 600 
+                      display: 'inline-flex', alignItems: 'center', gap: '0.3rem',
+                      padding: '0.2rem 0.6rem', borderRadius: 99,
+                      background: statusBadge.bg, color: statusBadge.color,
+                      fontSize: '0.7rem', fontWeight: 600
                     }}>
                       {statusBadge.icon} {statusBadge.label}
                     </span>
@@ -495,21 +395,13 @@ export function HousekeeperTasks({ token }) {
                 <div style={{ fontWeight: 700, fontSize: '1rem', marginBottom: '0.25rem', color: '#1a1f2e' }}>{task.title}</div>
                 <div style={{ fontSize: '0.85rem', color: '#4a5568', marginBottom: '0.75rem', lineHeight: 1.5 }}>
                   {task.description}
-                  {isService && task.service_charge > 0 && (
-                    <div style={{ marginTop: '0.5rem', fontSize: '0.7rem', color: '#f59e0b' }}>
-                      💰 Service Charge: ₱{task.service_charge.toLocaleString()}
-                    </div>
-                  )}
                 </div>
 
                 {task.guest_name && (
                   <div style={{ 
-                    background: 'rgba(201,168,76,0.08)', 
-                    borderRadius: 8, 
-                    padding: '0.5rem 0.75rem', 
-                    marginBottom: '0.75rem', 
-                    fontSize: '0.75rem',
-                    borderLeft: '3px solid #C9A84C'
+                    background: 'rgba(201,168,76,0.08)', borderRadius: 8,
+                    padding: '0.5rem 0.75rem', marginBottom: '0.75rem',
+                    fontSize: '0.75rem', borderLeft: '3px solid #C9A84C'
                   }}>
                     <div style={{ fontWeight: 600, marginBottom: '0.2rem' }}>Guest Request</div>
                     <div style={{ color: '#4a5568' }}>{task.guest_name} (Room {task.room_number})</div>
@@ -533,19 +425,33 @@ export function HousekeeperTasks({ token }) {
                   {task.status === 'PENDING' && (
                     <button
                       onClick={() => handleUpdateStatus(task, 'IN_PROGRESS')}
-                      disabled={updating}
-                      style={{ background: '#3b82f6', color: '#fff', border: 'none', borderRadius: 8, padding: '0.4rem 1rem', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
+                      disabled={isThisTaskUpdating}
+                      style={{ 
+                        background: isThisTaskUpdating ? '#60a5fa' : '#3b82f6',
+                        color: '#fff', border: 'none', borderRadius: 8,
+                        padding: '0.4rem 1rem', fontSize: '0.75rem', fontWeight: 600,
+                        cursor: isThisTaskUpdating ? 'not-allowed' : 'pointer',
+                        display: 'flex', alignItems: 'center', gap: '0.3rem',
+                        transition: 'background 0.2s'
+                      }}
                     >
-                      <PlayCircle size={14} /> Start Task
+                      {isThisTaskUpdating ? <><ButtonSpinner /> Starting...</> : <><PlayCircle size={14} /> Start Task</>}
                     </button>
                   )}
                   {task.status === 'IN_PROGRESS' && (
                     <button
                       onClick={() => handleUpdateStatus(task, 'COMPLETED')}
-                      disabled={updating}
-                      style={{ background: '#10b981', color: '#fff', border: 'none', borderRadius: 8, padding: '0.4rem 1rem', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
+                      disabled={isThisTaskUpdating}
+                      style={{ 
+                        background: isThisTaskUpdating ? '#34d399' : '#10b981',
+                        color: '#fff', border: 'none', borderRadius: 8,
+                        padding: '0.4rem 1rem', fontSize: '0.75rem', fontWeight: 600,
+                        cursor: isThisTaskUpdating ? 'not-allowed' : 'pointer',
+                        display: 'flex', alignItems: 'center', gap: '0.3rem',
+                        transition: 'background 0.2s'
+                      }}
                     >
-                      <CheckCircle size={14} /> Mark Complete
+                      {isThisTaskUpdating ? <><ButtonSpinner /> Completing...</> : <><CheckCircle size={14} /> Mark Complete</>}
                     </button>
                   )}
                   {task.status === 'COMPLETED' && (
@@ -556,7 +462,7 @@ export function HousekeeperTasks({ token }) {
                 </div>
 
                 {/* Expanded Section - Checklist (only for cleaning tasks) */}
-                {expandedTask === task.id && !isCompleted && !isService && checklist[task.id] && checklist[task.id].length > 0 && (
+                {expandedTask === task.id && !isCompleted && checklist[task.id] && checklist[task.id].length > 0 && (
                   <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid #e2e8f0' }}>
                     <div style={{ fontSize: '0.75rem', fontWeight: 600, marginBottom: '0.5rem', color: '#4a5568', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
                       <Sparkles size={12} /> Task Checklist

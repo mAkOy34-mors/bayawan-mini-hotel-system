@@ -54,12 +54,12 @@ class RequestBookingOtpView(APIView):
         ser.is_valid(raise_exception=True)
         d = ser.validated_data
 
-        # Validate room exists and is available
+        # Validate room exists
         try:
-            room = Room.objects.get(id=d["roomId"], available=True)
+            room = Room.objects.get(id=d["roomId"])
         except Room.DoesNotExist:
             return Response(
-                {"message": "Room not found or not available."},
+                {"message": "Room not found."},
                 status=status.HTTP_404_NOT_FOUND,
             )
 
@@ -163,10 +163,10 @@ class ConfirmBookingWithOtpView(APIView):
 
         # Check room
         try:
-            room = Room.objects.get(id=d["roomId"], available=True)
+            room = Room.objects.get(id=d["roomId"])
         except Room.DoesNotExist:
             return Response(
-                {"message": "Room not found or not available."},
+                {"message": "Room not found."},
                 status=status.HTTP_404_NOT_FOUND,
             )
 
@@ -227,13 +227,6 @@ class ConfirmBookingWithOtpView(APIView):
             special_requests=d.get("specialRequests", ""),
             status=Booking.BookingStatus.PENDING_DEPOSIT,
             payment_status=Booking.PaymentStatus.UNPAID,
-        )
-        room.available = False
-        room.save(update_fields=["available"])
-
-        logger.info(
-            "Booking %s created - Room %s marked unavailable",
-            booking_reference, room.room_number
         )
 
         logger.info("Booking %s confirmed after OTP for user %s", booking_reference, request.user.id)

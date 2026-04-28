@@ -18,6 +18,7 @@ class Booking(models.Model):
         CHECKED_OUT     = "CHECKED_OUT",     "Checked Out"
         CANCELLED       = "CANCELLED",       "Cancelled"
         COMPLETED       = "COMPLETED",       "Completed"
+        CANCELLATION_PENDING = 'CANCELLATION_PENDING', 'Cancellation Pending'
 
     class PaymentStatus(models.TextChoices):
         UNPAID       = "UNPAID",       "Unpaid"
@@ -91,6 +92,17 @@ class Booking(models.Model):
     # LocalDateTime updatedAt
     updated_at = models.DateTimeField(null=True, blank=True, db_column="updated_at")
 
+    cancelled_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='cancelled_bookings',
+        db_column='cancelled_by_id'  # This matches your database column
+    )
+
+    cancellation_reason = models.TextField(blank=True, null=True)
+    cancelled_at = models.DateTimeField(null=True, blank=True)
     class Meta:
         db_table = "bookings"
         managed  = False  # table already exists from Spring Boot
@@ -162,3 +174,37 @@ class BookingChangeRequest(models.Model):
 
     def __str__(self):
         return f"ChangeRequest #{self.id} for {self.booking.booking_reference} [{self.status}]"
+
+
+class CancellationRequest(models.Model):
+    """Guest cancellation requests that require admin approval"""
+
+    class Status(models.TextChoices):
+        PENDING = 'PENDING', 'Pending'
+        APPROVED = 'APPROVED', 'Approved'
+        REJECTED = 'REJECTED', 'Rejected'
+
+    booking = models.ForeignKey(
+        Booking,
+        on_delete=models.CASCADE,
+        related_name='cancellation_requests'
+    )
+    reason = models.TextField()
+    status = models.CharField(max_length=10, choices=Status.choices, default='PENDING')
+    admin_note = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    resolved_at = models.DateTimeField(null=True, blank=True)
+    resolved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='resolved_cancellation_requests'
+    )
+
+    class Meta:
+        db_table = 'cancellation_requests'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"Cancellation request for {self.booking.booking_reference} - {self.status}"

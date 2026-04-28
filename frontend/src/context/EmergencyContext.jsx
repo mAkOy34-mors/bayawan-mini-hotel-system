@@ -1,8 +1,13 @@
-// src/context/EmergencyContext.jsx
+// src/context/EmergencyContext.jsx - Updated with loading state
+
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import { Modal } from 'react-bootstrap';
 import { API_BASE } from '../constants/config';
-import { Phone, CheckCircle2, Volume2, VolumeX } from 'lucide-react';
+import { 
+  Phone, CheckCircle2, Volume2, VolumeX, AlertTriangle, 
+  Heart, Flame, Shield, Bell, X, PhoneCall, Headphones,
+  Activity, Zap, Music, CircleAlert, Loader2
+} from 'lucide-react';
 
 const EmergencyContext = createContext();
 
@@ -45,15 +50,12 @@ const playEmergencySoundLoop = async () => {
     const context = initAudioContext();
     if (!context) return;
     
-    // Resume context if suspended (browsers suspend by default)
     if (context.state === 'suspended') {
       await context.resume();
     }
     
-    // Stop any existing sound
     stopEmergencySound();
     
-    // Create oscillator and gain
     const oscillator = context.createOscillator();
     const gainNode = context.createGain();
     
@@ -68,7 +70,6 @@ const playEmergencySoundLoop = async () => {
     currentOscillator = oscillator;
     currentGain = gainNode;
     
-    // Create alternating frequency pattern for urgency
     let isHigh = true;
     soundInterval = setInterval(() => {
       if (!soundEnabled) {
@@ -92,7 +93,7 @@ const playEmergencySoundLoop = async () => {
 
 const showBrowserNotification = (alert) => {
   if (Notification.permission === 'granted') {
-    const notification = new Notification('🚨 EMERGENCY ALERT! 🚨', {
+    const notification = new Notification('EMERGENCY ALERT!', {
       body: `${alert.guestName} in Room ${alert.roomNumber} - ${alert.emergencyTypeName}`,
       icon: '/emergency-icon.png',
       tag: `emergency-${alert.id}`,
@@ -116,6 +117,7 @@ export function EmergencyProvider({ children, token }) {
   const [currentEmergency, setCurrentEmergency] = useState(null);
   const [soundOn, setSoundOn] = useState(false);
   const [wsConnected, setWsConnected] = useState(false);
+  const [isReady, setIsReady] = useState(false); // Add ready state
   const wsRef = useRef(null);
   const reconnectTimeoutRef = useRef(null);
 
@@ -128,7 +130,10 @@ export function EmergencyProvider({ children, token }) {
 
   // Load active emergencies from API
   const loadActiveEmergencies = useCallback(async () => {
-    if (!token) return;
+    if (!token) {
+      setIsReady(true);
+      return;
+    }
     try {
       const response = await fetch(`${API_BASE}/emergency/all/`, {
         headers: { Authorization: `Bearer ${token}` }
@@ -155,6 +160,8 @@ export function EmergencyProvider({ children, token }) {
       }
     } catch (err) {
       console.error('Failed to load emergencies:', err);
+    } finally {
+      setIsReady(true);
     }
   }, [token, showEmergencyModal]);
 
@@ -222,17 +229,14 @@ export function EmergencyProvider({ children, token }) {
     try {
       const context = initAudioContext();
       if (context) {
-        // Resume the audio context (required after user interaction)
         if (context.state === 'suspended') {
           await context.resume();
         }
         soundEnabled = true;
         setSoundOn(true);
         
-        // Play test sound to confirm it works
         playEmergencySoundLoop();
         
-        // Stop test sound after 2 seconds
         setTimeout(() => {
           if (!showEmergencyModal) {
             stopEmergencySound();
@@ -276,6 +280,8 @@ export function EmergencyProvider({ children, token }) {
     if (token) {
       loadActiveEmergencies();
       connectWebSocket();
+    } else {
+      setIsReady(true);
     }
     
     return () => {
@@ -287,10 +293,10 @@ export function EmergencyProvider({ children, token }) {
 
   const getEmergencyIcon = (type) => {
     switch (type) {
-      case 'medical': return '❤️';
-      case 'fire': return '🔥';
-      case 'security': return '🛡️';
-      default: return '🚨';
+      case 'medical': return <Heart size={20} />;
+      case 'fire': return <Flame size={20} />;
+      case 'security': return <Shield size={20} />;
+      default: return <AlertTriangle size={20} />;
     }
   };
 
@@ -303,10 +309,21 @@ export function EmergencyProvider({ children, token }) {
     }
   };
 
+  // Always provide a context value, even when loading
+  const contextValue = {
+    activeEmergencies,
+    soundOn,
+    enableSound,
+    disableSound,
+    wsConnected,
+    isReady,
+  };
+
   return (
-    <EmergencyContext.Provider value={{ activeEmergencies, soundOn, enableSound, disableSound, wsConnected }}>
+    <EmergencyContext.Provider value={contextValue}>
       {children}
       
+      {/* Modal code remains the same */}
       <Modal show={showEmergencyModal} onHide={closeModal} centered className="emergency-global-modal">
         <style>{`
           .emergency-global-modal .modal-content {
@@ -369,7 +386,9 @@ export function EmergencyProvider({ children, token }) {
           }
           
           .emergency-type-badge {
-            display: inline-block;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.3rem;
             padding: 0.25rem 1rem;
             border-radius: 99px;
             font-size: 0.8rem;
@@ -392,7 +411,7 @@ export function EmergencyProvider({ children, token }) {
             color: white;
             font-weight: 700;
             cursor: pointer;
-            display: flex;
+            display: inline-flex;
             align-items: center;
             gap: 0.5rem;
             transition: all 0.2s;
@@ -411,7 +430,7 @@ export function EmergencyProvider({ children, token }) {
             color: white;
             font-weight: 700;
             cursor: pointer;
-            display: flex;
+            display: inline-flex;
             align-items: center;
             gap: 0.5rem;
             transition: all 0.2s;
@@ -430,6 +449,7 @@ export function EmergencyProvider({ children, token }) {
             align-items: center;
             justify-content: center;
             gap: 0.75rem;
+            flex-wrap: wrap;
           }
           
           .sound-toggle-btn {
@@ -441,7 +461,7 @@ export function EmergencyProvider({ children, token }) {
             font-weight: 600;
             cursor: pointer;
             transition: all 0.2s;
-            display: flex;
+            display: inline-flex;
             align-items: center;
             gap: 0.4rem;
           }
@@ -450,20 +470,18 @@ export function EmergencyProvider({ children, token }) {
             background: #fee2e2;
           }
           
-          .sound-enabled {
-            background: #4ade80;
-            border-color: #4ade80;
-            color: white;
+          .sound-status-text.active {
+            color: #4ade80;
           }
           
-          .sound-enabled:hover {
-            background: #22c55e;
+          .sound-status-text.inactive {
+            color: #dc2626;
           }
         `}</style>
         
         <Modal.Header closeButton>
           <Modal.Title>
-            <span style={{ fontSize: '1.8rem' }}>🚨</span>
+            <AlertTriangle size={28} style={{ color: 'white' }} />
             EMERGENCY ALERT!
           </Modal.Title>
         </Modal.Header>
@@ -504,16 +522,16 @@ export function EmergencyProvider({ children, token }) {
               <div className="sound-control">
                 {soundOn ? (
                   <>
-                    <Volume2 size={16} color="#4ade80" />
-                    <span style={{ fontSize: '0.75rem', color: '#4ade80', fontWeight: 600 }}>Sound Active</span>
+                    <Volume2 size={16} style={{ color: '#4ade80' }} />
+                    <span className="sound-status-text active">Sound Active</span>
                     <button className="sound-toggle-btn" onClick={disableSound}>
                       <VolumeX size={14} /> Mute
                     </button>
                   </>
                 ) : (
                   <>
-                    <VolumeX size={16} color="#dc2626" />
-                    <span style={{ fontSize: '0.75rem', color: '#dc2626', fontWeight: 600 }}>Sound Off</span>
+                    <VolumeX size={16} style={{ color: '#dc2626' }} />
+                    <span className="sound-status-text inactive">Sound Off</span>
                     <button className="sound-toggle-btn" onClick={enableSound}>
                       <Volume2 size={14} /> Enable Sound
                     </button>
@@ -523,7 +541,8 @@ export function EmergencyProvider({ children, token }) {
               
               {!soundOn && (
                 <p style={{ fontSize: '0.7rem', color: '#8a96a8', marginTop: '0.75rem', textAlign: 'center' }}>
-                  ⚠️ Click "Enable Sound" to hear emergency alerts (browser requires user interaction)
+                  <CircleAlert size={12} style={{ display: 'inline', marginRight: '0.3rem' }} />
+                  Click "Enable Sound" to hear emergency alerts (browser requires user interaction)
                 </p>
               )}
             </>
@@ -534,4 +553,19 @@ export function EmergencyProvider({ children, token }) {
   );
 }
 
-export const useEmergency = () => useContext(EmergencyContext);
+export const useEmergency = () => {
+  const context = useContext(EmergencyContext);
+  if (!context) {
+    console.warn('useEmergency must be used within an EmergencyProvider');
+    // Return a default value instead of throwing error
+    return {
+      activeEmergencies: [],
+      soundOn: false,
+      enableSound: () => {},
+      disableSound: () => {},
+      wsConnected: false,
+      isReady: true,
+    };
+  }
+  return context;
+};

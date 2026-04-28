@@ -3,7 +3,7 @@ import { Offcanvas } from 'react-bootstrap';
 import {
   LayoutDashboard, BedDouble, Hotel, Users, CreditCard,
   Star, MessageCircle, Settings, LogOut, RefreshCw, ShieldCheck,
-  AlertTriangle, FileText , Building2, BarChart3, Percent // ← Added AlertTriangle and FileText
+  AlertTriangle, FileText , Building2, BarChart3, Percent, ClipboardList,Package, Wrench// ← Added AlertTriangle and FileText
 } from 'lucide-react';
 
 const css = `
@@ -41,26 +41,40 @@ const css = `
 
 // ✅ Updated NAV with Emergency section
 const NAV = [
-  { key: 'dashboard', label: 'Dashboard', Icon: LayoutDashboard, section: 'Management' },
-  { key: 'users', label: 'Users', Icon: Users },
-  { key: 'bookings', label: 'Bookings', Icon: BedDouble },
-  { key: 'change-requests', label: 'Change Requests', Icon: RefreshCw, badge: 'pendingChanges' },
-  { key: 'rooms', label: 'Rooms', Icon: Hotel },
-  { key: 'guests', label: 'Guests', Icon: Users },
-  { key: 'payments', label: 'Payments', Icon: CreditCard },
-  { key: 'feedback', label: 'Guest Feedback', Icon: MessageCircle, section: 'Operations', badge: 'pendingFeedback' },
-  { key: 'rewards', label: 'Rewards', Icon: Star },
-  { key: 'support', label: 'Support', Icon: MessageCircle, badge: 'pendingTickets' },
-
-   { key: 'partner-management', label: 'Partner Management', Icon: Building2, section: 'Partners' },
-  { key: 'commission-dashboard', label: 'Commission Analytics', Icon: BarChart3 },
+  // Management Section
+  { key: 'dashboard', label: 'Dashboard', Icon: LayoutDashboard, section: 'MANAGEMENT' },
+  { key: 'task-monitor', label: 'Task Monitor', Icon: ClipboardList },
   
-  // ✅ Emergency Section - Added
-  { key: 'emergency', label: '🚨 Live Alerts', Icon: AlertTriangle, section: 'Emergency' },
-  { key: 'emergency-log', label: '📋 Emergency Log', Icon: FileText },
-  { key: 'settings', label: 'Settings', Icon: Settings },
+  // Requests Section
+  { key: 'supply-requests', label: 'Supply Requests', Icon: Package, section: 'REQUESTS' },
+  { key: 'maintenance-requests', label: 'Maintenance Requests', Icon: Wrench},
+  
+  // User Management Section
+  { key: 'users', label: 'Users', Icon: Users, section: 'USER MANAGEMENT' },
+  { key: 'guests', label: 'Guests', Icon: Users},
+  
+  // Booking Section
+  { key: 'bookings', label: 'Bookings', Icon: BedDouble, section: 'BOOKINGS' },
+  { key: 'change-requests', label: 'Change Requests', Icon: RefreshCw, badge: 'pendingChanges'},
+  { key: 'rooms', label: 'Rooms', Icon: Hotel},
+  { key: 'payments', label: 'Payments', Icon: CreditCard},
+  
+  // Operations Section
+  { key: 'feedback', label: 'Guest Feedback', Icon: MessageCircle, badge: 'pendingFeedback', section: 'OPERATIONS' },
+  { key: 'rewards', label: 'Rewards', Icon: Star},
+  { key: 'support', label: 'Support', Icon: MessageCircle, badge: 'pendingTickets'},
+  
+  // Partners Section
+  { key: 'partner-management', label: 'Partner Management', Icon: Building2, section: 'PARTNERS' },
+  { key: 'commission-dashboard', label: 'Commission Analytics', Icon: BarChart3},
+  
+  // Emergency Section
+  { key: 'emergency', label: 'Live Alerts', Icon: AlertTriangle, section: 'EMERGENCY' },
+  { key: 'emergency-log', label: 'Emergency Log', Icon: FileText},
+  
+  // Settings Section
+  { key: 'settings', label: 'Settings', Icon: Settings, section: 'SYSTEM' },
 ];
-
 function ini(u) { 
   const n = u?.username || u?.email || 'A'; 
   return n.slice(0, 2).toUpperCase(); 
@@ -78,7 +92,7 @@ function Inner({ page, setPage, user, onLogout, counts }) {
         <div className="asb-logo-row">
           <div className="asb-mark"><Hotel size={15}/></div>
           <div>
-            <div className="asb-name">Bayawan Mini Hotel</div>
+            <div className="asb-name">Cebu Mini Hotel</div>
             <div className="asb-sub">Admin Panel</div>
           </div>
         </div>
@@ -106,7 +120,7 @@ function Inner({ page, setPage, user, onLogout, counts }) {
           <span className="asb-out-ico"><LogOut size={14}/></span>Sign Out
         </button>
       </nav>
-      <div className="asb-foot">© 2026 Bayawan Mini Hotel</div>
+      <div className="asb-foot">© 2026 Cebu Mini Hotel</div>
     </>
   );
 }

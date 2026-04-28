@@ -19,7 +19,7 @@ class AdminRoomSerializer(serializers.ModelSerializer):
         fields = [
             "id", "roomNumber", "roomType", "description",
             "pricePerNight", "maxOccupancy", "available",
-            "amenities", "imageUrl", "createdAt",
+            "amenities", "imageUrl", "createdAt", "status",
         ]
         read_only_fields = ["id", "createdAt"]
 
@@ -41,6 +41,10 @@ class AdminBookingSerializer(serializers.ModelSerializer):
     specialRequests  = serializers.CharField(source="special_requests",       read_only=True)
     createdAt        = serializers.DateTimeField(source="created_at",         read_only=True)
 
+    cancellationReason = serializers.CharField(source='cancellation_reason', read_only=True)
+    cancelledBy = serializers.CharField(source='cancelled_by.username', read_only=True)
+    cancelledAt = serializers.DateTimeField(source='cancelled_at', read_only=True)
+
     class Meta:
         model  = Booking
         fields = [
@@ -48,7 +52,7 @@ class AdminBookingSerializer(serializers.ModelSerializer):
             "roomNumber", "roomType", "checkInDate", "checkOutDate",
             "numberOfNights", "numberOfGuests", "totalAmount",
             "depositAmount", "remainingAmount", "status", "paymentStatus",
-            "specialRequests", "createdAt",
+            "specialRequests", "createdAt",'cancellationReason', 'cancelledBy', 'cancelledAt'
         ]
 
 

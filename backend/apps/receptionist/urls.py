@@ -1,6 +1,7 @@
 """apps/receptionist/urls.py"""
 from django.urls import path
 from . import views
+from .views import ReceptionistCancelBookingView
 
 urlpatterns = [
     # Dashboard
@@ -31,4 +32,5 @@ urlpatterns = [
     path('verify-qr-checkin/',      views.VerifyQRCheckInView.as_view(), name='verify_qr_checkin'),
     path('verify-qr-checkout/', views.VerifyQRCheckOutView.as_view(), name='verify_qr_checkout'),
     path('process-qr-checkout/', views.ProcessQRCheckOutView.as_view(), name='process_qr_checkout'),
+    path('bookings/<int:id>/cancel/', ReceptionistCancelBookingView.as_view(), name='receptionist-cancel-booking'),
 ]

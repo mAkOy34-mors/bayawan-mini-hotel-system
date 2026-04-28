@@ -117,6 +117,49 @@ const EXTRA_CSS = `
   @keyframes spin {
     to { transform: rotate(360deg); }
   }
+  .rb-img {
+    width: 100%;
+    height: 90px;
+    object-fit: cover;
+    border-radius: 8px;
+    margin-bottom: .6rem;
+    background: #f1f5f9;
+  }
+  .rb-img-placeholder {
+    width: 100%;
+    height: 90px;
+    border-radius: 8px;
+    margin-bottom: .6rem;
+    background: #f1f5f9;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.8rem;
+    opacity: .4;
+  }
+  .rb-maintenance-btn {
+    width: 100%;
+    display: flex; align-items: center; gap: .3rem;
+    padding: .4rem .6rem;
+    border-radius: 7px;
+    font-size: .68rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all .15s;
+    justify-content: center;
+    background: linear-gradient(135deg, #dc2626, #f87171);
+    color: white;
+    border: none;
+    margin-top: 0.25rem;
+  }
+  .rb-maintenance-btn:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(220,38,38,0.3);
+  }
+  .rb-maintenance-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
 `;
 
 export function ReceptionistRoomBoard({ token }) {
@@ -131,6 +174,12 @@ export function ReceptionistRoomBoard({ token }) {
   const [taskMessage, setTaskMessage] = useState('');
   
   const { toast, show } = useToast();
+
+  const getFullImageUrl = (imageUrl) => {
+    if (!imageUrl) return null;
+    if (imageUrl.startsWith('http')) return imageUrl;
+    return `${BASE.replace('/api/v1', '')}${imageUrl}`;
+  };
 
   const load = async () => {
     setLoading(true);
@@ -149,31 +198,27 @@ export function ReceptionistRoomBoard({ token }) {
   useEffect(() => { load(); }, [token]);
 
   // ReceptionistRoomBoard.jsx - Updated createCleaningTask function
-
-// ReceptionistRoomBoard.jsx - Simplified createCleaningTask
 const createCleaningTask = async (room) => {
   setCreatingTask(room.id);
   try {
     const taskData = {
       title: `Clean Room ${room.roomNumber}`,
       description: `Room ${room.roomNumber} (${room.roomType}) requires cleaning.`,
-      taskType: 'ROOM_CLEANING',
+      task_type: 'CLEANING',
       priority: 'HIGH',
-      roomNumber: room.roomNumber,
-      // Remove assignedTo - backend will auto-assign
-      notes: `Room marked as DIRTY. Cleaning task created by receptionist.`
+      room: room.id,                    // ← ADD THIS
+      room_number: room.roomNumber,
+      note: `Room marked as DIRTY. Cleaning task created by receptionist.`
     };
-    
-    console.log('Task data:', taskData);
-    
-    const response = await fetch(`${BASE}/housekeepers/tasks/create/`, {
+
+    const response = await fetch(`${BASE}/staff/tasks/create/`, {
       method: 'POST',
       headers: hj(token),
       body: JSON.stringify(taskData)
     });
-    
+
     const responseData = await response.json();
-    
+
     if (response.ok) {
       const assignedName = responseData.assigned_to_name || 'housekeeper';
       setTaskMessage(`Cleaning task created for Room ${room.roomNumber} and assigned to ${assignedName}`);
@@ -191,6 +236,44 @@ const createCleaningTask = async (room) => {
   }
 };
 
+const createMaintenanceTask = async (room) => {
+  setCreatingTask(room.id);
+  try {
+    const taskData = {
+      title: `Maintenance - Room ${room.roomNumber}`,
+      description: `Room ${room.roomNumber} (${room.roomType}) requires maintenance inspection and repair.`,
+      task_type: 'MAINTENANCE',
+      priority: 'HIGH',
+      room: room.id,                    // ← ADD THIS
+      room_number: room.roomNumber,
+      note: `Room marked as MAINTENANCE and set to unavailable. Task created by receptionist.`
+    };
+
+    const response = await fetch(`${BASE}/staff/tasks/create/`, {
+      method: 'POST',
+      headers: hj(token),
+      body: JSON.stringify(taskData)
+    });
+
+    const responseData = await response.json();
+
+    if (response.ok) {
+      const assignedName = responseData.assigned_to_name || 'maintenance staff';
+      setTaskMessage(`Maintenance task created for Room ${room.roomNumber}, assigned to ${assignedName}`);
+      setShowTaskToast(true);
+      setTimeout(() => setShowTaskToast(false), 3500);
+      show(`🔧 Maintenance task created for Room ${room.roomNumber} (assigned to ${assignedName})`, 'success');
+    } else {
+      show(responseData.error || 'Failed to create maintenance task', 'error');
+    }
+  } catch (error) {
+    console.error('Error creating maintenance task:', error);
+    show('Network error. Please try again.', 'error');
+  } finally {
+    setCreatingTask(null);
+  }
+};
+
   const updateRoomStatus = async (room, newStatus) => {
     setUpdating(room.id);
     try {
@@ -201,11 +284,19 @@ const createCleaningTask = async (room) => {
       });
       
       if (response.ok) {
+        const responseData = await response.json();
+        // If backend sets unavailable on MAINTENANCE, reflect that locally too
         setRooms(prev => prev.map(r => 
-          r.id === room.id ? { ...r, status: newStatus } : r
+          r.id === room.id
+            ? { ...r, status: newStatus, available: newStatus === 'MAINTENANCE' ? false : r.available }
+            : r
         ));
         
-        show(`Room ${room.roomNumber} status updated to ${newStatus}`, 'success');
+        if (newStatus === 'MAINTENANCE') {
+          show(`🔧 Room ${room.roomNumber} set to Maintenance & marked unavailable`, 'success');
+        } else {
+          show(`Room ${room.roomNumber} status updated to ${newStatus}`, 'success');
+        }
       } else {
         const error = await response.json();
         show(error.error || 'Failed to update status', 'error');
@@ -312,9 +403,22 @@ const createCleaningTask = async (room) => {
             const statusConfig = getStatusConfig(r.status);
             const StatusIcon = statusConfig.Icon;
             const isDirty = r.status === 'DIRTY';
+            const isMaintenance = r.status === 'MAINTENANCE';
+            const imageUrl = getFullImageUrl(r.imageUrl);
             
             return (
               <div key={r.id} className={`rb-card status-${r.status || 'CLEAN'}`} style={{ animationDelay: `${i * 0.03}s` }}>
+                {/* Room image */}
+                {imageUrl ? (
+                  <img
+                    className="rb-img"
+                    src={imageUrl}
+                    alt={`Room ${r.roomNumber}`}
+                    onError={e => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }}
+                  />
+                ) : null}
+                <div className="rb-img-placeholder" style={{ display: imageUrl ? 'none' : 'flex' }}>🏨</div>
+
                 <div className="rb-type">{r.roomType}</div>
                 <div className="rb-num">#{r.roomNumber}</div>
                 
@@ -324,7 +428,7 @@ const createCleaningTask = async (room) => {
                 </div>
                 
                 <div className={`rb-availability ${r.available ? 'available' : 'unavailable'}`}>
-                  {r.available ? '✓ Available' : '✗ Not Available'}
+                  {r.available ? '✓ Available' : isMaintenance ? '🔧 Under Maintenance' : '✗ Not Available'}
                 </div>
                 
                 <div className="rb-price">₱{Number(r.pricePerNight || 0).toLocaleString()}/night</div>
@@ -350,7 +454,7 @@ const createCleaningTask = async (room) => {
                   <option value="VACANT">🏠 Vacant</option>
                 </select>
                 
-                {/* Create Task Button - Only for DIRTY rooms */}
+                {/* Create Cleaning Task - Only for DIRTY rooms */}
                 {isDirty && (
                   <button
                     className="rb-task-btn"
@@ -363,6 +467,22 @@ const createCleaningTask = async (room) => {
                       <PlusCircle size={12} />
                     )}
                     Create Cleaning Task
+                  </button>
+                )}
+
+                {/* Create Maintenance Task - Only for MAINTENANCE rooms */}
+                {isMaintenance && (
+                  <button
+                    className="rb-maintenance-btn"
+                    onClick={() => createMaintenanceTask(r)}
+                    disabled={creatingTask === r.id}
+                  >
+                    {creatingTask === r.id ? (
+                      <div className="ap-spin-sm" />
+                    ) : (
+                      <Wrench size={12} />
+                    )}
+                    Create Maintenance Task
                   </button>
                 )}
               </div>

@@ -27,6 +27,8 @@ import string
 from datetime import date
 from decimal import Decimal
 
+from rest_framework.permissions import IsAuthenticated
+
 from apps.utils.email import send_walkin_welcome_email
 from django.core.cache import cache
 from django.db.models import Q
@@ -823,6 +825,13 @@ class ReceptionistRoomsView(APIView):
         version = cache.get("rooms_cache_version", 0)
         cache_key = f"receptionist_rooms_v{version}"
         cached = cache.get(cache_key)
+
+        # ── Invalidate cache if it's missing the 'id' field ──────────────
+        if cached and isinstance(cached, list) and cached and 'id' not in cached[0]:
+            cached = None
+            cache.delete(cache_key)
+        # ─────────────────────────────────────────────────────────────────
+
         if cached:
             return Response(cached)
 
@@ -859,7 +868,6 @@ class ReceptionistRoomsView(APIView):
         cache.set(cache_key, data, timeout=60)
         return Response(data)
 
-
 class ReceptionistRoomStatusView(APIView):
     """PATCH /api/v1/receptionist/rooms/<pk>/status/"""
 
@@ -884,21 +892,60 @@ class ReceptionistRoomStatusView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Check if updating status (CLEAN, DIRTY, MAINTENANCE, etc.)
         new_status = request.data.get('status')
         available = request.data.get('available')
 
+        maintenance_task_created = False
+
         if new_status:
-            # Update the status field
             if hasattr(room, 'status'):
                 room.status = new_status
-                room.save(update_fields=['status'])
+
+                if new_status == 'MAINTENANCE':
+                    room.available = False
+                    room.save(update_fields=['status', 'available'])
+
+                    try:
+                        from apps.staff.models import Task
+
+                        maintenance_user = User.objects.filter(
+                            role='MAINTENANCE', is_active=True
+                        ).order_by('?').first()
+
+                        Task.objects.create(
+                            title=f"Maintenance - Room {room.room_number}",
+                            description=(
+                                f"Room {room.room_number} ({room.room_type}) has been flagged for maintenance "
+                                f"by receptionist {request.user.get_full_name() or request.user.username}. "
+                                f"Please inspect and resolve the issue before clearing the room."
+                            ),
+                            task_type='MAINTENANCE',
+                            priority='HIGH',
+                            room=room,
+                            room_number=room.room_number,
+                            status='PENDING',
+                            assigned_to=maintenance_user,
+                            assigned_by=request.user,
+                            note=f"Room marked UNAVAILABLE until maintenance is complete.",
+                        )
+                        maintenance_task_created = True
+                        logger.info(
+                            "Maintenance task created for Room %s, assigned to %s",
+                            room.room_number,
+                            maintenance_user.username if maintenance_user else "unassigned",
+                        )
+                    except Exception as e:
+                        logger.warning("Could not create maintenance task for Room %s: %s", room.room_number, e)
+
+                else:
+                    room.save(update_fields=['status'])
+
                 logger.info(
                     "Room %s status updated to %s by receptionist %s",
                     room.room_number, new_status, request.user.id,
                 )
 
-        if available is not None:
+        if available is not None and new_status != 'MAINTENANCE':
             room.available = bool(available)
             room.save(update_fields=["available"])
             logger.info(
@@ -915,8 +962,8 @@ class ReceptionistRoomStatusView(APIView):
             "roomNumber": room.room_number,
             "available": room.available,
             "status": getattr(room, 'status', 'CLEAN'),
+            "maintenanceTaskCreated": maintenance_task_created,
         })
-
 
 # ── Payments ──────────────────────────────────────────────────────────────────
 
@@ -1499,49 +1546,53 @@ class ProcessQRCheckOutView(APIView):
                 room.status = 'DIRTY'
             room.save()
 
-            # Create cleaning task for housekeeping
+            # Create cleaning task in staff_tasks (Task model)
             try:
-                from apps.housekeepers.models import CleaningTask, CleaningChecklist
+                from apps.staff.models import Task
 
-                cleaning_task = CleaningTask.objects.create(
+                # Auto-assign to an available housekeeping staff member
+                housekeeping_user = User.objects.filter(
+                    role='HOUSEKEEPER', is_active=True
+                ).order_by('?').first()
+
+                checklist_note = (
+                    "Checklist:\n"
+                    "- Make bed and change linens\n"
+                    "- Vacuum floor\n"
+                    "- Clean bathroom (toilet, sink, shower)\n"
+                    "- Replace towels\n"
+                    "- Restock amenities (soap, shampoo, tissue)\n"
+                    "- Wipe all surfaces\n"
+                    "- Empty trash bins\n"
+                    "- Check mini-bar\n"
+                    "- Arrange furniture\n"
+                    "- Final inspection"
+                )
+
+                Task.objects.create(
                     title=f"Clean Room {room.room_number} after check-out",
-                    description=f"Room {room.room_number} ({room.room_type}) needs cleaning after guest check-out.\n"
-                                f"Booking: {booking.booking_reference}\n"
-                                f"Guest: {booking.user.username}",
-                    task_type='ROOM_CLEANING',
+                    description=(
+                        f"Room {room.room_number} ({room.room_type}) needs cleaning after guest check-out.\n"
+                        f"Booking: {booking.booking_reference}\n"
+                        f"Guest: {booking.user.username}"
+                    ),
+                    task_type='CLEANING',
                     priority='HIGH',
                     room=room,
                     room_number=room.room_number,
                     booking=booking,
+                    assigned_to=housekeeping_user,
                     assigned_by=request.user,
                     status='PENDING',
-                    notes="Priority cleaning needed after check-out"
+                    note=checklist_note,
                 )
 
-                # Create default checklist items
-                default_items = [
-                    "Make bed and change linens",
-                    "Vacuum floor",
-                    "Clean bathroom (toilet, sink, shower)",
-                    "Replace towels",
-                    "Restock amenities (soap, shampoo, tissue)",
-                    "Wipe all surfaces",
-                    "Empty trash bins",
-                    "Check mini-bar",
-                    "Arrange furniture",
-                    "Final inspection"
-                ]
-                for item in default_items:
-                    CleaningChecklist.objects.create(
-                        task=cleaning_task,
-                        item_name=item
-                    )
-
                 cleaning_task_created = True
-                logger.info(f"Cleaning task created for room {room.room_number}")
+                logger.info(
+                    f"Cleaning task created in staff_tasks for room {room.room_number}, "
+                    f"assigned to {housekeeping_user.username if housekeeping_user else 'unassigned'}"
+                )
 
-            except ImportError as e:
-                logger.warning(f"Could not create cleaning task: {e}")
             except Exception as e:
                 logger.error(f"Error creating cleaning task: {e}")
 
@@ -1600,3 +1651,150 @@ class PaymentStatusView(APIView):
             "bookingId": payment.booking_id,
             "paidAt": payment.paid_at.isoformat() if payment.paid_at else None,
         })
+
+
+# apps/receptionist/views.py - Updated cancellation view
+# apps/receptionist/views.py - Fixed cancellation view for your Payment model
+
+class ReceptionistCancelBookingView(APIView):
+    """POST /api/v1/receptionist/bookings/<id>/cancel/"""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, id):
+        # Check permission
+        if request.user.role not in ['ADMIN', 'RECEPTIONIST']:
+            return Response(
+                {"error": "Access denied. Only admin or receptionist can cancel bookings."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        try:
+            booking = Booking.objects.get(id=id)
+        except Booking.DoesNotExist:
+            return Response(
+                {"error": "Booking not found."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        # Check if booking is already cancelled
+        if booking.status == 'CANCELLED':
+            return Response(
+                {"error": "Booking is already cancelled."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Only allow cancellation for certain statuses
+        cancelable_statuses = ['CONFIRMED', 'PENDING_DEPOSIT', 'CHECKED_IN', 'CANCELLATION_PENDING']
+        if booking.status not in cancelable_statuses:
+            return Response(
+                {"error": f"Cannot cancel booking with status {booking.status}."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        reason = request.data.get('reason', '')
+        admin_note = request.data.get('admin_note', '')
+        process_refund = request.data.get('process_refund', True)
+
+        # Store old status before changing
+        old_status = booking.status
+
+        # Calculate refund amount (50% of deposit)
+        deposit_amount = float(booking.deposit_amount or 0)
+        refund_amount = deposit_amount * 0.5
+
+        # ============================================================
+        # CREATE REFUND PAYMENT RECORD
+        # ============================================================
+        if process_refund and refund_amount > 0:
+            try:
+                from apps.payments.models import Payment
+
+                # Check if refund already exists for this booking
+                existing_refund = Payment.objects.filter(
+                    booking_id=booking.id,
+                    type='REFUND'
+                ).exists()
+
+                if not existing_refund:
+                    # Create a NEW refund payment record using your Payment model fields
+                    Payment.objects.create(
+                        paymongo_link_id=f"REFUND_{booking.booking_reference}_{booking.id}",  # Required unique field
+                        checkout_url="",  # Required field, can be empty for refunds
+                        email=booking.user.email,
+                        description=f"50% Refund for cancelled booking {booking.booking_reference} - {reason[:100]}",
+                        amount=refund_amount,
+                        status='REFUNDED',  # Using the REFUNDED status you added
+                        type='REFUND',  # Using the REFUND type you added
+                        booking_id=booking.id,
+                        paid_at=timezone.now()  # Set paid_at to now since refund is processed
+                    )
+                    logger.info(f"Created refund of ₱{refund_amount} for booking {booking.id}")
+            except Exception as e:
+                logger.error(f"Failed to create refund record: {e}")
+
+        # Update booking status to CANCELLED
+        booking.status = 'CANCELLED'
+        booking.save(update_fields=['status'])
+
+        # ============================================================
+        # HANDLE PENDING CANCELLATION REQUEST
+        # ============================================================
+        if old_status == 'CANCELLATION_PENDING':
+            try:
+                from apps.bookings.models import CancellationRequest
+                pending_request = CancellationRequest.objects.filter(
+                    booking=booking,
+                    status='PENDING'
+                ).first()
+                if pending_request:
+                    pending_request.status = 'APPROVED'
+                    pending_request.admin_note = admin_note or reason
+                    pending_request.resolved_by = request.user
+                    pending_request.resolved_at = timezone.now()
+                    pending_request.save()
+                    logger.info(f"Approved cancellation request {pending_request.id}")
+            except ImportError:
+                pass
+
+        # ============================================================
+        # UPDATE ROOM AVAILABILITY
+        # ============================================================
+        try:
+            room = booking.room
+            room.available = True
+            room.save(update_fields=['available'])
+            logger.info(f"Room {room.room_number} marked as available")
+        except Exception as e:
+            logger.error(f"Failed to update room availability: {e}")
+
+        # Clear cache
+        cache.delete(f"my_bookings_{booking.user_id}")
+
+        # Send email notification to guest
+        try:
+            from apps.utils.email import send_booking_cancelled_email
+            send_booking_cancelled_email(booking, reason, refund_amount)
+        except Exception as e:
+            logger.error(f"Failed to send cancellation email: {e}")
+
+        booking.cancellation_reason = reason
+        booking.status = 'CANCELLED'
+        booking.save()
+
+        booking.status = 'CANCELLED'
+        booking.cancellation_reason = reason
+        booking.cancelled_by = request.user  # ← THIS SAVES THE USER TO cancelled_by_id
+        booking.cancelled_at = timezone.now()
+        booking.save()
+
+        return Response({
+            "success": True,
+            "message": f"Booking #{booking.booking_reference} has been cancelled successfully.",
+            "refund_amount": f"₱{refund_amount:,.2f}" if refund_amount > 0 else None,
+            "booking": {
+                "id": booking.id,
+                "bookingReference": booking.booking_reference,
+                "status": booking.status,
+                "paymentStatus": booking.payment_status
+            }
+        }, status=status.HTTP_200_OK)

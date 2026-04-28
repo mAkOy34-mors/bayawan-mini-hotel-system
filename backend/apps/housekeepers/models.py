@@ -1,6 +1,7 @@
 # apps/housekeepers/models.py
 from django.db import models
 from django.conf import settings
+
 from apps.rooms.models import Room
 from apps.bookings.models import Booking
 from apps.employees.models import EmployeeInformation
@@ -101,17 +102,25 @@ class SupplyRequest(models.Model):
         FULFILLED = 'FULFILLED', 'Fulfilled'
         REJECTED = 'REJECTED', 'Rejected'
 
+    class Priority(models.TextChoices):  # ← Define it here
+        HIGH = 'HIGH', 'High'
+        MEDIUM = 'MEDIUM', 'Medium'
+        LOW = 'LOW', 'Low'
+
     housekeeper_employee = models.ForeignKey(
         EmployeeInformation,
         on_delete=models.CASCADE,
         related_name='supply_requests',
-        db_column='housekeeper_employee_id'
+        db_column='housekeeper_id'
     )
     item_name = models.CharField(max_length=200)
     quantity = models.IntegerField()
+    unit = models.CharField(max_length=50, default='piece(s)')
     reason = models.TextField()
+    priority = models.CharField(max_length=10, choices=Priority.choices)
     status = models.CharField(max_length=20, choices=RequestStatus.choices, default='PENDING')
     approved_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+    rejection_reason = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     fulfilled_at = models.DateTimeField(null=True, blank=True)
 
@@ -155,3 +164,81 @@ class RoomStatusLog(models.Model):
 
     def __str__(self):
         return f"Room {self.room.room_number}: {self.previous_status} → {self.new_status}"
+
+
+# apps/housekeepers/models.py - Add this new model
+
+class RoomIssue(models.Model):
+    """Room issues reported by housekeepers"""
+
+    class IssueType(models.TextChoices):
+        LIGHTS = 'LIGHTS', 'Broken Lights'
+        PLUMBING = 'PLUMBING', 'Plumbing Problem'
+        FURNITURE = 'FURNITURE', 'Damaged Furniture'
+        ELECTRICAL = 'ELECTRICAL', 'Electrical Issue'
+        TV_ELECTRONICS = 'TV_ELECTRONICS', 'TV/Electronics'
+        DOOR_LOCK = 'DOOR_LOCK', 'Door/Lock Issue'
+        AC_ISSUE = 'AC_ISSUE', 'AC/Heating Problem'
+        PEST_CONTROL = 'PEST_CONTROL', 'Pest Issue'
+        OTHER = 'OTHER', 'Other Issue'
+
+    class Priority(models.TextChoices):
+        HIGH = 'HIGH', 'High'
+        MEDIUM = 'MEDIUM', 'Medium'
+        LOW = 'LOW', 'Low'
+
+    class IssueStatus(models.TextChoices):
+        PENDING = 'PENDING', 'Pending'
+        IN_PROGRESS = 'IN_PROGRESS', 'In Progress'
+        COMPLETED = 'COMPLETED', 'Completed'
+        REJECTED = 'REJECTED', 'Rejected'
+
+    # Issue details
+    issue_type = models.CharField(max_length=20, choices=IssueType.choices)
+    title = models.CharField(max_length=200)
+    description = models.TextField()
+    priority = models.CharField(max_length=10, choices=Priority.choices, default='MEDIUM')
+    status = models.CharField(max_length=20, choices=IssueStatus.choices, default='PENDING')
+
+    # Location
+    room_number = models.CharField(max_length=10)
+
+    # Reporter
+    reported_by_employee = models.ForeignKey(
+        EmployeeInformation,
+        on_delete=models.CASCADE,
+        related_name='reported_issues',
+        db_column='reported_by_employee_id'
+    )
+
+    # Assignment (who is fixing it)
+    assigned_to_employee = models.ForeignKey(
+        EmployeeInformation,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='assigned_issues',
+        db_column='assigned_to_employee_id'  # Column name in database
+    )
+
+    # Notes and resolution
+    notes = models.TextField(blank=True, null=True)
+    resolution_notes = models.TextField(blank=True, null=True)
+    rejection_reason = models.TextField(blank=True, null=True)
+
+    # Images
+    before_image = models.CharField(max_length=500, blank=True, null=True)
+    after_image = models.CharField(max_length=500, blank=True, null=True)
+
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    started_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'room_issues'
+        ordering = ['-priority', '-created_at']
+        managed = False
+
+    def __str__(self):
+        return f"{self.get_issue_type_display()} - Room {self.room_number}"

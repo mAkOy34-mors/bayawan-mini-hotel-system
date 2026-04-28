@@ -1,10 +1,10 @@
-// admin/AdminEmergency.jsx
+// receptionist/ReceptionistEmergency.jsx
 import { StaffEmergency } from '../staff/StaffEmergency';
 import { useEmergency } from '../context/EmergencyContext';
-import { AlertTriangle, Bell, FileText, TrendingUp, Phone, Heart, Shield, Flame, Activity, Clock } from 'lucide-react';
+import { AlertTriangle, Bell, FileText, TrendingUp, Phone, Heart, Shield, Flame, Activity, Clock, Loader2 } from 'lucide-react';
 
-export function AdminEmergency({ token, user }) {
-  // Safely get emergency context with error handling
+export function ReceptionistEmergency({ token, user }) {
+  // Safely get emergency context with fallback
   let emergencyContext;
   try {
     emergencyContext = useEmergency();
@@ -13,7 +13,7 @@ export function AdminEmergency({ token, user }) {
     emergencyContext = null;
   }
   
-  // If context is not available, render fallback UI
+  // If context is not available, show loading
   if (!emergencyContext) {
     return (
       <div>
@@ -56,22 +56,90 @@ export function AdminEmergency({ token, user }) {
           </div>
         </div>
 
-        {/* Loading/Error State */}
-        <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: '2rem', textAlign: 'center' }}>
-          <AlertTriangle size={48} style={{ marginBottom: '1rem', opacity: 0.3, color: '#f59e0b' }} />
-          <h3 style={{ marginBottom: '0.5rem', fontSize: '1.1rem' }}>Emergency System Loading...</h3>
-          <p style={{ color: '#8a96a8', fontSize: '0.85rem' }}>Please wait while the emergency system initializes.</p>
+        {/* Loading State - Show spinner with hotlines */}
+        <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, padding: '2rem', textAlign: 'center' }}>
+          <Loader2 size={48} style={{ marginBottom: '1rem', opacity: 0.5, animation: 'spin 1s linear infinite' }} />
+          <h3>Loading Emergency System...</h3>
+          <p style={{ color: '#8a96a8' }}>Please wait while we connect to the emergency service.</p>
         </div>
+        
+        <style>{`
+          @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+          }
+        `}</style>
       </div>
     );
   }
   
-  const { activeEmergencies } = emergencyContext;
+  const { activeEmergencies, isLoading } = emergencyContext;
+  
+  // Show loading state if still loading
+  if (isLoading) {
+    return (
+      <div>
+        {/* Emergency Hotline Banner */}
+        <div style={{
+          background: 'linear-gradient(135deg, #dc2626, #ef4444)',
+          borderRadius: 12,
+          padding: '1rem',
+          marginBottom: '1rem',
+          color: 'white',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: '1rem'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <Bell size={20} />
+            <span><strong>Emergency Hotlines:</strong></span>
+          </div>
+          <div style={{ display: 'flex', gap: '0.75rem' }}>
+            <button 
+              onClick={() => window.location.href = 'tel:911'} 
+              style={{ background: 'white', color: '#dc2626', border: 'none', borderRadius: 8, padding: '0.4rem 1rem', cursor: 'pointer', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.3rem' }}
+            >
+              <Heart size={14} /> 911 - Medical
+            </button>
+            <button 
+              onClick={() => window.location.href = 'tel:117'} 
+              style={{ background: 'white', color: '#dc2626', border: 'none', borderRadius: 8, padding: '0.4rem 1rem', cursor: 'pointer', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.3rem' }}
+            >
+              <Shield size={14} /> 117 - Police
+            </button>
+            <button 
+              onClick={() => window.location.href = 'tel:160'} 
+              style={{ background: 'white', color: '#dc2626', border: 'none', borderRadius: 8, padding: '0.4rem 1rem', cursor: 'pointer', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.3rem' }}
+            >
+              <Flame size={14} /> 160 - Fire
+            </button>
+          </div>
+        </div>
+
+        {/* Loading State */}
+        <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, padding: '2rem', textAlign: 'center' }}>
+          <Loader2 size={48} style={{ marginBottom: '1rem', opacity: 0.5, animation: 'spin 1s linear infinite' }} />
+          <h3>Loading Emergency Data...</h3>
+          <p style={{ color: '#8a96a8' }}>Fetching active emergencies from server.</p>
+        </div>
+        
+        <style>{`
+          @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+          }
+        `}</style>
+      </div>
+    );
+  }
+  
   const activeCount = activeEmergencies?.length || 0;
 
   return (
     <div>
-      {/* Emergency Hotline Banner - Admin Specific */}
+      {/* Emergency Hotline Banner - Receptionist Specific */}
       <div style={{
         background: 'linear-gradient(135deg, #dc2626, #ef4444)',
         borderRadius: 12,
@@ -110,7 +178,7 @@ export function AdminEmergency({ token, user }) {
         </div>
       </div>
 
-      {/* Quick Stats for Admin */}
+      {/* Quick Stats for Receptionist */}
       <div style={{
         display: 'grid',
         gridTemplateColumns: 'repeat(3, 1fr)',
@@ -143,7 +211,7 @@ export function AdminEmergency({ token, user }) {
         </div>
       </div>
 
-      {/* Admin Stats Summary */}
+      {/* Response Time Indicator - Receptionist Specific */}
       <div style={{
         background: '#fff',
         border: '1px solid #e2e8f0',
@@ -157,14 +225,14 @@ export function AdminEmergency({ token, user }) {
         gap: '0.5rem'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <Activity size={16} color="#3b82f6" />
-          <span style={{ fontWeight: 600 }}>System Status:</span>
-          <span style={{ color: '#10b981', fontWeight: 700 }}>Active</span>
+          <Clock size={16} color="#3b82f6" />
+          <span style={{ fontWeight: 600 }}>Average Response Time:</span>
+          <span style={{ color: '#10b981', fontWeight: 700 }}>2.5 minutes</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <Clock size={16} color="#f59e0b" />
-          <span style={{ fontWeight: 600 }}>Last Updated:</span>
-          <span style={{ fontWeight: 500 }}>{new Date().toLocaleTimeString()}</span>
+          <Activity size={16} color="#f59e0b" />
+          <span style={{ fontWeight: 600 }}>Today's Alerts:</span>
+          <span style={{ fontWeight: 700 }}>{activeCount}</span>
         </div>
       </div>
 

@@ -2,7 +2,7 @@
 from django.urls import path
 from . import views
 from .views import AdminUsersListView, AdminUserCreateView, AdminUserUpdateView, AdminUserDeleteView, \
-    AdminUserToggleStatusView, AdminRoomUploadImageView
+    AdminUserToggleStatusView, AdminRoomUploadImageView, AdminCancelBookingView, AdminGetCancellationDetailsView
 
 urlpatterns = [
     # Rooms
@@ -27,4 +27,8 @@ urlpatterns = [
     path('users/<int:user_id>/toggle-status/', AdminUserToggleStatusView.as_view(), name='admin-users-toggle-status'),
     # apps/admin_panel/urls.py
     path('rooms/<int:room_id>/upload-image/', AdminRoomUploadImageView.as_view(), name='admin-room-upload-image'),
+
+    path('bookings/<int:booking_id>/cancel/', AdminCancelBookingView.as_view(), name='admin-cancel-booking'),
+    path('bookings/<int:booking_id>/cancellation/', AdminGetCancellationDetailsView.as_view(),
+         name='admin-cancellation-details'),
 ]

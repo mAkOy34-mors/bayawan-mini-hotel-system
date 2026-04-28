@@ -293,16 +293,16 @@ const createTask = async () => {
       }
     }
 
-    const payload = {
-      title: taskForm.title,
-      description: taskForm.description,
-      task_type: mapComplaintTypeToTaskType(taskForm.complaintType),
-      priority: taskForm.priority,
-      room_number: taskForm.roomNumber,
-      assigned_to: assignedToId,
-      note: `Complaint #${taskForm.complaintId}: ${taskForm.description.substring(0, 100)}`,
-      complaint_id: taskForm.complaintId  // ✅ ADD THIS LINE
-    };
+ const payload = {
+  title: taskForm.title,
+  description: taskForm.description,
+  task_type: mapComplaintTypeToTaskType(taskForm.complaintType),
+  priority: taskForm.priority,
+  room_number: taskForm.roomNumber,
+  assigned_to: assignedToId,  // ← Changed from 'assigned_to_employee'
+  note: `Complaint #${taskForm.complaintId}: ${taskForm.description.substring(0, 100)}`,  // ← Changed from 'notes'
+  complaint_id: taskForm.complaintId
+};
     
     console.log('Sending payload:', payload);
 

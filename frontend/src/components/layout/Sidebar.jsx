@@ -153,108 +153,99 @@ const css = `
     transform: rotate(180deg);
   }
 
-  .sb-btn-partner {
+  /* ============================================================
+     SPECIALTY BUTTONS - Normal state (transparent, no colors)
+     Only show colors when active
+  ============================================================ */
+  .sb-btn-services,
+  .sb-btn-partner,
+  .sb-btn-complaint,
+  .sb-btn-emergency {
     width: 100%; display: flex; align-items: center; gap: .65rem;
     padding: .54rem .75rem; border-radius: 9px;
-    font-family: 'DM Sans', sans-serif; font-size: .84rem; font-weight: 600;
+    font-family: 'DM Sans', sans-serif; font-size: .84rem; font-weight: 500;
     cursor: pointer; transition: all .16s;
     text-align: left; margin-bottom: .05rem;
-    background: rgba(201,168,76,0.08);
-    border: 1px solid rgba(201,168,76,0.2);
-    color: #9a7a2e;
-  }
-  .sb-btn-partner:hover {
-    background: rgba(201,168,76,0.12);
-    border-color: rgba(201,168,76,0.3);
-    transform: translateX(2px);
-  }
-  .sb-btn-partner.active {
-    background: rgba(201,168,76,0.12);
-    border-color: rgba(201,168,76,0.3);
-    color: #9a7a2e;
-  }
-  .sb-btn-partner .sb-icon {
-    background: rgba(201,168,76,0.08);
-    color: #9a7a2e;
-    border-color: rgba(201,168,76,0.15);
+    border: 1px solid transparent;
+    background: transparent;
+    color: #4a5568;
   }
 
-  .sb-btn-services {
-    width: 100%; display: flex; align-items: center; gap: .65rem;
-    padding: .54rem .75rem; border-radius: 9px;
-    font-family: 'DM Sans', sans-serif; font-size: .84rem; font-weight: 600;
-    cursor: pointer; transition: all .16s;
-    text-align: left; margin-bottom: .05rem;
-    background: rgba(16,185,129,0.08);
-    border: 1px solid rgba(16,185,129,0.2);
-    color: #10b981;
+  /* Hover state for all specialty buttons */
+  .sb-btn-services:hover:not(.active),
+  .sb-btn-partner:hover:not(.active),
+  .sb-btn-complaint:hover:not(.active),
+  .sb-btn-emergency:hover:not(.active) {
+    background: #f4f6f8;
+    color: #1a1f2e;
+    border-color: #e2e8f0;
   }
-  .sb-btn-services:hover {
-    background: rgba(16,185,129,0.12);
-    border-color: rgba(16,185,129,0.3);
-    transform: translateX(2px);
+
+  /* Icon container for specialty buttons - normal state */
+  .sb-btn-services .sb-icon,
+  .sb-btn-partner .sb-icon,
+  .sb-btn-complaint .sb-icon,
+  .sb-btn-emergency .sb-icon {
+    background: #f1f5f9;
+    color: #64748b;
   }
+
+  /* Icon container hover state */
+  .sb-btn-services:hover:not(.active) .sb-icon,
+  .sb-btn-partner:hover:not(.active) .sb-icon,
+  .sb-btn-complaint:hover:not(.active) .sb-icon,
+  .sb-btn-emergency:hover:not(.active) .sb-icon {
+    background: #e2e8f0;
+    color: #1a1f2e;
+  }
+
+  /* ACTIVE STATES - Colored backgrounds only when active */
   .sb-btn-services.active {
     background: rgba(16,185,129,0.12);
     border-color: rgba(16,185,129,0.3);
     color: #10b981;
+    font-weight: 600;
   }
-  .sb-btn-services .sb-icon {
-    background: rgba(16,185,129,0.08);
+  .sb-btn-services.active .sb-icon {
+    background: rgba(16,185,129,0.15);
+    border-color: rgba(16,185,129,0.2);
     color: #10b981;
-    border-color: rgba(16,185,129,0.15);
   }
 
-  .sb-btn-emergency {
-    width: 100%; display: flex; align-items: center; gap: .65rem;
-    padding: .54rem .75rem; border-radius: 9px;
-    font-family: 'DM Sans', sans-serif; font-size: .84rem; font-weight: 600;
-    cursor: pointer; transition: all .16s;
-    text-align: left; margin-top: .65rem; margin-bottom: .05rem;
-    background: rgba(220,38,38,0.1);
-    border: 1px solid rgba(220,38,38,0.25);
-    color: #dc2626;
+  .sb-btn-partner.active {
+    background: rgba(201,168,76,0.12);
+    border-color: rgba(201,168,76,0.3);
+    color: #9a7a2e;
+    font-weight: 600;
   }
-  .sb-btn-emergency:hover {
-    background: rgba(220,38,38,0.15);
-    border-color: rgba(220,38,38,0.4);
-    transform: translateX(2px);
-  }
-  .sb-btn-emergency.active {
-    background: rgba(220,38,38,0.15);
-    border-color: rgba(220,38,38,0.4);
-    color: #dc2626;
-  }
-  .sb-btn-emergency .sb-icon {
-    background: rgba(220,38,38,0.1);
-    color: #dc2626;
-    border-color: rgba(220,38,38,0.2);
+  .sb-btn-partner.active .sb-icon {
+    background: rgba(201,168,76,0.15);
+    border-color: rgba(201,168,76,0.2);
+    color: #9a7a2e;
   }
 
-  .sb-btn-complaint {
-    width: 100%; display: flex; align-items: center; gap: .65rem;
-    padding: .54rem .75rem; border-radius: 9px;
-    font-family: 'DM Sans', sans-serif; font-size: .84rem; font-weight: 600;
-    cursor: pointer; transition: all .16s;
-    text-align: left; margin-bottom: .05rem;
-    background: rgba(139,92,246,0.08);
-    border: 1px solid rgba(139,92,246,0.2);
-    color: #8b5cf6;
-  }
-  .sb-btn-complaint:hover {
-    background: rgba(139,92,246,0.12);
-    border-color: rgba(139,92,246,0.3);
-    transform: translateX(2px);
-  }
   .sb-btn-complaint.active {
     background: rgba(139,92,246,0.12);
     border-color: rgba(139,92,246,0.3);
     color: #8b5cf6;
+    font-weight: 600;
   }
-  .sb-btn-complaint .sb-icon {
-    background: rgba(139,92,246,0.08);
+  .sb-btn-complaint.active .sb-icon {
+    background: rgba(139,92,246,0.15);
+    border-color: rgba(139,92,246,0.2);
     color: #8b5cf6;
-    border-color: rgba(139,92,246,0.15);
+  }
+
+  .sb-btn-emergency.active {
+    background: rgba(220,38,38,0.12);
+    border-color: rgba(220,38,38,0.3);
+    color: #dc2626;
+    font-weight: 600;
+  }
+  .sb-btn-emergency.active .sb-icon {
+    background: rgba(220,38,38,0.15);
+    border-color: rgba(220,38,38,0.2);
+    color: #dc2626;
   }
 
   .sb-out {
@@ -305,25 +296,25 @@ function Avatar({ user, size = 36, radius = 10, fontSize = '.95rem', className =
   );
 }
 
-function SidebarContent({ page, setPage, user, onLogout }) {
+function SidebarContent({ page, setPage, user, onLogout, onClose }) {
   const { t } = useLang();
   const [partnerOpen, setPartnerOpen] = useState(false);
 
   const NAV_MAIN = [
-    { key: 'dashboard', label: t.dashboard, Icon: LayoutDashboard },
-    { key: 'bookings',  label: t.bookings,  Icon: BedDouble },
-    { key: 'mybookings',label: t.mybookings,Icon: ClipboardList },
-    { key: 'rewards',   label: t.rewards,   Icon: Star },
-    { key: 'payments',  label: t.payments,  Icon: CreditCard },
+    { key: 'dashboard', label: t.dashboard || 'Dashboard', Icon: LayoutDashboard },
+    { key: 'bookings',  label: t.bookings || 'Bookings',  Icon: BedDouble },
+    { key: 'mybookings',label: t.mybookings || 'My Bookings', Icon: ClipboardList },
+    { key: 'rewards',   label: t.rewards || 'Rewards',   Icon: Star },
+    { key: 'payments',  label: t.payments || 'Payments',  Icon: CreditCard },
   ];
 
   const NAV_ACCOUNT = [
-    { key: 'profile',  label: t.profile,  Icon: User },
-    { key: 'settings', label: t.settings, Icon: Settings },
-    { key: 'support',  label: t.support,  Icon: MessageCircle },
+    { key: 'profile',  label: t.profile || 'Profile',  Icon: User },
+    { key: 'settings', label: t.settings || 'Settings', Icon: Settings },
+    { key: 'support',  label: t.support || 'Support',  Icon: MessageCircle },
   ];
 
-  // Partner Services submenu items with their specific page keys
+  // Partner Services submenu items
   const PARTNER_SUBMENU = [
     { key: 'partner-services-spa', label: 'Spa & Wellness', Icon: Heart },
     { key: 'partner-services-tours', label: 'Tours & Guides', Icon: Map },
@@ -332,7 +323,17 @@ function SidebarContent({ page, setPage, user, onLogout }) {
     { key: 'partner-services-salon', label: 'Salon', Icon: Scissors },
   ];
 
-  const isPartnerPage = page?.startsWith('partner-services');
+  // Define exact page matches
+  const currentPage = page || 'dashboard';
+  const isServicesActive = currentPage === 'services';
+  const isComplaintsActive = currentPage === 'complaints';
+  const isEmergencyActive = currentPage === 'emergency';
+  const isPartnerActive = currentPage?.startsWith('partner-services');
+
+  const handleNavigation = (key) => {
+    setPage(key);
+    if (onClose) onClose();
+  };
 
   return (
     <>
@@ -343,7 +344,7 @@ function SidebarContent({ page, setPage, user, onLogout }) {
             <Hotel size={16} />
           </div>
           <div>
-            <div className="sb-logo-name">Bayawan Mini Hotel</div>
+            <div className="sb-logo-name">Cebu Mini Hotel</div>
             <div className="sb-logo-sub">Guest Portal</div>
           </div>
         </div>
@@ -360,24 +361,29 @@ function SidebarContent({ page, setPage, user, onLogout }) {
       <nav className="sb-nav">
         <div className="sb-sec">Navigation</div>
         {NAV_MAIN.map(({ key, label, Icon }) => (
-          <button key={key} className={`sb-btn${page === key ? ' active' : ''}`} onClick={() => setPage(key)}>
+          <button 
+            key={key} 
+            className={`sb-btn ${currentPage === key ? 'active' : ''}`} 
+            onClick={() => handleNavigation(key)}
+          >
             <span className="sb-icon"><Icon size={15} /></span>
             {label}
           </button>
         ))}
 
+        {/* Services Button */}
         <button
-          className={`sb-btn-services${page === 'services' ? ' active' : ''}`}
-          onClick={() => setPage('services')}
+          className={`sb-btn-services ${isServicesActive ? 'active' : ''}`}
+          onClick={() => handleNavigation('services')}
         >
           <span className="sb-icon"><Sparkles size={15} /></span>
-          {t.services}
+          Guest Services
         </button>
 
         {/* Partner Services with Submenu */}
         <div>
           <button
-            className={`sb-btn-partner${isPartnerPage ? ' active' : ''}`}
+            className={`sb-btn-partner ${isPartnerActive ? 'active' : ''}`}
             onClick={() => setPartnerOpen(!partnerOpen)}
           >
             <span className="sb-icon"><Sparkles size={15} /></span>
@@ -392,8 +398,8 @@ function SidebarContent({ page, setPage, user, onLogout }) {
               {PARTNER_SUBMENU.map(({ key, label, Icon }) => (
                 <button
                   key={key}
-                  className={`sb-submenu-btn${page === key ? ' active' : ''}`}
-                  onClick={() => setPage(key)}
+                  className={`sb-submenu-btn ${currentPage === key ? 'active' : ''}`}
+                  onClick={() => handleNavigation(key)}
                 >
                   <span className="sb-submenu-icon"><Icon size={12} /></span>
                   {label}
@@ -403,25 +409,31 @@ function SidebarContent({ page, setPage, user, onLogout }) {
           )}
         </div>
 
+        {/* Complaints Button */}
         <button
-          className={`sb-btn-complaint${page === 'complaints' ? ' active' : ''}`}
-          onClick={() => setPage('complaints')}
+          className={`sb-btn-complaint ${isComplaintsActive ? 'active' : ''}`}
+          onClick={() => handleNavigation('complaints')}
         >
           <span className="sb-icon"><Flag size={15} /></span>
-          {t.complaints}
+          Guest Complaints
         </button>
 
+        {/* Emergency Button */}
         <button
-          className={`sb-btn-emergency${page === 'emergency' ? ' active' : ''}`}
-          onClick={() => setPage('emergency')}
+          className={`sb-btn-emergency ${isEmergencyActive ? 'active' : ''}`}
+          onClick={() => handleNavigation('emergency')}
         >
           <span className="sb-icon"><AlertTriangle size={15} /></span>
-          🚨 {t.emergency}
+          Emergency
         </button>
 
         <div className="sb-sec" style={{ marginTop: '.65rem' }}>Account</div>
         {NAV_ACCOUNT.map(({ key, label, Icon }) => (
-          <button key={key} className={`sb-btn${page === key ? ' active' : ''}`} onClick={() => setPage(key)}>
+          <button 
+            key={key} 
+            className={`sb-btn ${currentPage === key ? 'active' : ''}`} 
+            onClick={() => handleNavigation(key)}
+          >
             <span className="sb-icon"><Icon size={15} /></span>
             {label}
           </button>
@@ -429,21 +441,28 @@ function SidebarContent({ page, setPage, user, onLogout }) {
 
         <button className="sb-out" onClick={onLogout}>
           <span className="sb-out-icon"><LogOut size={15} /></span>
-          {t.signout}
+          Sign Out
         </button>
       </nav>
 
-      <div className="sb-foot">© 2026 Bayawan Mini Hotel</div>
+      <div className="sb-foot">© 2026 Cebu Mini Hotel</div>
     </>
   );
 }
 
 export function Sidebar({ page, setPage, user, onLogout, open, onClose }) {
   const nav = (key) => { setPage(key); onClose?.(); };
+  
   return (
     <>
       <aside className="sb-wrap d-none d-md-flex flex-column">
-        <SidebarContent page={page} setPage={setPage} user={user} onLogout={onLogout} />
+        <SidebarContent 
+          page={page} 
+          setPage={setPage} 
+          user={user} 
+          onLogout={onLogout} 
+          onClose={onClose}
+        />
       </aside>
 
       <Offcanvas show={open} onHide={onClose} placement="start" className="sb-offcanvas" style={{ width: 252 }}>
@@ -456,7 +475,13 @@ export function Sidebar({ page, setPage, user, onLogout, open, onClose }) {
           </div>
         </Offcanvas.Header>
         <Offcanvas.Body style={{ padding: 0, overflowY: 'auto' }}>
-          <SidebarContent page={page} setPage={nav} user={user} onLogout={onLogout} />
+          <SidebarContent 
+            page={page} 
+            setPage={nav} 
+            user={user} 
+            onLogout={onLogout} 
+            onClose={onClose}
+          />
         </Offcanvas.Body>
       </Offcanvas>
     </>

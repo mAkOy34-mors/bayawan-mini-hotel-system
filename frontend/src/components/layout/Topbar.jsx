@@ -1,7 +1,10 @@
-// Topbar.jsx – Simple select dropdown with all languages
+// Topbar.jsx – With notification bell + slide-in panel
+import { useState } from 'react';
 import { LANGUAGES } from '../../constants/config';
 import { useLang } from '../../context/LangContext';
-import { Globe } from 'lucide-react';
+import { useNotifications } from '../../context/NotificationContext';
+import { NotificationsPanel } from '../NotificationsPanel';
+import { Bell } from 'lucide-react';
 
 const css = `
   @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&display=swap');
@@ -39,9 +42,6 @@ const css = `
   .tb-right { display: flex; align-items: center; gap: .7rem; }
 
   .tb-lang {
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
     appearance: none;
     background: #f4f6f8 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1L5 5L9 1' stroke='%238a96a8' fill='none' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E") no-repeat right .65rem center;
     border: 1px solid #e2e8f0;
@@ -57,7 +57,53 @@ const css = `
   }
   .tb-lang:focus { border-color: #C9A84C; background-color: #fff; }
 
-  /* Avatar in topbar — shows profile pic or initials */
+  /* ── Bell button ── */
+  .tb-bell {
+    position: relative;
+    width: 34px; height: 34px; border-radius: 9px;
+    border: 1px solid #e2e8f0; background: #fff;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; color: #8a96a8;
+    transition: all .15s; flex-shrink: 0;
+  }
+  .tb-bell:hover { background: #f4f6f8; color: #1a1f2e; border-color: #c9d4e0; }
+  .tb-bell.has-notif { color: #C9A84C; border-color: rgba(201,168,76,0.4); background: rgba(201,168,76,0.06); }
+  .tb-bell.has-notif:hover { background: rgba(201,168,76,0.12); }
+
+  /* Red badge on the bell */
+  .tb-bell-badge {
+    position: absolute;
+    top: -4px; right: -4px;
+    min-width: 17px; height: 17px;
+    background: linear-gradient(135deg, #dc3545, #f87171);
+    color: #fff; font-size: .6rem; font-weight: 700;
+    border-radius: 99px; display: flex; align-items: center; justify-content: center;
+    padding: 0 3px;
+    border: 2px solid #fff;
+    pointer-events: none;
+    animation: tbBadgePop .28s cubic-bezier(.22,1,.36,1) both;
+  }
+  @keyframes tbBadgePop {
+    from { transform: scale(0); }
+    to   { transform: scale(1); }
+  }
+
+  /* Bell ring animation when new notifications arrive */
+  .tb-bell.has-notif svg {
+    animation: tbRing 1.2s cubic-bezier(.36,.07,.19,.97) both;
+    transform-origin: top center;
+  }
+  @keyframes tbRing {
+    0%,100% { transform: rotate(0); }
+    15%      { transform: rotate(10deg); }
+    30%      { transform: rotate(-10deg); }
+    45%      { transform: rotate(8deg); }
+    60%      { transform: rotate(-6deg); }
+    75%      { transform: rotate(4deg); }
+    90%      { transform: rotate(-2deg); }
+  }
+
+  /* Avatar in topbar */
   .tb-av {
     width: 32px; height: 32px; border-radius: 9px;
     background: linear-gradient(135deg, #9a7a2e, #C9A84C);
@@ -93,31 +139,56 @@ function initials(user) {
 }
 
 export function Topbar({ title, user, onMenuClick }) {
-  const { lang, setLang } = useLang();
+  const { lang, setLang }    = useLang();
+  const { unreadCount }      = useNotifications();
+  const [panelOpen, setPanelOpen] = useState(false);
+
   const profilePic = user?.profilePicture || null;
+  const hasNotif   = unreadCount > 0;
 
   return (
-    <header className="tb-wrap">
+    <>
       <style>{css}</style>
-      <div className="tb-left">
-        <button className="tb-menu" onClick={onMenuClick} aria-label="Open menu">☰</button>
-        <span className="tb-title">{title}</span>
-      </div>
-      <div className="tb-right">
-        <select className="tb-lang" value={lang} onChange={e => setLang(e.target.value)}>
-          {FULL_LANGUAGE_LIST.map(l => (
-            <option key={l.code} value={l.code}>{l.flag} {l.label}</option>
-          ))}
-        </select>
 
-        {/* Avatar — profile picture if set, otherwise initials */}
-        <div className="tb-av">
-          {profilePic
-            ? <img src={profilePic} alt="Profile" className="tb-av-img"/>
-            : initials(user)
-          }
+      <header className="tb-wrap">
+        <div className="tb-left">
+          <button className="tb-menu" onClick={onMenuClick} aria-label="Open menu">☰</button>
+          <span className="tb-title">{title}</span>
         </div>
-      </div>
-    </header>
+
+        <div className="tb-right">
+          <select className="tb-lang" value={lang} onChange={e => setLang(e.target.value)}>
+            {FULL_LANGUAGE_LIST.map(l => (
+              <option key={l.code} value={l.code}>{l.flag} {l.label}</option>
+            ))}
+          </select>
+
+          {/* ── Notification bell ── */}
+          <button
+            className={`tb-bell${hasNotif ? ' has-notif' : ''}`}
+            onClick={() => setPanelOpen(o => !o)}
+            aria-label={`Notifications${hasNotif ? ` (${unreadCount} unread)` : ''}`}
+          >
+            <Bell size={16} />
+            {hasNotif && (
+              <span className="tb-bell-badge">
+                {unreadCount > 99 ? '99+' : unreadCount}
+              </span>
+            )}
+          </button>
+
+          {/* Avatar */}
+          <div className="tb-av">
+            {profilePic
+              ? <img src={profilePic} alt="Profile" className="tb-av-img" />
+              : initials(user)
+            }
+          </div>
+        </div>
+      </header>
+
+      {/* Slide-in notification panel */}
+      {panelOpen && <NotificationsPanel onClose={() => setPanelOpen(false)} />}
+    </>
   );
 }

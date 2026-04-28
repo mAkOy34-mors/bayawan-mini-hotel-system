@@ -15,6 +15,9 @@ from .serializers import (
     ServicePaymentSerializer
 )
 from apps.payments.models import Payment  # ← IMPORTANT: Add this import
+from ..rooms.models import Room
+from ..staff.models import Task, TaskHistory
+from ..users.models import User
 
 
 class GuestServiceRequestView(APIView):
@@ -78,31 +81,123 @@ class ReceptionServiceListView(APIView):
 
 
 class AssignServiceRequestView(APIView):
-    """PUT /api/v1/services/reception/<id>/assign/ - Assign service to staff"""
+    """PUT /api/v1/services/reception/<id>/assign/ - Assign service to staff and create task"""
     permission_classes = [IsAuthenticated]
 
+    @transaction.atomic
     def put(self, request, service_id):
+        # Check permissions
         if request.user.role not in ['ADMIN', 'RECEPTIONIST']:
             return Response({'error': 'Access denied'}, status=403)
 
         try:
             service = ServiceRequest.objects.get(id=service_id)
         except ServiceRequest.DoesNotExist:
-            return Response({'error': 'Service not found'}, status=404)
+            return Response({'error': 'Service request not found'}, status=404)
 
         assigned_to_id = request.data.get('assigned_to')
-        if assigned_to_id:
-            from django.contrib.auth import get_user_model
-            User = get_user_model()
-            try:
-                service.assigned_to = User.objects.get(id=assigned_to_id)
-            except User.DoesNotExist:
-                return Response({'error': 'Staff not found'}, status=404)
 
+        if not assigned_to_id:
+            return Response({'error': 'assigned_to is required'}, status=400)
+
+        try:
+            assigned_staff = User.objects.get(id=assigned_to_id)
+        except User.DoesNotExist:
+            return Response({'error': 'Staff not found'}, status=404)
+
+        # Update service request
+        service.assigned_to = assigned_staff
+        service.status = 'IN_PROGRESS'
+        if not service.started_at:
+            service.started_at = timezone.now()
         service.save()
-        serializer = ServiceRequestSerializer(service)
-        return Response(serializer.data)
 
+        # ========== CREATE TASK IN STAFF_TASKS ==========
+
+        # Map service type to task type
+        task_type_mapping = {
+            'CLEANING': 'CLEANING',
+            'MAINTENANCE': 'MAINTENANCE',
+            'LAUNDRY': 'DELIVERY',
+            'DELIVERY': 'DELIVERY',
+            'EXTRA_PILLOWS': 'DELIVERY',
+            'EXTRA_TOWELS': 'DELIVERY',
+            'MINI_BAR': 'DELIVERY',
+            'TECH_SUPPORT': 'REPAIR',
+            'OTHER': 'ASSISTANCE',
+        }
+
+        task_type = task_type_mapping.get(service.service_type, 'ASSISTANCE')
+
+        # Map priority
+        priority_mapping = {
+            'LOW': 'LOW',
+            'MEDIUM': 'MEDIUM',
+            'HIGH': 'HIGH',
+            'URGENT': 'HIGH',
+        }
+        priority = priority_mapping.get(service.priority, 'MEDIUM')
+
+        # Get room object if exists
+        room = None
+        room_number = service.room_number
+        if service.room_number:
+            try:
+                room = Room.objects.filter(room_number=service.room_number).first()
+            except Room.DoesNotExist:
+                pass
+
+        # Create the task title and description
+        # Create the task title and description - CLEAN AND PRECISE
+        task_title = f"{service.service_type} - Room {service.room_number}"
+        task_description = f"Guest: {service.guest_name} | Room: {service.room_number} | Type: {service.service_type} | Priority: {service.priority} | Request: #{service.id} - {service.description or 'No description'}"
+
+        # Create the task
+        task = Task.objects.create(
+            title=task_title,
+            description=task_description,
+            task_type=task_type,
+            priority=priority,
+            status='PENDING',
+            room=room,
+            room_number=room_number,
+            assigned_to=assigned_staff,
+            assigned_by=request.user,
+            note=f"Created from service request #{service.id} by {request.user.username}",
+            booking=None,
+        )
+
+        # Create task history record
+        TaskHistory.objects.create(
+            task=task,
+            previous_status='',
+            new_status='PENDING',
+            changed_by=request.user,
+            note=f"Task created from service request #{service.id}"
+        )
+
+        # Optional: Add task reference to service request (if you add the field)
+        # service.task = task
+        # service.save(update_fields=['task'])
+
+        # Serialize response
+        serializer = ServiceRequestSerializer(service)
+
+        return Response({
+            'success': True,
+            'message': f'Service request assigned to {assigned_staff.username} and task created',
+            'service': serializer.data,
+            'task': {
+                'id': task.id,
+                'title': task.title,
+                'task_type': task.task_type,
+                'priority': task.priority,
+                'status': task.status,
+                'assigned_to': assigned_staff.username,
+                'assigned_to_id': assigned_staff.id,
+                'created_at': task.created_at,
+            }
+        }, status=200)
 
 class UpdateServiceStatusView(APIView):
     """PATCH /api/v1/services/tasks/<id>/status/ - Update service status"""

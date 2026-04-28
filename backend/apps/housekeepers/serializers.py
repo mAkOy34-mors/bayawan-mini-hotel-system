@@ -1,6 +1,6 @@
 # apps/housekeepers/serializers.py
 from rest_framework import serializers
-from .models import CleaningTask, CleaningChecklist, SupplyRequest, RoomStatusLog
+from .models import CleaningTask, CleaningChecklist, SupplyRequest, RoomStatusLog, RoomIssue
 from apps.employees.models import EmployeeInformation
 
 
@@ -61,15 +61,29 @@ class CleaningChecklistSerializer(serializers.ModelSerializer):
 
 class SupplyRequestSerializer(serializers.ModelSerializer):
     status_display = serializers.CharField(source='get_status_display', read_only=True)
+    priority_display = serializers.CharField(source='get_priority_display', read_only=True)  # ← ADD THIS
     housekeeper_name = serializers.SerializerMethodField()
     housekeeper_id = serializers.SerializerMethodField()
 
     class Meta:
         model = SupplyRequest
         fields = [
-            'id', 'housekeeper_employee', 'housekeeper_name', 'housekeeper_id',
-            'item_name', 'quantity', 'reason', 'status', 'status_display',
-            'approved_by', 'created_at', 'fulfilled_at'
+            'id',
+            'housekeeper_employee',
+            'housekeeper_name',
+            'housekeeper_id',
+            'item_name',
+            'quantity',
+            'unit',                    # ← ADD THIS
+            'reason',
+            'priority',                # ← ADD THIS
+            'priority_display',        # ← ADD THIS
+            'status',
+            'status_display',
+            'approved_by',
+            'rejection_reason',        # ← ADD THIS
+            'created_at',
+            'fulfilled_at'
         ]
 
     def get_housekeeper_name(self, obj):
@@ -81,7 +95,6 @@ class SupplyRequestSerializer(serializers.ModelSerializer):
         if obj.housekeeper_employee:
             return obj.housekeeper_employee.id
         return None
-
 
 class RoomStatusLogSerializer(serializers.ModelSerializer):
     action_display = serializers.CharField(source='get_action_display', read_only=True)
@@ -104,4 +117,35 @@ class RoomStatusLogSerializer(serializers.ModelSerializer):
     def get_performed_by_employee_id(self, obj):
         if obj.performed_by_employee:
             return obj.performed_by_employee.id
+        return None
+
+
+# apps/housekeepers/serializers.py - Update RoomIssueSerializer
+
+class RoomIssueSerializer(serializers.ModelSerializer):
+    issue_type_display = serializers.CharField(source='get_issue_type_display', read_only=True)
+    priority_display = serializers.CharField(source='get_priority_display', read_only=True)
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    reported_by_name = serializers.SerializerMethodField()
+    assigned_to_name = serializers.SerializerMethodField()  # This will now get from EmployeeInformation
+
+    class Meta:
+        model = RoomIssue
+        fields = [
+            'id', 'issue_type', 'issue_type_display', 'title', 'description',
+            'priority', 'priority_display', 'status', 'status_display',
+            'room_number', 'reported_by_employee', 'reported_by_name',
+            'assigned_to_employee', 'assigned_to_name', 'notes', 'resolution_notes',
+            'rejection_reason', 'before_image', 'after_image',
+            'created_at', 'started_at', 'completed_at'
+        ]
+
+    def get_reported_by_name(self, obj):
+        if obj.reported_by_employee:
+            return obj.reported_by_employee.full_name
+        return None
+
+    def get_assigned_to_name(self, obj):
+        if obj.assigned_to_employee:
+            return obj.assigned_to_employee.full_name
         return None

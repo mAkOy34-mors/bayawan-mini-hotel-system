@@ -7,7 +7,7 @@ import {
   Mail, Phone, MapPin, Briefcase, Calendar, CreditCard,
   Building2, BadgeIndianRupee, Hash, UserCircle, Shield,
   CheckCircle, XCircle, Clock, Save, X, Plus, Coffee,
-   Wrench  
+  Wrench  
 } from 'lucide-react';
 import { SHARED_CSS, fmtDate, Pill, Spinner, Pager, Toast, useToast } from './adminShared';
 import { API_BASE } from '../constants/config';
@@ -22,16 +22,13 @@ const ROLE_OPTIONS = [
   { value: 'MAINTENANCE', label: 'Maintenance', icon: <Wrench size={14} />, color: '#f97316' },
   { value: 'SECURITY', label: 'Security', icon: <Shield size={14} />, color: '#ef4444' },
   { value: 'FRONT_DESK', label: 'Front Desk', icon: <Phone size={14} />, color: '#06b6d4' },
-  { value: 'MANAGEMENT', label: 'Management', icon: <Users size={14} />, color: '#8b5cf6' },
 ];
 
 const DEPARTMENT_OPTIONS = [
   { value: 'FRONT_DESK', label: 'Front Desk', icon: <Phone size={14} /> },
   { value: 'HOUSEKEEPING', label: 'Housekeeping', icon: <Building2 size={14} /> },
-  { value: 'MAINTENANCE', label: 'Maintenance', icon: <Briefcase size={14} /> },
+  { value: 'MAINTENANCE', label: 'Maintenance', icon: <Wrench size={14} /> },
   { value: 'SECURITY', label: 'Security', icon: <Shield size={14} /> },
-  { value: 'FOOD_BEVERAGE', label: 'Food & Beverage', icon: <Coffee size={14} /> },
-  { value: 'MANAGEMENT', label: 'Management', icon: <Users size={14} /> },
   { value: 'ADMIN', label: 'Administration', icon: <Shield size={14} /> },
 ];
 
@@ -125,9 +122,8 @@ export function AdminUsers({ token }) {
     housekeepers: users.filter(u => u.role === 'HOUSEKEEPER').length,
     staff: users.filter(u => u.role === 'STAFF').length,
     maintenance: users.filter(u => u.role === 'MAINTENANCE').length,
-  security: users.filter(u => u.role === 'SECURITY').length,
-  frontDesk: users.filter(u => u.role === 'FRONT_DESK').length,
-  management: users.filter(u => u.role === 'MANAGEMENT').length,
+    security: users.filter(u => u.role === 'SECURITY').length,
+    frontDesk: users.filter(u => u.role === 'FRONT_DESK').length,
   };
 
   // Validate form
@@ -300,6 +296,11 @@ export function AdminUsers({ token }) {
     return r ? r.color : '#8a96a8';
   };
 
+  const getDepartmentIcon = (department) => {
+    const d = DEPARTMENT_OPTIONS.find(opt => opt.value === department);
+    return d ? d.icon : <Building2 size={14} />;
+  };
+
   // Show loading spinner while loading
   if (loading) {
     return (
@@ -313,6 +314,19 @@ export function AdminUsers({ token }) {
     );
   }
 
+  // Update stats display to show all role counts
+  const statsList = [
+    { icon: <Users size={20} />, label: 'Total Employees', value: stats.total, color: 'blue' },
+    { icon: <CheckCircle size={20} />, label: 'Active', value: stats.active, color: 'green' },
+    { icon: <XCircle size={20} />, label: 'Inactive', value: stats.inactive, color: 'red' },
+    { icon: <Phone size={20} />, label: 'Receptionists', value: stats.receptionists, color: 'teal' },
+    { icon: <Building2 size={20} />, label: 'Housekeepers', value: stats.housekeepers, color: 'purple' },
+    { icon: <Briefcase size={20} />, label: 'Staff', value: stats.staff, color: 'orange' },
+    { icon: <Wrench size={20} />, label: 'Maintenance', value: stats.maintenance, color: 'amber' },
+    { icon: <Shield size={20} />, label: 'Security', value: stats.security, color: 'red' },
+    { icon: <Phone size={20} />, label: 'Front Desk', value: stats.frontDesk, color: 'cyan' },
+  ];
+
   return (
     <div className="ap-root">
       <style>{SHARED_CSS}</style>
@@ -322,7 +336,7 @@ export function AdminUsers({ token }) {
       <div className="ap-hd">
         <div>
           <h1 className="ap-title">User Management</h1>
-          <p className="ap-sub">Manage employees (Receptionists, Housekeepers, Staff)</p>
+          <p className="ap-sub">Manage employees (Receptionists, Housekeepers, Staff, Maintenance, Security, Front Desk)</p>
         </div>
         <button className="ap-btn-primary" onClick={openCreate}>
           <UserPlus size={16} /> Add Employee
@@ -330,15 +344,8 @@ export function AdminUsers({ token }) {
       </div>
 
       {/* Stats Cards */}
-      <div className="ap-stats" style={{ gridTemplateColumns: 'repeat(6, 1fr)' }}>
-        {[
-          { icon: <Users size={20} />, label: 'Total Employees', value: stats.total, color: 'blue' },
-          { icon: <CheckCircle size={20} />, label: 'Active', value: stats.active, color: 'green' },
-          { icon: <XCircle size={20} />, label: 'Inactive', value: stats.inactive, color: 'red' },
-          { icon: <Phone size={20} />, label: 'Receptionists', value: stats.receptionists, color: 'teal' },
-          { icon: <Building2 size={20} />, label: 'Housekeepers', value: stats.housekeepers, color: 'purple' },
-          { icon: <Briefcase size={20} />, label: 'Staff', value: stats.staff, color: 'orange' },
-        ].map((s, i) => (
+      <div className="ap-stats" style={{ gridTemplateColumns: 'repeat(9, 1fr)' }}>
+        {statsList.map((s, i) => (
           <div key={i} className={`ap-stat ${s.color}`}>
             <div className="ap-stat-icon">{s.icon}</div>
             <div className="ap-stat-lbl">{s.label}</div>
@@ -435,7 +442,7 @@ export function AdminUsers({ token }) {
                       <td>
                         <Mail size={12} style={{ display: 'inline', marginRight: '.2rem', color: 'var(--text-muted)' }} />
                         <span style={{ fontSize: '.78rem', color: 'var(--text-sub)' }}>{user.email}</span>
-                       </td>
+                      </td>
                       <td>
                         <span style={{
                           display: 'inline-flex', alignItems: 'center', gap: '.3rem',
@@ -446,11 +453,18 @@ export function AdminUsers({ token }) {
                         }}>
                           {getRoleIcon(user.role)} {user.role?.charAt(0) + user.role?.slice(1).toLowerCase()}
                         </span>
-                       </td>
+                      </td>
                       <td>
-                        <Building2 size={12} style={{ display: 'inline', marginRight: '.2rem', color: 'var(--text-muted)' }} />
-                        <span style={{ fontSize: '.78rem' }}>{user.department?.replace('_', ' ') || '—'}</span>
-                       </td>
+                        <span style={{
+                          display: 'inline-flex', alignItems: 'center', gap: '.3rem',
+                          padding: '.2rem .6rem', borderRadius: 99,
+                          background: '#e2e8f015',
+                          color: 'var(--text-sub)',
+                          fontSize: '.72rem'
+                        }}>
+                          {getDepartmentIcon(user.department)} {user.department?.replace('_', ' ') || '—'}
+                        </span>
+                      </td>
                       <td><Pill status={user.isActive ? 'active' : 'inactive'} label={user.isActive ? 'Active' : 'Inactive'} /></td>
                       <td>
                         <div style={{ display: 'flex', gap: '.4rem' }}>
@@ -473,8 +487,8 @@ export function AdminUsers({ token }) {
                             <Trash2 size={13} />
                           </button>
                         </div>
-                       </td>
-                     </tr>
+                      </td>
+                    </tr>
                   ))}
                 </tbody>
               </table>
@@ -555,13 +569,19 @@ export function AdminUsers({ token }) {
               </select>
             </div>
             <div className="ap-field">
-              <label className="ap-label"><Building2 size={12} /> Department</label>
-              <input 
-                className="ap-input"
+              <label className="ap-label"><Building2 size={12} /> Department <span className="req">*</span></label>
+              <select 
+                className="ap-sel"
                 value={form.department}
                 onChange={e => setForm({ ...form, department: e.target.value })}
-                placeholder="e.g., FRONT_DESK"
-              />
+              >
+                <option value="">Select Department</option>
+                {DEPARTMENT_OPTIONS.map(dept => (
+                  <option key={dept.value} value={dept.value}>
+                    {dept.icon} {dept.label}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
 

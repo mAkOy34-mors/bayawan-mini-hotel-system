@@ -336,7 +336,6 @@ const css = `
   }
   .bm-pay-chip.deposit { background:rgba(201,168,76,0.12); color:#9a7a2e; }
   .bm-pay-chip.full    { background:var(--green-bg); color:var(--green); }
-  .bm-pay-chip.hotel   { background:#f1f5f9; color:#64748b; }
   .bm-due-box {
     display:flex; align-items:center; justify-content:space-between;
     padding:.75rem 1rem; border-radius:10px; margin-bottom:.9rem;
@@ -487,7 +486,35 @@ const css = `
     box-shadow:0 2px 8px rgba(201,168,76,0.3);
   }
   .bs-close-btn:hover { background:linear-gradient(135deg,#b09038,#dfc06e); }
+
+  /* ══ Room-type filter tabs ══ */
+  .bp-type-filter {
+    display:flex; flex-wrap:wrap; gap:.5rem; margin-bottom:1.25rem;
+    animation:fadeUp .4s cubic-bezier(.22,1,.36,1) both;
+  }
+  .bp-type-tab {
+    display:inline-flex; align-items:center; gap:.4rem;
+    padding:.38rem .95rem; border-radius:99px; font-size:.78rem; font-weight:600;
+    cursor:pointer; border:1.5px solid var(--border); background:#fff;
+    color:var(--text-sub); font-family:'DM Sans',sans-serif;
+    transition:all .18s; white-space:nowrap;
+  }
+  .bp-type-tab:hover { border-color:rgba(201,168,76,0.5); color:var(--gold); background:rgba(201,168,76,0.04); }
+  .bp-type-tab.active {
+    background:linear-gradient(135deg,#9a7a2e,#C9A84C); color:#fff;
+    border-color:transparent; box-shadow:0 2px 10px rgba(201,168,76,0.3);
+  }
+  .bp-type-tab-dot {
+    width:7px; height:7px; border-radius:50%; background:currentColor; opacity:.7; flex-shrink:0;
+  }
+  .bp-type-tab.active .bp-type-tab-dot { opacity:1; background:#fff; }
+  .bp-type-count {
+    font-size:.68rem; padding:.07rem .42rem; border-radius:99px;
+    background:rgba(0,0,0,0.08); color:inherit;
+  }
+  .bp-type-tab.active .bp-type-count { background:rgba(255,255,255,0.25); color:#fff; }
 `;
+
 
 export function BookingPage({ token, user }) {
   const { t } = useLang();
@@ -503,7 +530,6 @@ export function BookingPage({ token, user }) {
   const [guestName, setGuestName]         = useState(user?.fullName || user?.username || '');
   const [guestEmail, setGuestEmail]       = useState(user?.email || '');
   const [guestPhone, setGuestPhone]       = useState('');
-  const [paymentMethod, setPaymentMethod] = useState('ONLINE');
   const [paymentType, setPaymentType]     = useState('DEPOSIT');
 
   const [confirming, setConfirming] = useState(false);
@@ -526,6 +552,8 @@ export function BookingPage({ token, user }) {
   const [payBookingId,  setPayBookingId]  = useState(null);
   const [payBookingRef, setPayBookingRef] = useState('');
   const [checkingPay,   setCheckingPay]   = useState(false);
+
+  const [activeType, setActiveType] = useState('ALL');
 
   const { alert, showAlert } = useAlert();
 
@@ -603,6 +631,7 @@ export function BookingPage({ token, user }) {
       
       const data = await response.json();
       setRooms(data);
+      setActiveType('ALL');
       
       const availableCount = data.filter(r => r.available).length;
       if (availableCount === 0) {
@@ -617,6 +646,12 @@ export function BookingPage({ token, user }) {
       setLoading(false);
     }
   };
+
+  // Derive unique room types from loaded rooms (preserving display order)
+  const roomTypes = ['ALL', ...Array.from(new Set(rooms.map(r => r.roomType)))];
+
+  // Rooms filtered by active type tab
+  const filteredRooms = activeType === 'ALL' ? rooms : rooms.filter(r => r.roomType === activeType);
 
   const nights = Math.max(1, Math.ceil((new Date(checkOut) - new Date(checkIn)) / 86400000));
   const total = selected ? selected.pricePerNight * nights : 0;
@@ -674,7 +709,6 @@ export function BookingPage({ token, user }) {
     setGuestName(user?.fullName || user?.username || '');
     setGuestEmail(user?.email || '');
     setGuestPhone('');
-    setPaymentMethod('ONLINE'); 
     setPaymentType('DEPOSIT');
     setRequests(''); 
     setTouched(false); 
@@ -708,7 +742,7 @@ export function BookingPage({ token, user }) {
           numChildren:     0,
           totalAmount:     totalAmount,
           specialRequests: pendingPayload.specialRequests || '',
-          paymentMethod:   pendingPayload.paymentMethod,
+          paymentMethod:   'ONLINE',
           paymentType:     pendingPayload.paymentType,
         }),
       });
@@ -777,7 +811,7 @@ export function BookingPage({ token, user }) {
           guestName:       pendingPayload.guestName,
           guestEmail:      pendingPayload.guestEmail,
           guestPhone:      pendingPayload.guestPhone,
-          paymentMethod:   pendingPayload.paymentMethod,
+          paymentMethod:   'ONLINE',
           paymentType:     pendingPayload.paymentType,
           totalAmount:     pendingPayload.pricePerNight * Math.max(1, Math.ceil(
             (new Date(pendingPayload.checkOutDate) - new Date(pendingPayload.checkInDate)) / 86400000
@@ -795,22 +829,10 @@ export function BookingPage({ token, user }) {
       setBookedData(data);
       setShowOtp(false);
       
-      if (pendingPayload.paymentMethod === 'ONLINE' && data.checkoutUrl) {
-        resetGuestForm();
-        setSelected(null);
-        setPendingPayload(null);
-        openPayPopup(data.checkoutUrl, data.id, data.bookingReference);
-      } else {
-        setBooked({
-          id:            data.id || data.bookingReference,
-          depositAmount: data.depositAmount,
-          fromRedirect:  false,
-        });
-        showAlert(t.bookingConfirmedHotel || 'Booking confirmed! Pay at hotel on arrival.', 'success');
-        resetGuestForm();
-        setSelected(null);
-        setPendingPayload(null);
-      }
+      resetGuestForm();
+      setSelected(null);
+      setPendingPayload(null);
+      openPayPopup(data.checkoutUrl, data.id, data.bookingReference);
 
     } catch (e) {
       setOtpError(e.message || t.invalidOtp || 'Invalid OTP. Please try again.');
@@ -828,7 +850,6 @@ export function BookingPage({ token, user }) {
     if (!guestEmail.trim()) { setModalError(t.emailRequired || 'Email address is required.'); return; }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(guestEmail.trim())) { setModalError(t.validEmailRequired || 'Please enter a valid email address.'); return; }
     if (!guestPhone.trim()) { setModalError(t.phoneRequired || 'Phone number is required.'); return; }
-    if (!paymentMethod)     { setModalError(t.paymentMethodRequired || 'Please select a payment method.'); return; }
 
     const payload = {
       roomId:          selected.id,
@@ -840,7 +861,7 @@ export function BookingPage({ token, user }) {
       guestName:       guestName.trim(),
       guestEmail:      guestEmail.trim(),
       guestPhone:      guestPhone.trim(),
-      paymentMethod,
+      paymentMethod:   'ONLINE',
       paymentType,
       amountDue,
     };
@@ -865,7 +886,7 @@ export function BookingPage({ token, user }) {
           numChildren:     0,
           totalAmount:     totalAmount,
           specialRequests: requests.trim(),
-          paymentMethod,
+          paymentMethod:   'ONLINE',
           paymentType,
         }),
       });
@@ -982,8 +1003,43 @@ export function BookingPage({ token, user }) {
           </div>
         </div>
       ) : (
-        <div className="bp-room-grid">
-          {rooms.map((room, idx) => {
+        <>
+          {/* Room Type Filter Tabs */}
+          <div className="bp-type-filter">
+            {roomTypes.map(type => {
+              const count = type === 'ALL'
+                ? rooms.length
+                : rooms.filter(r => r.roomType === type).length;
+              const typeColor = type === 'ALL' ? null : getRoomTypeColor(type);
+              return (
+                <button
+                  key={type}
+                  className={`bp-type-tab ${activeType === type ? 'active' : ''}`}
+                  onClick={() => setActiveType(type)}
+                  style={activeType !== type && typeColor ? { '--tab-color': typeColor } : {}}
+                >
+                  {type !== 'ALL' && (
+                    <span
+                      className="bp-type-tab-dot"
+                      style={activeType !== type ? { background: typeColor } : {}}
+                    />
+                  )}
+                  {type === 'ALL' ? (t.allTypes || 'All Types') : type}
+                  <span className="bp-type-count">{count}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="bp-room-grid">
+            {filteredRooms.length === 0 ? (
+              <div className="bp-empty" style={{ gridColumn: '1 / -1' }}>
+                <div className="bp-empty-icon"><Hotel size={44} strokeWidth={1} opacity={0.4}/></div>
+                <div className="bp-empty-text">
+                  {t.noRoomsForType || `No ${activeType} rooms found for the selected dates.`}
+                </div>
+              </div>
+            ) : filteredRooms.map((room, idx) => {
             const typeColor = getRoomTypeColor(room.roomType);
             const imageFullUrl = getFullImageUrl(room.imageUrl);
             
@@ -1072,7 +1128,8 @@ export function BookingPage({ token, user }) {
               </div>
             );
           })}
-        </div>
+          </div>
+        </>
       )}
 
       {/* Booking Confirmation Modal */}
@@ -1147,23 +1204,17 @@ export function BookingPage({ token, user }) {
               <div style={{ marginBottom:'.75rem' }}>
                 <div className="bm-label" style={{ marginBottom:'.5rem' }}>{t.howToPay || 'How would you like to pay?'} *</div>
                 <div style={{ display:'flex', gap:'.65rem', flexWrap:'wrap' }}>
-                  {[
-                    { value:'ONLINE', Icon: CreditCard, label: t.payOnline || 'Pay Online', sub: t.payOnlineSub || 'GCash / Card via PayMongo' },
-                    { value:'HOTEL',  Icon: Hotel,      label: t.payAtHotel || 'Pay at Hotel', sub: t.payAtHotelSub || 'Cash upon arrival' },
-                  ].map(opt => (
-                    <button key={opt.value} type="button"
-                      className={`bm-pay-card${paymentMethod===opt.value?' sel':''}`}
-                      style={{ flex:1, minWidth:130 }}
-                      onClick={() => setPaymentMethod(opt.value)}>
-                      <div className="bm-pay-radio">{paymentMethod===opt.value && <div className="bm-pay-dot"/>}</div>
-                      <div>
-                        <div className="bm-pay-title" style={{ display:'flex', alignItems:'center', gap:'.4rem' }}>
-                          <opt.Icon size={14}/>{opt.label}
-                        </div>
-                        <div className="bm-pay-sub">{opt.sub}</div>
+                  <button type="button"
+                    className="bm-pay-card sel"
+                    style={{ flex:1, minWidth:130 }}>
+                    <div className="bm-pay-radio"><div className="bm-pay-dot"/></div>
+                    <div>
+                      <div className="bm-pay-title" style={{ display:'flex', alignItems:'center', gap:'.4rem' }}>
+                        <CreditCard size={14}/>{t.payOnline || 'Pay Online'}
                       </div>
-                    </button>
-                  ))}
+                      <div className="bm-pay-sub">{t.payOnlineSub || 'GCash / Card via PayMongo'}</div>
+                    </div>
+                  </button>
                 </div>
               </div>
 
@@ -1256,11 +1307,9 @@ export function BookingPage({ token, user }) {
               ? <><div className="bp-spinner"/>{t.sendingOtp || 'Sending OTP…'}</>
               : confirming
                 ? <><div className="bp-spinner"/>{t.confirming || 'Confirming…'}</>
-                : paymentMethod === 'HOTEL'
-                  ? <><Mail size={14}/>{t.verifyAndConfirm || 'Verify & Confirm'}</>
-                  : paymentType === 'FULL'
-                    ? <><Mail size={14}/>{t.verifyAndPayFull || 'Verify & Pay Full'}</>
-                    : <><Mail size={14}/>{t.verifyAndPayDeposit || 'Verify & Pay Deposit'}</>
+                : paymentType === 'FULL'
+                  ? <><Mail size={14}/>{t.verifyAndPayFull || 'Verify & Pay Full'}</>
+                  : <><Mail size={14}/>{t.verifyAndPayDeposit || 'Verify & Pay Deposit'}</>
             }
           </button>
         </Modal.Footer>
@@ -1313,9 +1362,7 @@ export function BookingPage({ token, user }) {
           <button className="otp-verify-btn" disabled={otpVerifying || otpDigits.join('').length < 6} onClick={verifyOtpAndBook}>
             {otpVerifying
               ? <><div className="bp-spinner"/>{t.verifying || 'Verifying…'}</>
-              : pendingPayload?.paymentMethod === 'HOTEL'
-                ? <><CheckCircle2 size={15}/>{t.confirmBookingAction || 'Confirm Booking'}</>
-                : <><CreditCard size={15}/>{t.confirmAndProceed || 'Confirm & Proceed to Payment'}</>
+              : <><CreditCard size={15}/>{t.confirmAndProceed || 'Confirm & Proceed to Payment'}</>
             }
           </button>
         </Modal.Body>

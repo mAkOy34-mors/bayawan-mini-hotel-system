@@ -9,6 +9,8 @@ import { HousekeeperRoomDetail } from './HousekeeperRoomDetail';
 import { HousekeeperTasks } from './HousekeeperTasks';
 import { HousekeeperReport } from './HousekeeperReport';
 import { HousekeeperProfile } from './HousekeeperProfile';
+import { HousekeeperSupplyRequests } from './HousekeeperSupplyRequests';
+import { HousekeeperRoomIssues } from './HousekeeperRoomIssues';
 import { API_BASE } from '../constants/config';
 
 const LAYOUT_CSS = `
@@ -151,6 +153,8 @@ const PAGE_TITLES = {
   tasks: 'My Tasks',
   report: 'My Report',
   profile: 'My Profile',
+  'supply-requests': 'Supply Requests',
+  'room-issues': 'Room Issues',
 };
 
 function HousekeeperLogin({ onLogin }) {
@@ -221,6 +225,10 @@ function HousekeeperShell({ user, token, onLogout }) {
         return <HousekeeperRoomDetail {...props} />;
       case 'tasks':
         return <HousekeeperTasks {...props} />;
+      case 'supply-requests':
+        return <HousekeeperSupplyRequests {...props} />;
+      case 'room-issues':
+        return <HousekeeperRoomIssues {...props} />;
       case 'report':
         return <HousekeeperReport {...props} />;
       case 'profile':

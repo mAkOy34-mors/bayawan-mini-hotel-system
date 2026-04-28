@@ -21,6 +21,9 @@ import AdminCommissionDashboard from './AdminCommissionDashboard';
 import AdminPartnerManagement from './AdminPartnerManagement';
 import { AdminEmergency } from './AdminEmergency';
 import { AdminEmergencyLog } from './AdminEmergencyLog';
+import { AdminTaskMonitor } from './AdminTaskMonitor';
+import { AdminSupplyRequests } from './AdminSupplyRequests';
+import { AdminMaintenanceRequests } from './AdminMaintenanceRequests';
 
 import { API_BASE as BASE } from '../constants/config';
 
@@ -142,6 +145,9 @@ function AdminShell({ user, token, onLogout }) {
   // ✅ Updated PAGE_MAP with Emergency pages
   const PAGE_MAP = {
     dashboard:         <AdminDashboard      token={token} setPage={setPage} />,
+    'task-monitor': <AdminTaskMonitor token={token} />, 
+    'supply-requests': <AdminSupplyRequests token={token} />,
+'maintenance-requests': <AdminMaintenanceRequests token={token} />,
     bookings:          <AdminBookings       token={token} />,
     'change-requests': <AdminChangeRequests token={token} />,
     rooms:             <AdminRooms          token={token} />,

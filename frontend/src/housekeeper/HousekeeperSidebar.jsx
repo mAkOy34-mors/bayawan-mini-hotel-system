@@ -1,11 +1,13 @@
 // housekeeper/HousekeeperSidebar.jsx
 import { Offcanvas } from 'react-bootstrap';
-import { LayoutDashboard, Hotel, ClipboardList, BarChart3, User, LogOut, Wrench } from 'lucide-react';
+import { LayoutDashboard, Hotel, ClipboardList, BarChart3, User, LogOut, Wrench, Package, AlertTriangle} from 'lucide-react';
 
 const NAV_ITEMS = [
   { key: 'dashboard', label: 'Dashboard', Icon: LayoutDashboard },
   { key: 'rooms', label: 'Room Status', Icon: Hotel },
   { key: 'tasks', label: 'My Tasks', Icon: ClipboardList },
+  { key: 'supply-requests', label: 'Supply Requests', Icon: Package },
+  { key: 'room-issues', label: 'Room Issues', Icon: AlertTriangle },
   { key: 'report', label: 'My Report', Icon: BarChart3 },
   { key: 'profile', label: 'My Profile', Icon: User },
 ];

@@ -9,20 +9,26 @@ from django.db import models
 
 # apps/payments/models.py
 class Payment(models.Model):
+    # apps/bookings/models.py - Update PaymentStatus
+
     class PaymentStatus(models.TextChoices):
         PENDING = "PENDING", "Pending"
-        PAID    = "PAID",    "Paid"
+        PAID = "PAID", "Paid"
         EXPIRED = "EXPIRED", "Expired"
-        FAILED  = "FAILED",  "Failed"
+        FAILED = "FAILED", "Failed"
+        REFUNDED = "REFUNDED", "Refunded"  # ← ADD THIS
+        CANCELLED = "CANCELLED", "Cancelled"  # ← ADD THIS
 
     class PaymentType(models.TextChoices):
         ROOM_BOOKING = "ROOM_BOOKING", "Room Booking"
-        CHECK_IN     = "CHECK_IN",     "Check In"
-        DEPOSIT      = "DEPOSIT",      "Deposit"
-        BALANCE      = "BALANCE",      "Balance"
-        SERVICE      = "SERVICE",      "Service Charge"  # ← Add this
-        REFUND       = "REFUND",       "Refund"
-        OTHER        = "OTHER",        "Other"
+        CHECK_IN = "CHECK_IN", "Check In"
+        DEPOSIT = "DEPOSIT", "Deposit"
+        BALANCE = "BALANCE", "Balance"
+        SERVICE = "SERVICE", "Service Charge"
+        REFUND = "REFUND", "Refund"  # ← ADD THIS
+        CANCELLATION = "CANCELLATION", "Cancellation"  # ← ADD THIS (optional)
+        ADDITIONAL_DEPOSIT = "ADDITIONAL_DEPOSIT", "Additional Deposit"
+        OTHER = "OTHER", "Other"
 
     # Long id @GeneratedValue IDENTITY
     id = models.BigAutoField(primary_key=True)

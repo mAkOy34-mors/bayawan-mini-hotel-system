@@ -58,6 +58,23 @@ class Task(models.Model):
         blank=True,
         related_name='tasks'
     )
+    # Add alongside the existing `complaint` FK
+    room_issue = models.ForeignKey(
+        'housekeepers.RoomIssue',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='tasks'
+    )
+
+    service_request = models.ForeignKey(
+        'services.ServiceRequest',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='tasks'
+    )
+
 
     # Timestamps
     created_at = models.DateTimeField(auto_now_add=True)
@@ -127,3 +144,75 @@ class StaffProfile(models.Model):
             import random
             self.employee_id = f"STAFF{random.randint(100000, 999999)}"
         super().save(*args, **kwargs)
+
+
+# apps/staff/models.py - Add this new model
+
+class MaintenanceRequest(models.Model):
+    """Maintenance requests from staff (electrical, plumbing, tools request, etc.)"""
+
+    MAINTENANCE_TYPES = [
+        ('ELECTRICAL', 'Electrical Problem'),
+        ('PLUMBING', 'Plumbing Issue'),
+        ('HVAC', 'AC/Heating Problem'),
+        ('DOOR_LOCK', 'Door/Lock Issue'),
+        ('TV_ELECTRONICS', 'TV/Electronics'),
+        ('FURNITURE', 'Furniture Repair'),
+        ('TOOLS_REQUEST', 'Request Tools/Materials'),
+        ('OTHER', 'Other Issue'),
+    ]
+
+    PRIORITY_CHOICES = [
+        ('HIGH', 'High - Urgent'),
+        ('MEDIUM', 'Medium - Normal'),
+        ('LOW', 'Low - Can Wait'),
+    ]
+
+    STATUS_CHOICES = [
+        ('PENDING', 'Pending'),
+        ('APPROVED', 'Approved'),
+        ('FULFILLED', 'Fulfilled'),
+        ('REJECTED', 'Rejected'),
+    ]
+
+    # Request details
+    maintenance_type = models.CharField(max_length=20, choices=MAINTENANCE_TYPES)
+    title = models.CharField(max_length=200)
+    description = models.TextField()
+    priority = models.CharField(max_length=10, choices=PRIORITY_CHOICES, default='MEDIUM')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
+
+    # Location
+    room_number = models.CharField(max_length=10, blank=True, null=True)
+
+    # Requestor and assignment
+    requested_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='maintenance_requests'
+    )
+    assigned_to = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='assigned_maintenance_requests'
+    )
+
+    # Notes and resolution
+    notes = models.TextField(blank=True, null=True)
+    resolution_notes = models.TextField(blank=True, null=True)
+    rejection_reason = models.TextField(blank=True, null=True)
+
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    started_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'maintenance_requests'
+        ordering = ['-priority', '-created_at']
+
+    def __str__(self):
+        return f"{self.get_maintenance_type_display()}: {self.title}"

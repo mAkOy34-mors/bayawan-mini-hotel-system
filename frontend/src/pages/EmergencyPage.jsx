@@ -1,4 +1,4 @@
-// EmergencyPage.jsx – Emergency alert system for guests
+// EmergencyPage.jsx - Updated to fetch active booking
 import { useState, useEffect } from 'react';
 import { Modal } from 'react-bootstrap';
 import { API_BASE } from '../constants/config';
@@ -7,7 +7,8 @@ import { useAlert } from '../hooks/useAlert';
 import {
   AlertTriangle, Bell, Hotel, Phone, Heart, Shield, 
   Flame, Ambulance, Lock, CheckCircle2, Send,
-  X, Clock, User, ChevronRight, HelpCircle,
+  X, Clock, User, ChevronRight, HelpCircle, Home,
+  Stethoscope, Building2, MapPin, Calendar, Loader2
 } from 'lucide-react';
 
 const css = `
@@ -42,7 +43,7 @@ const css = `
   *::-webkit-scrollbar-thumb { background:rgba(201,168,76,0.4); border-radius:99px; }
 
   @keyframes fadeUp    { from{opacity:0;transform:translateY(14px)} to{opacity:1;transform:translateY(0)} }
-  @keyframes pulse     { 0%,100%{transform:scale(1)} 50%{transform:scale(1.05)} }
+  @keyframes pulse     { 0%,100%{transform:scale(1)} 50%{transform:scale(1.02)} }
   @keyframes shake     { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-5px)} 75%{transform:translateX(5px)} }
   @keyframes spin      { to{transform:rotate(360deg)} }
   @keyframes glow      { 0%{box-shadow:0 0 0 0 rgba(220,38,38,0.4)} 70%{box-shadow:0 0 0 10px rgba(220,38,38,0)} 100%{box-shadow:0 0 0 0 rgba(220,38,38,0)} }
@@ -61,7 +62,7 @@ const css = `
   /* ── Emergency Banner ── */
   .emergency-banner {
     background:linear-gradient(135deg,#dc2626,#ef4444);
-    border-radius:14px; padding:1.25rem 1.5rem; margin-bottom:1.5rem;
+    border-radius:14px; padding:1rem 1.5rem; margin-bottom:1.5rem;
     animation:fadeUp .4s both, pulse 2s ease-in-out infinite;
     color:#fff; display:flex; align-items:center; justify-content:space-between;
     flex-wrap:wrap; gap:1rem;
@@ -71,8 +72,8 @@ const css = `
     width:48px; height:48px; border-radius:50%; background:rgba(255,255,255,0.2);
     display:flex; align-items:center; justify-content:center;
   }
-  .emergency-banner-text h3 { font-size:1.1rem; font-weight:700; margin:0 0 .2rem; }
-  .emergency-banner-text p { font-size:.78rem; opacity:0.9; margin:0; }
+  .emergency-banner-text h3 { font-size:1rem; font-weight:700; margin:0 0 .2rem; }
+  .emergency-banner-text p { font-size:.75rem; opacity:0.9; margin:0; }
   .emergency-banner-btn {
     padding:.65rem 1.5rem; border:none; border-radius:10px;
     font-size:.85rem; font-weight:700; cursor:pointer;
@@ -84,7 +85,6 @@ const css = `
   /* ── Stats Cards ── */
   .emergency-stats { display:grid; grid-template-columns:repeat(4,1fr); gap:1rem; margin-bottom:1.5rem; }
   @media(max-width:900px){ .emergency-stats { grid-template-columns:repeat(2,1fr); } }
-  @media(max-width:480px){ .emergency-stats { grid-template-columns:1fr 1fr; } }
 
   .emergency-stat {
     background:var(--surface); border:1px solid var(--border); border-radius:14px;
@@ -124,7 +124,7 @@ const css = `
     display:flex; align-items:center; justify-content:space-between;
     padding:.95rem 1.25rem; border-bottom:1px solid var(--border); background:var(--surface2);
   }
-  .emergency-panel-title { font-family:'Cormorant Garamond',serif; font-size:1.05rem; font-weight:600; color:var(--text); display:flex; align-items:center; gap:.5rem; }
+  .emergency-panel-title { font-family:'Cormorant Garamond',serif; font-size:1rem; font-weight:600; color:var(--text); display:flex; align-items:center; gap:.5rem; }
   .emergency-panel-body  { padding:1.25rem; }
 
   /* ── Emergency Types Grid ── */
@@ -150,7 +150,7 @@ const css = `
   /* ── Alert Button ── */
   .emergency-alert-btn {
     width:100%; padding:1.25rem; border:none; border-radius:12px;
-    font-size:1.1rem; font-weight:800; cursor:pointer;
+    font-size:1rem; font-weight:800; cursor:pointer;
     background:linear-gradient(135deg,#dc2626,#ef4444); color:#fff;
     transition:all .22s; display:flex; align-items:center;
     justify-content:center; gap:.75rem; margin-bottom:1rem;
@@ -188,7 +188,7 @@ const css = `
   }
   .emergency-alert-info { flex:1; }
   .emergency-alert-type { font-weight:700; font-size:.84rem; color:var(--text); margin-bottom:.2rem; }
-  .emergency-alert-meta { font-size:.7rem; color:var(--text-muted); display:flex; gap:.6rem; align-items:center; }
+  .emergency-alert-meta { font-size:.7rem; color:var(--text-muted); display:flex; gap:.6rem; align-items:center; flex-wrap:wrap; }
   .emergency-alert-time { display:flex; align-items:center; gap:.25rem; }
   .emergency-status-pill {
     padding:.12rem .5rem; border-radius:99px; font-size:.6rem; font-weight:700;
@@ -202,11 +202,11 @@ const css = `
 
   /* ── Confirmation Modal ── */
   .emergency-modal .modal-content { border-radius:18px; border:1px solid rgba(220,38,38,0.3); overflow:hidden; }
-  .emergency-modal .modal-header { background:linear-gradient(135deg,#dc2626,#ef4444); color:#fff; border-bottom:none; padding:1.25rem 1.5rem; }
+  .emergency-modal .modal-header { background:linear-gradient(135deg,#dc2626,#ef4444); color:#fff; border-bottom:none; padding:1rem 1.5rem; }
   .emergency-modal .modal-header .btn-close { filter:brightness(0) invert(1); }
-  .emergency-modal .modal-title { font-family:'Cormorant Garamond',serif; font-size:1.3rem; font-weight:600; display:flex; align-items:center; gap:.5rem; }
-  .emergency-modal .modal-body { padding:1.5rem; }
-  .emergency-modal .modal-footer { border-top:1px solid var(--border); padding:1rem 1.5rem; }
+  .emergency-modal .modal-title { font-family:'Cormorant Garamond',serif; font-size:1.2rem; font-weight:600; display:flex; align-items:center; gap:.5rem; }
+  .emergency-modal .modal-body { padding:1.25rem; }
+  .emergency-modal .modal-footer { border-top:1px solid var(--border); padding:.85rem 1.25rem; }
 
   .emergency-confirm-details { background:var(--surface2); border-radius:10px; padding:1rem; margin:1rem 0; }
   .emergency-confirm-row { display:flex; justify-content:space-between; padding:.5rem 0; border-bottom:1px solid var(--border); }
@@ -225,10 +225,17 @@ const css = `
 `;
 
 const EMERGENCY_TYPES = [
-  { id: 'medical', name: 'Medical Emergency', icon: '❤️', color: '#dc2626', desc: 'Urgent medical assistance needed' },
-  { id: 'fire', name: 'Fire', icon: '🔥', color: '#f97316', desc: 'Fire or smoke detected' },
-  { id: 'security', name: 'Security Issue', icon: '🛡️', color: '#3b82f6', desc: 'Safety or security concern' },
-  { id: 'other', name: 'Other', icon: '⚠️', color: '#f59e0b', desc: 'General emergency assistance' },
+  { id: 'medical', name: 'Medical Emergency', icon: Heart, color: '#dc2626', desc: 'Urgent medical assistance needed' },
+  { id: 'fire', name: 'Fire', icon: Flame, color: '#f97316', desc: 'Fire or smoke detected' },
+  { id: 'security', name: 'Security Issue', icon: Shield, color: '#3b82f6', desc: 'Safety or security concern' },
+  { id: 'other', name: 'Other', icon: AlertTriangle, color: '#f59e0b', desc: 'General emergency assistance' },
+];
+
+const CONTACTS = [
+  { name: 'Front Desk', number: '+63 32 888 8888', icon: Phone, phone: '+63328888888' },
+  { name: 'Security', number: '+63 32 888 8899', icon: Shield, phone: '+63328888899' },
+  { name: 'Medical Officer', number: '+63 32 888 8877', icon: Stethoscope, phone: '+63328888877' },
+  { name: 'Housekeeping', number: '+63 32 888 8866', icon: Building2, phone: '+63328888866' },
 ];
 
 export function EmergencyPage({ user, token, roomNumber }) {
@@ -238,9 +245,65 @@ export function EmergencyPage({ user, token, roomNumber }) {
   const [recentAlerts, setRecentAlerts] = useState([]);
   const [stats, setStats] = useState({ total: 0, active: 0, resolved: 0 });
   const [displayRoom, setDisplayRoom] = useState('Loading...');
+  const [checkingRoom, setCheckingRoom] = useState(true);
   const { alert, showAlert } = useAlert();
 
   const guestName = user?.fullName || user?.username || user?.email?.split('@')[0] || 'Guest';
+
+  // Fetch the active booking room number
+  const fetchActiveRoom = async () => {
+    setCheckingRoom(true);
+    try {
+      console.log('Fetching active booking...');
+      const response = await fetch(`${API_BASE}/bookings/my-bookings/`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      
+      if (response.ok) {
+        const bookings = await response.json();
+        console.log('Bookings response:', bookings);
+        
+        const today = new Date().toISOString().split('T')[0];
+        
+        // Find CHECKED_IN booking that covers today's date
+        const activeBooking = bookings.find(b => 
+          b.status === 'CHECKED_IN' &&
+          b.checkInDate <= today && 
+          b.checkOutDate >= today
+        );
+        
+        console.log('Active booking found:', activeBooking);
+        
+        if (activeBooking) {
+          // Try multiple possible field names for room number
+          let room = activeBooking.roomNumber || 
+                    activeBooking.room_number || 
+                    activeBooking.room?.roomNumber || 
+                    activeBooking.room?.room_number ||
+                    activeBooking.room?.number;
+          
+          if (room) {
+            setDisplayRoom(String(room));
+            console.log('Room set to:', room);
+          } else {
+            console.warn('No room number in active booking:', activeBooking);
+            setDisplayRoom('Room not found');
+          }
+        } else {
+          console.log('No active CHECKED_IN booking found');
+          setDisplayRoom('Not checked in');
+        }
+      } else {
+        console.error('Failed to fetch bookings:', response.status);
+        setDisplayRoom('Unable to fetch room');
+      }
+    } catch (error) {
+      console.error('Failed to fetch active room:', error);
+      setDisplayRoom('Error loading room');
+    } finally {
+      setCheckingRoom(false);
+    }
+  };
 
   // Load recent alerts
   const loadRecentAlerts = async () => {
@@ -250,23 +313,7 @@ export function EmergencyPage({ user, token, roomNumber }) {
       });
       if (response.ok) {
         const data = await response.json();
-        console.log('API Response:', data);
         setRecentAlerts(data.alerts || []);
-        
-        // Update room from most recent alert
-        if (data.alerts && data.alerts.length > 0 && data.alerts[0].roomNumber) {
-          const roomFromApi = data.alerts[0].roomNumber;
-          if (roomFromApi && roomFromApi !== 'Unknown' && roomFromApi !== 'Not assigned') {
-            setDisplayRoom(roomFromApi);
-            console.log('Room set from API:', roomFromApi);
-          }
-        } else if (roomNumber && roomNumber !== 'Not assigned') {
-          setDisplayRoom(roomNumber);
-        } else if (user?.roomNumber && user?.roomNumber !== 'Not assigned') {
-          setDisplayRoom(user.roomNumber);
-        } else {
-          setDisplayRoom('Not assigned');
-        }
         
         setStats({
           total: data.stats?.total || 0,
@@ -281,6 +328,12 @@ export function EmergencyPage({ user, token, roomNumber }) {
 
   // Send emergency alert
   const sendEmergencyAlert = async () => {
+    // Check if room is assigned before sending
+    if (displayRoom === 'Not checked in' || displayRoom === 'Loading...' || displayRoom === 'Room not found' || displayRoom === 'Unable to fetch room') {
+      showAlert('You must be checked in to send an emergency alert. Please visit the front desk.', 'error');
+      return;
+    }
+    
     setLoading(true);
     try {
       const requestBody = {
@@ -291,7 +344,7 @@ export function EmergencyPage({ user, token, roomNumber }) {
         timestamp: new Date().toISOString(),
       };
       
-      console.log('Sending alert:', requestBody);
+      console.log('Sending alert with room:', displayRoom);
       
       const response = await fetch(`${API_BASE}/emergency/alert/`, {
         method: 'POST',
@@ -303,14 +356,6 @@ export function EmergencyPage({ user, token, roomNumber }) {
       });
 
       if (response.ok) {
-        const data = await response.json();
-        console.log('Alert response:', data);
-        
-        // Update room from response
-        if (data.room_number && data.room_number !== 'Unknown') {
-          setDisplayRoom(data.room_number);
-        }
-        
         setShowConfirm(false);
         setSelectedType(null);
         showAlert('Emergency alert sent! Staff has been notified.', 'success');
@@ -334,20 +379,22 @@ export function EmergencyPage({ user, token, roomNumber }) {
     return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
   };
 
-  // Quick contacts
-  const contacts = [
-    { name: 'Front Desk', number: '+63 32 888 8888', icon: '📞' },
-    { name: 'Security', number: '+63 32 888 8899', icon: '🛡️' },
-    { name: 'Medical Officer', number: '+63 32 888 8877', icon: '❤️' },
-    { name: 'Housekeeping', number: '+63 32 888 8866', icon: '🏨' },
-  ];
-
-  // Load alerts on mount
+  // Load data on mount
   useEffect(() => {
     if (token) {
+      fetchActiveRoom();
       loadRecentAlerts();
     }
   }, [token]);
+
+  const getEmergencyIcon = (typeId) => {
+    const found = EMERGENCY_TYPES.find(t => t.id === typeId);
+    return found?.icon || AlertTriangle;
+  };
+
+  // Check if room is not valid for alert
+  const isRoomInvalid = displayRoom === 'Not checked in' || displayRoom === 'Loading...' || displayRoom === 'Room not found' || displayRoom === 'Unable to fetch room';
+  const roomStatusMessage = displayRoom === 'Not checked in' ? 'You are not checked in' : displayRoom;
 
   return (
     <div className="emergency-root">
@@ -357,7 +404,7 @@ export function EmergencyPage({ user, token, roomNumber }) {
       {/* Header */}
       <div className="emergency-hd">
         <div className="emergency-title">
-          <span style={{ fontSize: '2rem' }}>🚨</span>
+          <AlertTriangle size={28} style={{ color: '#dc2626' }} />
           Emergency Assistance
         </div>
         <div className="emergency-sub">For immediate help, use the emergency button below</div>
@@ -382,18 +429,26 @@ export function EmergencyPage({ user, token, roomNumber }) {
       {/* Stats */}
       <div className="emergency-stats">
         {[
-          { label: 'My Alerts', value: stats.total, icon: '🚨', color: 'red' },
-          { label: 'Active', value: stats.active, icon: '🔔', color: 'blue' },
-          { label: 'Resolved', value: stats.resolved, icon: '✅', color: 'green' },
-          { label: 'Room', value: displayRoom, icon: '🏨', color: 'gold' },
+          { label: 'My Alerts', value: stats.total, icon: Bell, color: 'red' },
+          { label: 'Active', value: stats.active, icon: AlertTriangle, color: 'blue' },
+          { label: 'Resolved', value: stats.resolved, icon: CheckCircle2, color: 'green' },
+          { label: 'Room', value: checkingRoom ? 'Loading...' : roomStatusMessage, icon: Home, color: 'gold' },
         ].map((s, i) => (
           <div key={i} className={`emergency-stat ${s.color}`} style={{ animationDelay: `${i * 0.06}s` }}>
-            <div className="emergency-stat-icon"><span style={{ fontSize: '1.2rem' }}>{s.icon}</span></div>
+            <div className="emergency-stat-icon"><s.icon size={16} /></div>
             <div className="emergency-stat-label">{s.label}</div>
             <div className="emergency-stat-val">{s.value}</div>
           </div>
         ))}
       </div>
+
+      {/* Warning if not checked in */}
+      {isRoomInvalid && !checkingRoom && (
+        <div className="emergency-warning" style={{ marginBottom: '1rem', justifyContent: 'center' }}>
+          <AlertTriangle size={16} />
+          <span>You are not checked in. Please visit the front desk to check in before using emergency services.</span>
+        </div>
+      )}
 
       {/* Main Grid */}
       <div className="emergency-grid">
@@ -401,13 +456,14 @@ export function EmergencyPage({ user, token, roomNumber }) {
         <div className="emergency-panel" style={{ animationDelay: '.05s' }}>
           <div className="emergency-panel-hd">
             <div className="emergency-panel-title">
-              <span style={{ color: '#dc2626' }}>🚨</span>
+              <AlertTriangle size={16} style={{ color: '#dc2626' }} />
               Send Emergency Alert
             </div>
           </div>
           <div className="emergency-panel-body">
             <div className="emergency-types">
               {EMERGENCY_TYPES.map((type) => {
+                const IconComponent = type.icon;
                 return (
                   <div
                     key={type.id}
@@ -415,7 +471,7 @@ export function EmergencyPage({ user, token, roomNumber }) {
                     onClick={() => setSelectedType(type)}
                   >
                     <div className="emergency-type-icon">
-                      <span style={{ fontSize: '1.5rem' }}>{type.icon}</span>
+                      <IconComponent size={24} />
                     </div>
                     <div>
                       <div className="emergency-type-name">{type.name}</div>
@@ -428,16 +484,16 @@ export function EmergencyPage({ user, token, roomNumber }) {
 
             <button
               className="emergency-alert-btn"
-              disabled={!selectedType}
+              disabled={!selectedType || isRoomInvalid}
               onClick={() => setShowConfirm(true)}
             >
-              <span>🚨</span>
+              <AlertTriangle size={20} />
               SEND EMERGENCY ALERT
               <ChevronRight size={16} />
             </button>
 
             <div className="emergency-warning">
-              <span>⚠️</span>
+              <AlertTriangle size={16} />
               <span>Only use this button for real emergencies. False alarms may result in penalties.</span>
             </div>
           </div>
@@ -449,21 +505,22 @@ export function EmergencyPage({ user, token, roomNumber }) {
           <div className="emergency-panel" style={{ animationDelay: '.08s' }}>
             <div className="emergency-panel-hd">
               <div className="emergency-panel-title">
-                <Phone size={18} />
+                <Phone size={16} />
                 Quick Contacts
               </div>
             </div>
             <div className="emergency-panel-body">
               <div className="emergency-contacts">
-                {contacts.map((contact, i) => {
+                {CONTACTS.map((contact, i) => {
+                  const IconComponent = contact.icon;
                   return (
                     <div
                       key={i}
                       className="emergency-contact"
-                      onClick={() => window.location.href = `tel:${contact.number.replace(/\D/g, '')}`}
+                      onClick={() => window.location.href = `tel:${contact.phone}`}
                     >
                       <div className="emergency-contact-icon">
-                        <span style={{ fontSize: '1.1rem' }}>{contact.icon}</span>
+                        <IconComponent size={18} />
                       </div>
                       <div style={{ flex: 1 }}>
                         <div className="emergency-contact-name">{contact.name}</div>
@@ -481,7 +538,7 @@ export function EmergencyPage({ user, token, roomNumber }) {
           <div className="emergency-panel" style={{ animationDelay: '.11s' }}>
             <div className="emergency-panel-hd">
               <div className="emergency-panel-title">
-                <Bell size={18} />
+                <Bell size={16} />
                 Recent Alerts
               </div>
             </div>
@@ -494,24 +551,27 @@ export function EmergencyPage({ user, token, roomNumber }) {
                   <div style={{ fontSize: '.82rem' }}>No recent alerts</div>
                 </div>
               ) : (
-                recentAlerts.slice(0, 5).map((alert, i) => (
-                  <div key={i} className="emergency-alert-item">
-                    <div className="emergency-alert-badge">
-                      <span>🚨</span>
-                    </div>
-                    <div className="emergency-alert-info">
-                      <div className="emergency-alert-type">{alert.emergencyTypeName}</div>
-                      <div className="emergency-alert-meta">
-                        <span className="emergency-alert-time">
-                          <Clock size={10} /> {formatTime(alert.createdAt)}
-                        </span>
-                        <span className={`emergency-status-pill ${alert.status === 'RESOLVED' ? 'resolved' : ''}`}>
-                          {alert.status || 'ACTIVE'}
-                        </span>
+                recentAlerts.slice(0, 5).map((alert, i) => {
+                  const AlertIcon = getEmergencyIcon(alert.emergencyType);
+                  return (
+                    <div key={i} className="emergency-alert-item">
+                      <div className="emergency-alert-badge">
+                        <AlertTriangle size={18} />
+                      </div>
+                      <div className="emergency-alert-info">
+                        <div className="emergency-alert-type">{alert.emergencyTypeName}</div>
+                        <div className="emergency-alert-meta">
+                          <span className="emergency-alert-time">
+                            <Clock size={10} /> {formatTime(alert.createdAt)}
+                          </span>
+                          <span className={`emergency-status-pill ${alert.status === 'RESOLVED' ? 'resolved' : ''}`}>
+                            {alert.status || 'ACTIVE'}
+                          </span>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
           </div>
@@ -522,12 +582,12 @@ export function EmergencyPage({ user, token, roomNumber }) {
       <Modal show={showConfirm} onHide={() => setShowConfirm(false)} centered className="emergency-modal">
         <Modal.Header closeButton>
           <Modal.Title>
-            <span>🚨</span> Confirm Emergency Alert
+            <AlertTriangle size={18} /> Confirm Emergency Alert
           </Modal.Title>
         </Modal.Header>
         <Modal.Body>
           <div className="emergency-warning" style={{ marginBottom: '1rem' }}>
-            <span>⚠️</span>
+            <AlertTriangle size={16} />
             <strong>This will immediately notify hotel staff.</strong>
           </div>
 
@@ -548,7 +608,7 @@ export function EmergencyPage({ user, token, roomNumber }) {
             </div>
             <div className="emergency-confirm-row">
               <span className="emergency-confirm-label">Time</span>
-              <span className="emergency-confirm-value">{new Date().toLocaleString()}</span>
+              <span className="emergency-confirm-value"><Calendar size={12} style={{ display: 'inline', marginRight: '.3rem' }} />{new Date().toLocaleString()}</span>
             </div>
           </div>
 
@@ -561,7 +621,7 @@ export function EmergencyPage({ user, token, roomNumber }) {
             Cancel
           </button>
           <button className="emergency-alert-btn" style={{ margin: 0, padding: '.65rem 1.5rem', width: 'auto' }} onClick={sendEmergencyAlert} disabled={loading}>
-            {loading ? <><div className="emergency-spinner" /> Sending...</> : <>Confirm & Send Alert</>}
+            {loading ? <><Loader2 size={16} className="emergency-spinner" /> Sending...</> : <>Confirm & Send Alert</>}
           </button>
         </Modal.Footer>
       </Modal>

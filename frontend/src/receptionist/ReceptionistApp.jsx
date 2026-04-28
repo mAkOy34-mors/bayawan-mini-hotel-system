@@ -8,7 +8,7 @@ import {
   Users, LogIn, LogOut, Search, Menu, X, ChevronRight,
   RefreshCw, Bell, UserCircle, Hotel, CreditCard, PlusCircle,
   QrCode, ScanLine, ClipboardList, Sparkles, MessageCircle, 
-  AlertTriangle, FileText  // ← Add Sparkles for services
+  AlertTriangle, FileText, ArrowRightLeft, Hammer // ← Add Sparkles for services
 } from 'lucide-react';
 
 import { ReceptionistDashboard }   from './ReceptionistDashboard';
@@ -26,7 +26,9 @@ import { ReceptionServiceList }    from './ReceptionServiceList'; // ← Add thi
 import { ReceptionistQRCheckOut }  from './ReceptionistQRCheckOut'; // ← Add this component for QR Checkout
 import { ReceptionistEmergencyLog } from './ReceptionistEmergencyLog';
 import { ReceptionistPartnerPayments } from './ReceptionistPartnerPayments';
-import { StaffEmergency } from '../staff/StaffEmergency';
+import { ReceptionistChangeRequests } from './ReceptionistChangeRequests';
+import { ReceptionistRoomIssues } from './ReceptionistRoomIssues';
+import { ReceptionistEmergency } from './ReceptionistEmergency';
 import FeedbackManager from './FeedbackManager'; 
 import { API_BASE as BASE } from '../constants/config';
 
@@ -102,20 +104,22 @@ const LAYOUT_CSS = `
 const NAV = [
   { key:'dashboard',   label:'Dashboard',      Icon: LayoutDashboard, section:'Overview' },
   { key:'qrcheckin',   label:'QR Check-In',    Icon: QrCode,           section:"Today's Front Desk" },
-  { key:'qrcheckout', label:'QR Check-out',    Icon: LogOut, section:"Today's Front Desk" },
-  { key:'arrivals',    label:'Arrivals',        Icon: LogIn,           section:"Today's Front Desk" },
+  { key:'qrcheckout', label:'QR Check-out',    Icon: LogOut },
+  { key:'arrivals',    label:'Arrivals',        Icon: LogIn },
   { key:'departures',  label:'Departures',      Icon: LogOut },
   { key:'bookings',    label:'All Bookings',    Icon: CalendarCheck,   section:'Bookings' },
+  { key: 'change-requests', label: 'Change Requests', Icon: ArrowRightLeft },
   { key:'walkin',      label:'Walk-in Booking', Icon: PlusCircle },
   { key:'feedback',    label:'Guest Feedback',  Icon: MessageCircle,   section:'Guest Relations' }, 
   { key:'emergency',   label:'Live Alerts',    Icon: AlertTriangle,    section:'Emergency' },
-  { key:'emergency-log',label:'Emergency Log', Icon: FileText,         section:'Emergency' },
+  { key:'emergency-log',label:'Emergency Log', Icon: FileText },
   { key:'services',    label:'Service Requests', Icon: Sparkles,       section:'Operations' },  // ← Add Service Requests
-  { key:'tasks',       label:'Staff Tasks',     Icon: ClipboardList,   section:'Operations' },
+  { key:'tasks',       label:'Staff Tasks',     Icon: ClipboardList },
+  { key:'room-issues', label:'Room Issues',     Icon: Hammer },
   { key:'guests',      label:'Guest Profiles',  Icon: Users,           section:'Guests & Rooms' },
   { key:'roomboard',   label:'Room Board',      Icon: BedDouble },
   { key:'payments',    label:'Payments',        Icon: CreditCard,      section:'Payments' },
-  { key: 'partner-payments', label: 'Partner Payments', Icon: CreditCard, section: 'Payments' },
+  { key: 'partner-payments', label: 'Partner Payments', Icon: CreditCard },
   { key:'inhouse',     label:'In-House Guests', Icon: Users,           section:"Current Guests" },
 ];
 
@@ -126,12 +130,14 @@ const PAGE_TITLES = {
   arrivals:   "Today's Arrivals",
   departures: "Today's Departures",
   bookings:   'All Bookings',
+  'change-requests': 'Booking Change Requests',
   walkin:     'Walk-in Booking',
   feedback:   'Guest Feedback',
-  emergency: '🚨 Live Emergency Alerts',
-  'emergency-log': '📋 Emergency Log', 
+  emergency: ' Live Emergency Alerts',
+  'emergency-log': ' Emergency Log', 
   services:   'Service Requests',  // ← Add this
   tasks:      'Staff Tasks & Complaints',
+  'room-issues': 'Room Issues',
   guests:     'Guest Profiles',
   roomboard:  'Room Status Board',
   payments:   'Payment Records',
@@ -153,7 +159,7 @@ function SidebarInner({ page, setPage, user, onLogout }) {
       <div className="rc-sb-logo-row">
         <div className="rc-sb-mark"><Hotel size={16}/></div>
         <div>
-          <div className="rc-sb-name">Bayawan Mini Hotel</div>
+          <div className="rc-sb-name">Cebu Mini Hotel</div>
           <div style={{ fontSize:'.6rem', color:'#8a96a8', textTransform:'uppercase', letterSpacing:'.1em' }}>Reception Desk</div>
         </div>
       </div>
@@ -177,7 +183,7 @@ function SidebarInner({ page, setPage, user, onLogout }) {
         <span className="rc-sb-out-ico"><LogOut size={14}/></span>Sign Out
       </button>
     </nav>
-    <div className="rc-sb-foot">© 2026 Bayawan Mini Hotel</div>
+    <div className="rc-sb-foot">© 2026 Cebu Mini Hotel</div>
   </>;
 }
 
@@ -214,7 +220,7 @@ function ReceptionistLogin({ onLogin }) {
         <div className="rc-login-head">
           <div className="rc-login-mark"><Hotel size={20} color="#fff"/></div>
           <div className="rc-login-title">Reception Desk</div>
-          <div className="rc-login-sub">Cebu Grand Hotel · Staff Access</div>
+          <div className="rc-login-sub">Cebu Mini Hotel · Staff Access</div>
         </div>
         <div className="rc-login-body">
           {error && <div className="rc-login-err">⚠️ {error}</div>}
@@ -247,12 +253,14 @@ function ReceptionistShell({ user, token, onLogout }) {
     arrivals:   <ReceptionistArrivals   token={token} />,
     departures: <ReceptionistDepartures token={token} />,
     bookings:   <ReceptionistBookings   token={token} />,
+    'change-requests': <ReceptionistChangeRequests token={token} user={user} />,
     walkin:     <ReceptionistWalkIn     token={token} setPage={setPage} />,
     feedback:   <FeedbackManager   token={token} user={user} />,
-     emergency: <StaffEmergency token={token} user={user} />,
+     emergency: <ReceptionistEmergency token={token} user={user} />,
   'emergency-log': <ReceptionistEmergencyLog token={token} />,
     services:   <ReceptionServiceList   token={token} />,  // ← Add Service List component
     tasks:      <ReceptionistTasks      token={token} setPage={setPage} />,
+    'room-issues': <ReceptionistRoomIssues token={token} />,
     guests:     <ReceptionistGuests     token={token} />,
     roomboard:  <ReceptionistRoomBoard  token={token} />,
     payments:   <ReceptionistPayments   token={token} />, 

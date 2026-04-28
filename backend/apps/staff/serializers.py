@@ -1,6 +1,6 @@
 # apps/staff/serializers.py
 from rest_framework import serializers
-from .models import Task, TaskHistory
+from .models import Task, TaskHistory, MaintenanceRequest
 from apps.rooms.models import Room
 from apps.bookings.models import Booking
 
@@ -20,7 +20,8 @@ class TaskSerializer(serializers.ModelSerializer):
             'room', 'room_number', 'room_number_display', 'booking',
             'assigned_to', 'assigned_to_name', 'assigned_by', 'assigned_by_name',
             'created_at', 'updated_at', 'started_at', 'completed_at', 'note',
-            'complaint_id', 'complaint_status', 'complaint_title'
+            'complaint_id', 'complaint_status', 'complaint_title',
+            'room_issue_id', 'service_request_id',
         ]
 
     def get_assigned_to_name(self, obj):
@@ -55,6 +56,11 @@ class TaskHistorySerializer(serializers.ModelSerializer):
 class CreateTaskSerializer(serializers.ModelSerializer):
     complaint_id = serializers.IntegerField(required=False, allow_null=True)
     assigned_to = serializers.IntegerField(required=False, allow_null=True)
+    room = serializers.PrimaryKeyRelatedField(  # ← add this explicitly
+        queryset=Room.objects.all(),
+        required=False,
+        allow_null=True
+    )
 
     class Meta:
         model = Task
@@ -96,3 +102,59 @@ class CreateTaskSerializer(serializers.ModelSerializer):
             if not User.objects.filter(id=value).exists():
                 return None
         return value
+
+
+# apps/staff/serializers.py - Add these serializers
+
+class MaintenanceRequestSerializer(serializers.ModelSerializer):
+    maintenance_type_display = serializers.CharField(source='get_maintenance_type_display', read_only=True)
+    priority_display = serializers.CharField(source='get_priority_display', read_only=True)
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    requested_by_name = serializers.SerializerMethodField()
+    assigned_to_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = MaintenanceRequest
+        fields = [
+            'id', 'maintenance_type', 'maintenance_type_display', 'title', 'description',
+            'priority', 'priority_display', 'status', 'status_display',
+            'room_number', 'requested_by', 'requested_by_name',
+            'assigned_to', 'assigned_to_name', 'notes', 'resolution_notes',
+            'rejection_reason', 'created_at', 'updated_at', 'started_at', 'completed_at'
+        ]
+
+    def get_requested_by_name(self, obj):
+        if obj.requested_by:
+            return obj.requested_by.username
+        return None
+
+    def get_assigned_to_name(self, obj):
+        if obj.assigned_to:
+            return obj.assigned_to.username
+        return None
+
+
+class CreateMaintenanceRequestSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MaintenanceRequest
+        fields = [
+            'maintenance_type', 'title', 'description', 'priority',
+            'room_number', 'notes'
+        ]
+
+    def validate_title(self, value):
+        if not value or not value.strip():
+            raise serializers.ValidationError("Title is required")
+        return value.strip()
+
+    def validate_description(self, value):
+        if not value or not value.strip():
+            raise serializers.ValidationError("Description is required")
+        return value.strip()
+
+    def validate_maintenance_type(self, value):
+        valid_types = ['ELECTRICAL', 'PLUMBING', 'HVAC', 'DOOR_LOCK',
+                       'TV_ELECTRONICS', 'FURNITURE', 'TOOLS_REQUEST', 'OTHER']
+        if value and value.upper() in valid_types:
+            return value.upper()
+        return 'OTHER'

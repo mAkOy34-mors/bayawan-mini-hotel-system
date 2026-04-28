@@ -54,10 +54,10 @@ class CreateBookingView(APIView):
 
         # Check room exists and is available
         try:
-            room = Room.objects.get(id=d["roomId"], available=True)
+            room = Room.objects.get(id=d["roomId"])
         except Room.DoesNotExist:
             return Response(
-                {"message": "Room not found or not available."},
+                {"message": "Room not found."},
                 status=status.HTTP_404_NOT_FOUND,
             )
 

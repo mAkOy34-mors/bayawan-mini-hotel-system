@@ -1,6 +1,6 @@
 """apps/bookings/serializers.py — bulletproof version"""
 from rest_framework import serializers
-from .models import Booking
+from .models import Booking, CancellationRequest
 
 
 def safe_int(val):
@@ -92,3 +92,28 @@ class BookingCreateSerializer(serializers.Serializer):
         if data["checkInDate"] >= data["checkOutDate"]:
             raise serializers.ValidationError("checkOutDate must be after checkInDate.")
         return data
+
+
+# Add to apps/bookings/serializers.py
+
+class CancellationRequestSerializer(serializers.ModelSerializer):
+    booking_reference = serializers.CharField(source='booking.booking_reference', read_only=True)
+    guest_name = serializers.CharField(source='booking.user.username', read_only=True)
+    room_number = serializers.CharField(source='booking.room.room_number', read_only=True)
+    deposit_amount = serializers.DecimalField(source='booking.deposit_amount', max_digits=10, decimal_places=2,
+                                              read_only=True)
+
+    class Meta:
+        model = CancellationRequest
+        fields = [
+            'id', 'booking', 'booking_reference', 'guest_name', 'room_number',
+            'reason', 'status', 'admin_note', 'created_at', 'resolved_at',
+            'resolved_by_name', 'deposit_amount'
+        ]
+
+    resolved_by_name = serializers.SerializerMethodField()
+
+    def get_resolved_by_name(self, obj):
+        if obj.resolved_by:
+            return obj.resolved_by.username
+        return None

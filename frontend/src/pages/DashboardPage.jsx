@@ -629,7 +629,7 @@ export function DashboardPage({ user, token, t, setPage }) {
       <div className="db-header">
         <div>
           <h1 className="db-greeting">Welcome back, <em>{getUsername(user)}</em></h1>
-          <p className="db-header-sub">Here's your stay overview at Cebu Grand Hotel</p>
+          <p className="db-header-sub">Here's your stay overview at Cebu Mini Hotel</p>
         </div>
         <div className="db-date-pill">
           <Calendar size={13}/> {today}

@@ -127,23 +127,47 @@ export function ReceptionServiceList({ token }) {
     }
     setAssigning(true);
     try {
-      const response = await fetch(`${API_BASE}/services/reception/${selectedService.id}/assign/`, {
-        method: 'PUT',
+      // Map service type to task type
+      const taskTypeMapping = {
+        'CLEANING':      'CLEANING',
+        'MAINTENANCE':   'MAINTENANCE',
+        'LAUNDRY':       'HOUSEKEEPING',
+        'DELIVERY':      'DELIVERY',
+        'EXTRA_PILLOWS': 'HOUSEKEEPING',
+        'EXTRA_TOWELS':  'HOUSEKEEPING',
+        'MINI_BAR':      'DELIVERY',
+        'TECH_SUPPORT':  'MAINTENANCE',
+        'OTHER':         'ASSISTANCE',
+      };
+
+      // Create a staff task linked to this service request
+      const taskResponse = await fetch(`${API_BASE}/staff/tasks/create/`, {
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify({ assigned_to: selectedService.assigned_to_id })
+        body: JSON.stringify({
+          title: `${getServiceTypeLabel(selectedService.service_type)} - Room ${selectedService.room_number}`,
+          description: selectedService.description || `Guest service request: ${getServiceTypeLabel(selectedService.service_type)}`,
+          task_type: taskTypeMapping[selectedService.service_type] || 'ASSISTANCE',
+          priority: selectedService.priority || 'MEDIUM',
+          room_number: selectedService.room_number,
+          assigned_to: selectedService.assigned_to_id,
+          service_request_id: selectedService.id,  // ← links the FK
+        })
       });
-      if (response.ok) {
-        show('Service request assigned successfully!', 'success');
-        loadServices();
-        setShowAssign(false);
-        setSelectedService(null);
-      } else {
-        const error = await response.json();
-        show(error.error || 'Failed to assign', 'error');
+
+      if (!taskResponse.ok) {
+        const error = await taskResponse.json();
+        show(error.error || 'Failed to create staff task', 'error');
+        return;
       }
+
+      show('Service request assigned and task created successfully!', 'success');
+      loadServices();
+      setShowAssign(false);
+      setSelectedService(null);
     } catch (error) {
       console.error('Failed to assign:', error);
       show('Network error. Please try again.', 'error');

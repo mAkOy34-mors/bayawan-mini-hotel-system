@@ -10,10 +10,10 @@ from rest_framework.permissions import IsAuthenticated
 from django.db import transaction
 from django.db.models import Q, Count, Avg
 
-from .models import CleaningTask, CleaningChecklist, SupplyRequest, RoomStatusLog
+from .models import CleaningTask, CleaningChecklist, SupplyRequest, RoomStatusLog, RoomIssue
 from .serializers import (
     CleaningTaskSerializer, CleaningChecklistSerializer,
-    SupplyRequestSerializer, RoomStatusLogSerializer
+    SupplyRequestSerializer, RoomStatusLogSerializer, RoomIssueSerializer
 )
 from apps.rooms.models import Room
 from apps.bookings.models import Booking
@@ -642,7 +642,7 @@ class HousekeeperUpdateRoomStatusView(APIView):
             'id': room.id,
             'roomNumber': room.room_number,
             'status': new_status,
-            'statusDisplay': status_display,
+            'statusDisplay': new_status.replace('_', ' ').title(),
             'message': f'Room {room.room_number} status updated to {new_status}'
         })
 
@@ -751,11 +751,8 @@ class MyTasksView(APIView):
 
         logger.info(f"MyTasksView called by user: {request.user.email}, Role: {user_role}")
 
-        if user_role != 'HOUSEKEEPER':
-            return Response({
-                "error": "Only housekeepers can access their tasks",
-                "your_role": user_role
-            }, status=403)
+        if user_role not in ['HOUSEKEEPER', 'ADMIN', 'RECEPTIONIST']:
+            return Response({"error": "Access denied"}, status=403)
 
         # Get employee record - link via user
         try:
@@ -794,7 +791,7 @@ class CreateCleaningTaskView(APIView):
         description = request.data.get('description')
         task_type = request.data.get('taskType')
         room_number = request.data.get('roomNumber')
-        assigned_to_id = request.data.get('assignedTo')
+        assigned_to_id = request.data.get('assigned_to_employee')
         priority = request.data.get('priority', 'MEDIUM')
         notes = request.data.get('notes', '')
 
@@ -1232,7 +1229,7 @@ class CreateSupplyRequestView(APIView):
             return Response({"error": "Only housekeepers can create supply requests"}, status=403)
 
         try:
-            employee = EmployeeInformation.objects.get(user=request.user, position='HOUSEKEEPER')
+            employee = EmployeeInformation.objects.get(user=request.user)
         except EmployeeInformation.DoesNotExist:
             return Response({"error": "Housekeeper profile not found"}, status=404)
 
@@ -1247,7 +1244,8 @@ class CreateSupplyRequestView(APIView):
             housekeeper_employee=employee,
             item_name=item_name,
             quantity=quantity,
-            reason=reason
+            reason=reason,
+            priority = request.data.get('priority', 'MEDIUM'),
         )
 
         cache.delete("supply_requests_all")
@@ -1260,11 +1258,13 @@ class CreateSupplyRequestView(APIView):
             'message': 'Supply request created successfully'
         }, status=201)
 
+# apps/housekeepers/views.py - Update UpdateSupplyRequestStatusView
 
 class UpdateSupplyRequestStatusView(APIView):
     """PATCH /api/v1/housekeepers/supply-requests/<id>/update/ - Update supply request status"""
 
     @admin_only
+    @transaction.atomic
     def patch(self, request, request_id):
         try:
             supply_request = SupplyRequest.objects.get(id=request_id)
@@ -1272,14 +1272,225 @@ class UpdateSupplyRequestStatusView(APIView):
             return Response({"error": "Supply request not found"}, status=404)
 
         new_status = request.data.get('status')
-        if new_status:
-            supply_request.status = new_status
-            if new_status == 'APPROVED' or new_status == 'REJECTED':
-                supply_request.approved_by = request.user
-            elif new_status == 'FULFILLED':
-                supply_request.fulfilled_at = timezone.now()
-            supply_request.save()
+        rejection_reason = request.data.get('rejection_reason', '')
+
+        if not new_status:
+            return Response({"error": "Status is required"}, status=400)
+
+        # Validate status
+        valid_statuses = ['PENDING', 'APPROVED', 'REJECTED', 'FULFILLED']
+        if new_status not in valid_statuses:
+            return Response({"error": f"Invalid status. Must be one of: {valid_statuses}"}, status=400)
+
+        # Update status
+        supply_request.status = new_status
+
+        if new_status == 'APPROVED':
+            supply_request.approved_by = request.user
+            # Add note about approval
+            supply_request.notes = request.data.get('notes', f"Approved by {request.user.username}")
+
+        elif new_status == 'REJECTED':
+            supply_request.approved_by = request.user
+            supply_request.rejection_reason = rejection_reason
+            supply_request.notes = request.data.get('notes', f"Rejected by {request.user.username}: {rejection_reason}")
+
+        elif new_status == 'FULFILLED':
+            supply_request.fulfilled_at = timezone.now()
+            supply_request.notes = request.data.get('notes', f"Fulfilled by {request.user.username}")
+
+        supply_request.save()
 
         cache.delete("supply_requests_all")
 
-        return Response({"message": f"Supply request status updated to {new_status}"})
+        # Return updated data
+        serializer = SupplyRequestSerializer(supply_request)
+        return Response(serializer.data, status=200)
+
+class MySupplyRequestsView(APIView):
+    """GET /api/v1/housekeepers/supply-requests/my-requests/ - Get current housekeeper's supply requests"""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user_role = getattr(request.user, 'role', '')
+        if user_role not in ['HOUSEKEEPER', 'ADMIN', 'RECEPTIONIST']:
+            return Response({"error": "Access denied"}, status=403)
+
+        try:
+            employee = EmployeeInformation.objects.get(user=request.user)
+        except EmployeeInformation.DoesNotExist:
+            return Response([])
+
+        requests = SupplyRequest.objects.filter(housekeeper_employee=employee).order_by('-created_at')
+        serializer = SupplyRequestSerializer(requests, many=True)
+        return Response(serializer.data)
+
+# apps/housekeepers/views.py - Add these views
+
+# ── Room Issues ──────────────────────────────────────────────────────────
+
+# apps/housekeepers/views.py - Update HousekeeperRoomIssuesView
+
+class HousekeeperRoomIssuesView(APIView):
+    """GET /api/v1/housekeepers/room-issues/ - Get room issues"""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user_role = getattr(request.user, 'role', '')
+
+        # Admin, receptionist, and maintenance can see ALL issues
+        if user_role in ['ADMIN', 'RECEPTIONIST', 'MAINTENANCE']:
+            issues = RoomIssue.objects.all().order_by('-priority', '-created_at')
+        elif user_role == 'HOUSEKEEPER':
+            try:
+                employee = EmployeeInformation.objects.get(user=request.user)
+                issues = RoomIssue.objects.filter(reported_by_employee=employee).order_by('-priority', '-created_at')
+            except EmployeeInformation.DoesNotExist:
+                issues = RoomIssue.objects.none()
+        else:
+            return Response({"error": "Access denied"}, status=403)
+
+        serializer = RoomIssueSerializer(issues, many=True)
+        return Response(serializer.data)
+
+# apps/housekeepers/views.py - Update the views
+
+class CreateRoomIssueView(APIView):
+    """POST /api/v1/housekeepers/room-issues/create/ - Create a room issue report"""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        user_role = getattr(request.user, 'role', '')
+
+        if user_role != 'HOUSEKEEPER':
+            return Response({"error": "Only housekeepers can report room issues"}, status=403)
+
+        try:
+            employee = EmployeeInformation.objects.get(user=request.user)
+        except EmployeeInformation.DoesNotExist:
+            return Response({"error": "Employee profile not found"}, status=404)
+
+        issue_type = request.data.get('issueType')
+        title = request.data.get('title')
+        description = request.data.get('description')
+        room_number = request.data.get('roomNumber')
+        priority = request.data.get('priority', 'MEDIUM')
+        notes = request.data.get('notes', '')
+
+        if not issue_type or not title or not description or not room_number:
+            return Response({
+                "error": "Issue type, title, description, and room number are required"
+            }, status=400)
+
+        issue = RoomIssue.objects.create(
+            issue_type=issue_type,
+            title=title,
+            description=description,
+            room_number=room_number,
+            priority=priority,
+            notes=notes,
+            reported_by_employee=employee,
+            status='PENDING'
+        )
+
+        serializer = RoomIssueSerializer(issue)
+        return Response(serializer.data, status=201)
+
+
+class UpdateRoomIssueStatusView(APIView):
+    """PATCH /api/v1/housekeepers/room-issues/<id>/status/ - Update room issue status"""
+    permission_classes = [IsAuthenticated]
+
+    @transaction.atomic
+    def patch(self, request, issue_id):
+        try:
+            issue = RoomIssue.objects.get(id=issue_id)
+        except RoomIssue.DoesNotExist:
+            return Response({"error": "Issue not found"}, status=404)
+
+        user_role = getattr(request.user, 'role', '')
+
+        # Check permission
+        if user_role == 'HOUSEKEEPER':
+            try:
+                employee = EmployeeInformation.objects.get(user=request.user)
+                if issue.reported_by_employee.id != employee.id:
+                    return Response({"error": "You can only update issues you reported"}, status=403)
+            except EmployeeInformation.DoesNotExist:
+                return Response({"error": "Employee profile not found"}, status=404)
+        elif user_role not in ['ADMIN', 'RECEPTIONIST', 'MAINTENANCE']:
+            return Response({"error": "Permission denied"}, status=403)
+
+        new_status = request.data.get('status')
+        if not new_status:
+            return Response({"error": "Status is required"}, status=400)
+
+        valid_statuses = ['PENDING', 'IN_PROGRESS', 'COMPLETED', 'REJECTED']
+        if new_status not in valid_statuses:
+            return Response({"error": f"Invalid status. Must be one of: {valid_statuses}"}, status=400)
+
+        issue.status = new_status
+
+        if new_status == 'IN_PROGRESS' and not issue.started_at:
+            issue.started_at = timezone.now()
+            # Assign to maintenance employee if provided
+            assigned_to_id = request.data.get('assigned_to_employee_id')
+            if assigned_to_id:
+                try:
+                    assigned_employee = EmployeeInformation.objects.get(id=assigned_to_id)
+                    issue.assigned_to_employee = assigned_employee
+                except EmployeeInformation.DoesNotExist:
+                    pass
+        elif new_status == 'COMPLETED':
+            issue.completed_at = timezone.now()
+            issue.resolution_notes = request.data.get('resolution_notes', '')
+        elif new_status == 'REJECTED':
+            issue.rejection_reason = request.data.get('rejection_reason', '')
+
+        issue.save()
+
+        serializer = RoomIssueSerializer(issue)
+        return Response(serializer.data, status=200)
+
+class RoomIssueDetailView(APIView):
+    """GET /api/v1/housekeepers/room-issues/<id>/ - Get single room issue details"""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, issue_id):
+        try:
+            issue = RoomIssue.objects.get(id=issue_id)
+        except RoomIssue.DoesNotExist:
+            return Response({"error": "Issue not found"}, status=404)
+
+        user_role = getattr(request.user, 'role', '')
+
+        # Check permission
+        if user_role == 'HOUSEKEEPER':
+            try:
+                employee = EmployeeInformation.objects.get(user=request.user)
+                if issue.reported_by_employee.id != employee.id:
+                    return Response({"error": "Access denied"}, status=403)
+            except EmployeeInformation.DoesNotExist:
+                return Response({"error": "Access denied"}, status=403)
+        elif user_role not in ['ADMIN', 'RECEPTIONIST', 'MAINTENANCE']:
+            return Response({"error": "Access denied"}, status=403)
+
+        serializer = RoomIssueSerializer(issue)
+        return Response(serializer.data)
+
+
+class AllRoomIssuesView(APIView):
+    """GET /api/v1/housekeepers/room-issues/all/ - Get all room issues (admin/receptionist only)"""
+
+    @admin_only
+    def get(self, request):
+        cache_key = "all_room_issues"
+        cached = cache.get(cache_key)
+        if cached:
+            return Response(cached)
+
+        issues = RoomIssue.objects.all().order_by('-priority', '-created_at')
+        serializer = RoomIssueSerializer(issues, many=True)
+
+        cache.set(cache_key, serializer.data, timeout=60)
+        return Response(serializer.data)

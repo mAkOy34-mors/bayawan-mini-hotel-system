@@ -200,14 +200,16 @@ class AdminRoomDetailView(APIView):
 
 # ── Bookings ──────────────────────────────────────────────────────────────────
 
+# apps/admin_panel/views.py
+
 class AdminBookingsView(APIView):
-    """GET/POST /api/v1/admin/bookings/"""
+    """GET /api/v1/admin/bookings/"""
 
     @staff_only
     def get(self, request):
         status_filter = request.query_params.get("status", "")
-        search        = request.query_params.get("search", "")
-        check_in      = request.query_params.get("checkIn", "")
+        search = request.query_params.get("search", "")
+        check_in = request.query_params.get("checkIn", "")
 
         # Only cache unfiltered requests
         if not status_filter and not search and not check_in:
@@ -215,8 +217,9 @@ class AdminBookingsView(APIView):
             if cached:
                 return Response(cached)
 
+        # IMPORTANT: Add 'cancelled_by' to select_related
         qs = Booking.objects.select_related(
-            "room", "user", "guest_information"
+            "user", "guest_information", "room", "cancelled_by"  # ← ADD cancelled_by here
         ).order_by("-created_at")
 
         if status_filter:
@@ -224,7 +227,7 @@ class AdminBookingsView(APIView):
         if search:
             qs = qs.filter(
                 Q(booking_reference__icontains=search) |
-                Q(user__email__icontains=search)       |
+                Q(user__email__icontains=search) |
                 Q(user__username__icontains=search)
             )
         if check_in:
@@ -237,84 +240,124 @@ class AdminBookingsView(APIView):
 
         return Response(data)
 
-    @staff_only
-    def post(self, request):
-        """Create walk-in booking."""
-        guest_email = request.data.get("guestEmail")
-        room_id     = request.data.get("roomId")
+# Also create a separate view for updating cancellation details if needed
+class AdminCancelBookingView(APIView):
+    """POST /api/v1/admin/bookings/<id>/cancel/ - Cancel a booking with reason"""
 
-        if not guest_email or not room_id:
+    @staff_only
+    def post(self, request, booking_id):
+        try:
+            booking = Booking.objects.get(id=booking_id)
+        except Booking.DoesNotExist:
             return Response(
-                {"message": "guestEmail and roomId are required."},
-                status=400,
+                {"error": "Booking not found."},
+                status=status.HTTP_404_NOT_FOUND
             )
 
-        try:
-            guest = User.objects.get(email=guest_email)
-        except User.DoesNotExist:
-            return Response({"message": f"Guest {guest_email} not found."}, status=404)
+        # Check if already cancelled
+        if booking.status == 'CANCELLED':
+            return Response(
+                {"error": "Booking is already cancelled."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
-        try:
-            room = Room.objects.get(pk=room_id)
-        except Room.DoesNotExist:
-            return Response({"message": "Room not found."}, status=404)
+        # Get cancellation details
+        cancellation_reason = request.data.get('reason', '')
+        if not cancellation_reason:
+            return Response(
+                {"error": "Cancellation reason is required."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
-        check_in_date  = request.data.get("checkInDate")
-        check_out_date = request.data.get("checkOutDate")
-        total_amount   = Decimal(str(request.data.get("totalAmount", 0)))
-        deposit_amount = Decimal(str(request.data.get("depositAmount", total_amount / 2)))
-        num_guests     = request.data.get("numberOfGuests", 1)
-        special_req    = request.data.get("specialRequests", "Walk-in booking")
+        # Update booking with cancellation details
+        booking.status = 'CANCELLED'
+        booking.cancellation_reason = cancellation_reason
+        booking.cancelled_by = request.user
+        booking.cancelled_at = timezone.now()
+        booking.save()
 
-        nights = (
-            date.fromisoformat(check_out_date) - date.fromisoformat(check_in_date)
-        ).days
-
-        booking = Booking.objects.create(
-            user              = guest,
-            room              = room,
-            check_in_date     = check_in_date,
-            check_out_date    = check_out_date,
-            number_of_nights  = max(1, nights),
-            number_of_guests  = num_guests,
-            total_amount      = total_amount,
-            deposit_amount    = deposit_amount,
-            remaining_amount  = total_amount - deposit_amount,
-            status            = request.data.get("status", "CHECKED_IN"),
-            special_requests  = special_req,
-            booking_reference = f"CGH-WALKIN-{uuid.uuid4().hex[:6].upper()}",
-        )
-
+        # Clear caches
         _clear_admin_booking_cache()
-        cache.delete(f"my_bookings_{guest.id}")
+        cache.delete(f"my_bookings_{booking.user_id}")
 
-        return Response(
-            AdminBookingSerializer(booking).data,
-            status=status.HTTP_201_CREATED,
-        )
+        # Optional: Create refund payment if deposit was paid
+        from apps.payments.models import Payment
+        deposit_amount = float(booking.deposit_amount or 0)
+        refund_amount = deposit_amount * 0.5
 
+        if refund_amount > 0:
+            # Check if refund already exists
+            existing_refund = Payment.objects.filter(
+                booking_id=booking.id,
+                type='REFUND'
+            ).exists()
+
+            if not existing_refund:
+                Payment.objects.create(
+                    paymongo_link_id=f"REFUND_{booking.booking_reference}_{booking.id}",
+                    checkout_url="",
+                    email=booking.user.email,
+                    description=f"Refund for cancelled booking {booking.booking_reference}",
+                    amount=refund_amount,
+                    status='REFUNDED',
+                    type='REFUND',
+                    booking_id=booking.id,
+                    paid_at=timezone.now()
+                )
+
+        return Response({
+            "success": True,
+            "message": f"Booking #{booking.booking_reference} has been cancelled.",
+            "cancellation_reason": cancellation_reason,
+            "cancelled_by": request.user.username,
+            "cancelled_at": booking.cancelled_at
+        }, status=status.HTTP_200_OK)
+
+
+class AdminGetCancellationDetailsView(APIView):
+    """GET /api/v1/admin/bookings/<id>/cancellation/ - Get cancellation details"""
+
+    @staff_only
+    def get(self, request, booking_id):
+        try:
+            booking = Booking.objects.select_related('cancelled_by').get(id=booking_id)
+        except Booking.DoesNotExist:
+            return Response(
+                {"error": "Booking not found."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        return Response({
+            "is_cancelled": booking.status == 'CANCELLED',
+            "cancellation_reason": booking.cancellation_reason,
+            "cancelled_by": booking.cancelled_by.username if booking.cancelled_by else None,
+            "cancelled_at": booking.cancelled_at,
+            "cancelled_by_id": booking.cancelled_by_id
+        })
+
+
+# apps/admin_panel/views.py
+
+# apps/admin_panel/views.py
 
 class AdminBookingDetailView(APIView):
     """GET /api/v1/admin/bookings/<pk>/"""
 
     @staff_only
-    def get(self, request, pk):
-        cache_key = f"admin_booking_{pk}"
-        cached    = cache.get(cache_key)
-        if cached:
-            return Response(cached)
-
+    def get(self, request, pk):  # Use 'pk' to match the URL pattern
         try:
+            # Add 'cancelled_by' to select_related to include cancellation data
             booking = Booking.objects.select_related(
-                "room", "user", "guest_information"
-            ).get(pk=pk)
+                'user', 'room', 'guest_information', 'cancelled_by'
+            ).get(id=pk)
         except Booking.DoesNotExist:
-            return Response({"message": "Booking not found."}, status=404)
+            return Response(
+                {"error": "Booking not found."},
+                status=status.HTTP_404_NOT_FOUND
+            )
 
-        data = AdminBookingSerializer(booking).data
-        cache.set(cache_key, data, timeout=30)
-        return Response(data)
-
+        serializer = AdminBookingSerializer(booking)
+        return Response(serializer.data)
 
 class AdminBookingStatusView(APIView):
     """POST /api/v1/admin/bookings/<pk>/status/"""
@@ -402,6 +445,9 @@ class AdminGuestDetailView(APIView):
 
     @staff_only
     def get(self, request, pk):
+        from apps.services.models import ServiceRequest
+        from apps.feedback.models import Feedback
+
         cache_key = f"admin_guest_{pk}"
         cached    = cache.get(cache_key)
         if cached:
@@ -415,14 +461,120 @@ class AdminGuestDetailView(APIView):
         bookings = Booking.objects.filter(user=guest).select_related("room").order_by("-created_at")
         profile  = GuestInformation.objects.filter(user=guest).first()
 
+        # ── Bookings ──────────────────────────────────────────
+        # Collect IDs upfront — Payment.booking_id is a plain BigIntegerField, not a FK.
+        booking_ids     = list(bookings.values_list("id", flat=True))
+        booking_ref_map = {b.id: b.booking_reference for b in bookings}
+
+        bookings_data = [
+            {
+                "id":               b.id,
+                "bookingReference": b.booking_reference,
+                "status":           b.status,
+                "paymentStatus":    b.payment_status,
+                "checkInDate":      b.check_in_date,
+                "checkOutDate":     b.check_out_date,
+                "numberOfNights":   b.number_of_nights,
+                "numberOfGuests":   b.number_of_guests,
+                "totalAmount":      str(b.total_amount),
+                "depositAmount":    str(b.deposit_amount),
+                "remainingAmount":  str(b.remaining_amount),
+                "specialRequests":  b.special_requests,
+                "roomNumber":       b.room.room_number if b.room else None,
+                "roomType":         b.room.room_type   if b.room else None,
+                "createdAt":        b.created_at,
+            }
+            for b in bookings
+        ]
+
+        # ── Payments ──────────────────────────────────────────
+        # Payment has no booking FK — filter by booking_id__in (BigIntegerField).
+        payments_qs = Payment.objects.filter(
+            booking_id__in=booking_ids
+        ).order_by("-created_at")
+
+        payments_data = [
+            {
+                "id":               p.id,
+                "amount":           str(p.amount),
+                "status":           p.status,
+                "type":             p.type,
+                "description":      p.description,
+                "paymongoLinkId":   p.paymongo_link_id,
+                "email":            p.email,
+                "bookingReference": booking_ref_map.get(p.booking_id),
+                "paidAt":           p.paid_at,
+                "createdAt":        p.created_at,
+            }
+            for p in payments_qs
+        ]
+
+        # ── Service Requests ───────────────────────────────────
+        # ServiceRequest has no user FK — linked by guest_email only.
+        service_qs = ServiceRequest.objects.filter(
+            guest_email=guest.email
+        ).select_related("assigned_to").order_by("-created_at")
+
+        service_requests_data = [
+            {
+                "id":            s.id,
+                "serviceType":   s.get_service_type_display(),
+                "description":   s.description,
+                "status":        s.status,
+                "priority":      s.priority,
+                "roomNumber":    s.room_number,
+                "assignedTo":    (s.assigned_to.get_username() or s.assigned_to.username)
+                                 if s.assigned_to else None,
+                "serviceCharge": str(s.service_charge),
+                "isPaid":        s.is_paid,
+                "startedAt":     s.started_at,
+                "completedAt":   s.completed_at,
+                "createdAt":     s.created_at,
+            }
+            for s in service_qs
+        ]
+
+        # ── Feedback ──────────────────────────────────────────
+        feedback_qs = Feedback.objects.filter(
+            user=guest
+        ).select_related("booking", "room").order_by("-created_at")
+
+        feedback_data = [
+            {
+                "id":                f.id,
+                "bookingReference":  f.booking.booking_reference if f.booking else None,
+                "roomNumber":        f.room.room_number if f.room else None,
+                "overallRating":     f.overall_rating,
+                "cleanlinessRating": f.cleanliness_rating,
+                "serviceRating":     f.service_rating,
+                "comfortRating":     f.comfort_rating,
+                "valueRating":       f.value_rating,
+                "averageRating":     f.average_rating,
+                "comment":           f.comment,
+                "likes":             f.likes,
+                "improvements":      f.improvements,
+                "isPublished":       f.is_published,
+                "isResponded":       f.is_responded,
+                "response":          f.response,
+                "createdAt":         f.created_at,
+            }
+            for f in feedback_qs
+        ]
+
+        # ── Assemble ──────────────────────────────────────────
         data = AdminGuestSerializer(guest).data
-        data["bookingCount"] = bookings.count()
+        data["bookingCount"]    = bookings.count()
         data["profile"] = {
             "firstName":     profile.first_name     if profile else None,
             "lastName":      profile.last_name      if profile else None,
             "contactNumber": profile.contact_number if profile else None,
             "nationality":   profile.nationality    if profile else None,
+            "address":       getattr(profile, "home_address", None) if profile else None,
         } if profile else None
+        data["bookings"]        = bookings_data
+        data["payments"]        = payments_data
+        data["serviceRequests"] = service_requests_data
+        data["feedback"]        = feedback_data
 
         cache.set(cache_key, data, timeout=60)
         return Response(data)

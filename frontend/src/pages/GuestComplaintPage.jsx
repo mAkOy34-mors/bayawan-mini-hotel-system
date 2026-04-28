@@ -6,8 +6,11 @@ import { API_BASE } from '../constants/config';
 import {
   AlertTriangle, Send, CheckCircle2, Clock, XCircle,
   MessageSquare, Phone, Mail, ChevronDown, ChevronUp,
-  RefreshCw, Plus, Eye, Search,
-  User, Flag,
+  RefreshCw, Plus, Eye, Search, Star,
+  User, Flag, Volume2, Wrench, Tv, Wind, Droplet,
+  Users, Coffee, Shield, Home, MoreHorizontal,
+  Calendar, CornerDownRight, Headphones, Building2,
+  Sparkles, Loader2
 } from 'lucide-react';
 
 const css = `
@@ -57,15 +60,14 @@ const css = `
 
   .complaint-stats { display:grid; grid-template-columns:repeat(4,1fr); gap:1rem; margin-bottom:1.5rem; }
   @media(max-width:900px){ .complaint-stats { grid-template-columns:repeat(2,1fr); } }
-  @media(max-width:480px){ .complaint-stats { grid-template-columns:1fr 1fr; } }
 
   .complaint-stat {
     background:var(--surface); border:1px solid var(--border); border-radius:14px;
     padding:1rem 1.15rem; position:relative; overflow:hidden;
-    box-shadow:0 1px 6px rgba(0,0,0,.05); animation:fadeUp .45s cubic-bezier(.22,1,.36,1) both;
+    box-shadow:0 2px 8px rgba(0,0,0,.04); animation:fadeUp .45s cubic-bezier(.22,1,.36,1) both;
     transition:transform .2s,box-shadow .2s;
   }
-  .complaint-stat:hover { transform:translateY(-2px); box-shadow:0 6px 20px rgba(0,0,0,.09); }
+  .complaint-stat:hover { transform:translateY(-2px); box-shadow:0 8px 24px rgba(0,0,0,.1); }
   .complaint-stat::before { content:''; position:absolute; top:0; left:0; right:0; height:3px; }
   .complaint-stat.red::before    { background:linear-gradient(to right,#dc2626,#f87171); }
   .complaint-stat.orange::before { background:linear-gradient(to right,#f59e0b,#fbbf24); }
@@ -88,15 +90,15 @@ const css = `
   @media(max-width:1024px){ .complaint-grid { grid-template-columns:1fr; } }
 
   .complaint-panel {
-    background:var(--surface); border:1px solid var(--border); border-radius:14px;
-    overflow:hidden; box-shadow:0 1px 6px rgba(0,0,0,.05); animation:fadeUp .45s cubic-bezier(.22,1,.36,1) both;
+    background:var(--surface); border:1px solid var(--border); border-radius:16px;
+    overflow:hidden; box-shadow:0 2px 8px rgba(0,0,0,.04); animation:fadeUp .45s cubic-bezier(.22,1,.36,1) both;
     margin-bottom:1rem;
   }
   .complaint-panel-hd {
     display:flex; align-items:center; justify-content:space-between;
     padding:.95rem 1.25rem; border-bottom:1px solid var(--border); background:var(--surface2);
   }
-  .complaint-panel-title { font-family:'Cormorant Garamond',serif; font-size:1.05rem; font-weight:600; color:var(--text); display:flex; align-items:center; gap:.5rem; }
+  .complaint-panel-title { font-family:'Cormorant Garamond',serif; font-size:1rem; font-weight:600; color:var(--text); display:flex; align-items:center; gap:.5rem; }
   .complaint-panel-body  { padding:1.25rem; }
 
   .complaint-filter-bar { display:flex; gap:.75rem; flex-wrap:wrap; margin-bottom:1rem; align-items:center; }
@@ -104,7 +106,7 @@ const css = `
   .complaint-search-ico { position:absolute; left:.75rem; top:50%; transform:translateY(-50%); color:var(--text-muted); }
   .complaint-search {
     width:100%; background:var(--surface2); border:1px solid var(--border);
-    color:var(--text); border-radius:8px; padding:.6rem .85rem .6rem 2.2rem; font-size:.82rem;
+    color:var(--text); border-radius:10px; padding:.6rem .85rem .6rem 2.2rem; font-size:.82rem;
     font-family:'DM Sans',sans-serif; outline:none; transition:border-color .18s,box-shadow .18s;
   }
   .complaint-search:focus { border-color:var(--gold); background:#fff; box-shadow:0 0 0 3px rgba(201,168,76,0.1); }
@@ -117,11 +119,11 @@ const css = `
   .complaint-chip:hover { border-color:var(--gold); color:var(--gold-dark); }
 
   .complaint-card {
-    background:var(--surface); border:1px solid var(--border); border-radius:12px;
+    background:var(--surface); border:1px solid var(--border); border-radius:14px;
     margin-bottom:.85rem; overflow:hidden; transition:all .2s;
     animation:fadeUp .3s cubic-bezier(.22,1,.36,1) both;
   }
-  .complaint-card:hover { border-color:rgba(201,168,76,0.3); box-shadow:0 4px 12px rgba(0,0,0,.08); }
+  .complaint-card:hover { border-color:rgba(201,168,76,0.3); box-shadow:0 4px 16px rgba(0,0,0,.08); }
   .complaint-card::before { content:''; display:block; height:3px; }
   .complaint-card.status-PENDING::before   { background:linear-gradient(to right,#f59e0b,#fbbf24); }
   .complaint-card.status-IN_PROGRESS::before { background:linear-gradient(to right,#3b82f6,#60a5fa); }
@@ -132,34 +134,10 @@ const css = `
     display:flex; align-items:center; justify-content:space-between;
     padding:1rem 1.25rem; flex-wrap:wrap; gap:.5rem;
   }
-  .complaint-type-badge {
-    display:inline-flex; align-items:center; gap:.3rem;
-    padding:.2rem .65rem; border-radius:99px; font-size:.65rem; font-weight:700;
-  }
-  .complaint-type-badge.NOISE     { background:rgba(139,92,246,0.12); color:#8b5cf6; border:1px solid rgba(139,92,246,0.25); }
-  .complaint-type-badge.CLEANING  { background:rgba(45,155,111,0.12); color:#2d9b6f; border:1px solid rgba(45,155,111,0.25); }
-  .complaint-type-badge.AC        { background:rgba(59,130,246,0.12); color:#3b82f6; border:1px solid rgba(59,130,246,0.25); }
-  .complaint-type-badge.TV        { background:rgba(59,130,246,0.12); color:#3b82f6; border:1px solid rgba(59,130,246,0.25); }
-  .complaint-type-badge.PLUMBING  { background:rgba(245,158,11,0.12); color:#f59e0b; border:1px solid rgba(245,158,11,0.25); }
-  .complaint-type-badge.STAFF     { background:rgba(220,53,69,0.12); color:#dc3545; border:1px solid rgba(220,53,69,0.25); }
-  .complaint-type-badge.AMENITIES { background:rgba(201,168,76,0.12); color:#9a7a2e; border:1px solid rgba(201,168,76,0.25); }
-  .complaint-type-badge.SECURITY  { background:rgba(220,38,38,0.12); color:#dc2626; border:1px solid rgba(220,38,38,0.25); }
-  .complaint-type-badge.OTHER     { background:#f1f5f9; color:#64748b; border:1px solid #e2e8f0; }
-
-  .complaint-status-pill {
-    display:inline-flex; align-items:center; gap:.25rem;
-    padding:.2rem .6rem; border-radius:99px; font-size:.65rem; font-weight:700;
-    text-transform:uppercase; letter-spacing:.04em;
-  }
-  .complaint-status-pill.PENDING     { background:var(--orange-bg); color:var(--orange); }
-  .complaint-status-pill.IN_PROGRESS { background:var(--blue-bg); color:var(--blue); }
-  .complaint-status-pill.RESOLVED    { background:var(--green-bg); color:var(--green); }
-  .complaint-status-pill.CLOSED      { background:#f1f5f9; color:#64748b; }
-
   .complaint-card-body { padding:0 1.25rem .9rem; }
   .complaint-title { font-size:.9rem; font-weight:700; color:var(--text); margin-bottom:.35rem; }
   .complaint-desc { font-size:.78rem; color:var(--text-sub); line-height:1.55; margin-bottom:.65rem; }
-  .complaint-meta { display:flex; gap:.75rem; font-size:.7rem; color:var(--text-muted); flex-wrap:wrap; }
+  .complaint-meta { display:flex; gap:.75rem; font-size:.7rem; color:var(--text-muted); flex-wrap:wrap; margin-bottom:.5rem; }
   .complaint-response {
     margin-top:.65rem; padding:.65rem .85rem; background:var(--surface2);
     border-radius:10px; border-left:3px solid var(--gold);
@@ -181,7 +159,7 @@ const css = `
   .complaint-label .req { color:var(--red); margin-left:.2rem; }
   .complaint-input, .complaint-select, .complaint-textarea {
     background:#fff; border:1px solid var(--border); color:var(--text);
-    border-radius:8px; padding:.65rem .9rem; font-size:.85rem;
+    border-radius:10px; padding:.65rem .9rem; font-size:.85rem;
     font-family:'DM Sans',sans-serif; outline:none;
     transition:border-color .2s,box-shadow .2s;
   }
@@ -196,7 +174,7 @@ const css = `
   }
 
   .complaint-submit-btn {
-    width:100%; padding:.78rem; border:none; border-radius:10px;
+    width:100%; padding:.78rem; border:none; border-radius:12px;
     background:linear-gradient(135deg,#9a7a2e,#C9A84C); color:#fff;
     font-family:'DM Sans',sans-serif; font-size:.88rem; font-weight:600;
     cursor:pointer; transition:all .22s; display:flex; align-items:center;
@@ -220,7 +198,9 @@ const css = `
   .complaint-contact-card {
     background:var(--surface); border:1px solid var(--border); border-radius:12px;
     padding:1rem; text-align:center; transition:all .2s; cursor:pointer;
+    margin-bottom:.65rem;
   }
+  .complaint-contact-card:last-child { margin-bottom:0; }
   .complaint-contact-card:hover { transform:translateY(-2px); box-shadow:0 4px 12px rgba(0,0,0,.08); border-color:rgba(201,168,76,0.3); }
   .complaint-contact-icon { width:48px; height:48px; border-radius:12px; background:var(--gold-bg); display:flex; align-items:center; justify-content:center; margin:0 auto .65rem; color:var(--gold-dark); }
   .complaint-contact-name { font-weight:700; font-size:.85rem; color:var(--text); margin-bottom:.12rem; }
@@ -232,18 +212,42 @@ const css = `
   .complaint-timeline { margin-top:.65rem; padding-top:.65rem; border-top:1px dashed var(--border); }
   .complaint-timeline-item { display:flex; gap:.6rem; margin-top:.5rem; font-size:.7rem; }
   .complaint-timeline-dot { width:8px; height:8px; border-radius:50%; margin-top:4px; flex-shrink:0; }
+
+  .room-info-box {
+    background:var(--surface2);
+    border-radius:12px;
+    padding:.75rem;
+    margin-bottom:.85rem;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    border:1px solid var(--border);
+  }
+  .room-info-label {
+    font-size:.65rem;
+    text-transform:uppercase;
+    letter-spacing:.08em;
+    color:var(--text-muted);
+    font-weight:700;
+  }
+  .room-info-value {
+    font-size:.9rem;
+    font-weight:700;
+    color:var(--gold-dark);
+  }
 `;
 
+// Complaint Types with Lucide Icons
 const COMPLAINT_TYPES = [
-  { value: 'NOISE', label: 'Noise Complaint', icon: '🔊', color: '#8b5cf6' },
-  { value: 'CLEANING', label: 'Cleaning Issue', icon: '🧹', color: '#2d9b6f' },
-  { value: 'AC', label: 'Air Conditioning', icon: '❄️', color: '#3b82f6' },
-  { value: 'TV', label: 'TV/Entertainment', icon: '📺', color: '#3b82f6' },
-  { value: 'PLUMBING', label: 'Plumbing Issue', icon: '🚰', color: '#f59e0b' },
-  { value: 'STAFF', label: 'Staff Behavior', icon: '👥', color: '#dc3545' },
-  { value: 'AMENITIES', label: 'Amenities Missing', icon: '🍽️', color: '#9a7a2e' },
-  { value: 'SECURITY', label: 'Security Concern', icon: '🛡️', color: '#dc2626' },
-  { value: 'OTHER', label: 'Other', icon: '📝', color: '#64748b' },
+  { value: 'NOISE', label: 'Noise Complaint', icon: Volume2, color: '#8b5cf6', bg: 'rgba(139,92,246,0.12)' },
+  { value: 'CLEANING', label: 'Cleaning Issue', icon: Sparkles, color: '#2d9b6f', bg: 'rgba(45,155,111,0.12)' },
+  { value: 'AC', label: 'Air Conditioning', icon: Wind, color: '#3b82f6', bg: 'rgba(59,130,246,0.12)' },
+  { value: 'TV', label: 'TV/Entertainment', icon: Tv, color: '#3b82f6', bg: 'rgba(59,130,246,0.12)' },
+  { value: 'PLUMBING', label: 'Plumbing Issue', icon: Droplet, color: '#f59e0b', bg: 'rgba(245,158,11,0.12)' },
+  { value: 'STAFF', label: 'Staff Behavior', icon: Users, color: '#dc3545', bg: 'rgba(220,53,69,0.12)' },
+  { value: 'AMENITIES', label: 'Amenities Missing', icon: Coffee, color: '#9a7a2e', bg: 'rgba(201,168,76,0.12)' },
+  { value: 'SECURITY', label: 'Security Concern', icon: Shield, color: '#dc2626', bg: 'rgba(220,38,38,0.12)' },
+  { value: 'OTHER', label: 'Other', icon: MoreHorizontal, color: '#64748b', bg: '#f1f5f9' },
 ];
 
 const STATUS_CONFIG = {
@@ -277,71 +281,47 @@ export function GuestComplaintPage({ token, user }) {
 
   // Fetch the actual room number from active booking
   useEffect(() => {
-    // GuestComplaintPage.jsx - Updated fetchActiveRoom function
-const fetchActiveRoom = async () => {
-  if (!token) return;
-  
-  setLoadingRoom(true);
-  try {
-    const response = await fetch(`${API_BASE}/bookings/my-bookings/`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    
-    if (response.ok) {
-      const bookings = await response.json();
-      const today = new Date().toISOString().split('T')[0];
+    const fetchActiveRoom = async () => {
+      if (!token) return;
       
-      // Find active booking (CHECKED_IN status)
-      const activeBooking = bookings.find(b => 
-        b.status === 'CHECKED_IN' &&
-        b.checkInDate <= today && 
-        b.checkOutDate >= today
-      );
-      
-      console.log('Active booking found:', activeBooking);
-      
-      if (activeBooking) {
-        // Try multiple possible field names for room number
-        let roomNum = null;
+      setLoadingRoom(true);
+      try {
+        const response = await fetch(`${API_BASE}/bookings/my-bookings/`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
         
-        // Check all possible locations for room number
-        if (activeBooking.roomNumber) {
-          roomNum = activeBooking.roomNumber;
-        } else if (activeBooking.room_number) {
-          roomNum = activeBooking.room_number;
-        } else if (activeBooking.room?.roomNumber) {
-          roomNum = activeBooking.room.roomNumber;
-        } else if (activeBooking.room?.room_number) {
-          roomNum = activeBooking.room.room_number;
-        } else if (activeBooking.room?.number) {
-          roomNum = activeBooking.room.number;
-        } else if (activeBooking.room__room_number) {
-          roomNum = activeBooking.room__room_number;
+        if (response.ok) {
+          const bookings = await response.json();
+          const today = new Date().toISOString().split('T')[0];
+          
+          const activeBooking = bookings.find(b => 
+            b.status === 'CHECKED_IN' &&
+            b.checkInDate <= today && 
+            b.checkOutDate >= today
+          );
+          
+          if (activeBooking) {
+            let roomNum = activeBooking.roomNumber || 
+                         activeBooking.room_number || 
+                         activeBooking.room?.roomNumber || 
+                         activeBooking.room?.room_number;
+            
+            if (roomNum) {
+              setActiveRoom(String(roomNum));
+            } else {
+              setActiveRoom('');
+            }
+          } else {
+            setActiveRoom('');
+          }
         }
-        
-        console.log('Found room number:', roomNum);
-        
-        if (roomNum) {
-          setActiveRoom(String(roomNum));
-        } else {
-          console.warn('No room number in booking:', activeBooking);
-          setActiveRoom('');
-        }
-      } else {
-        console.log('No active CHECKED_IN booking found');
+      } catch (error) {
+        console.error('Failed to fetch active room:', error);
         setActiveRoom('');
+      } finally {
+        setLoadingRoom(false);
       }
-    } else {
-      console.error('Failed to fetch bookings:', response.status);
-      setActiveRoom('');
-    }
-  } catch (error) {
-    console.error('Failed to fetch active room:', error);
-    setActiveRoom('');
-  } finally {
-    setLoadingRoom(false);
-  }
-};
+    };
     
     fetchActiveRoom();
   }, [token]);
@@ -393,7 +373,6 @@ const fetchActiveRoom = async () => {
         preferred_contact: form.preferredContact,
       };
       
-      // Only add room_number if we have one
       if (activeRoom && activeRoom.trim() !== '') {
         payload.room_number = activeRoom;
       }
@@ -421,7 +400,7 @@ const fetchActiveRoom = async () => {
         setTimeout(() => setSubmitted(false), 3000);
         showAlert('Complaint submitted successfully!', 'success');
       } else {
-        const errorMessage = data.message || data.error || Object.values(data).flat().join(', ') || 'Failed to submit complaint';
+        const errorMessage = data.message || data.error || 'Failed to submit complaint';
         showAlert(errorMessage, 'error');
       }
     } catch (error) {
@@ -469,9 +448,9 @@ const fetchActiveRoom = async () => {
   };
 
   const contacts = [
-    { name: 'Front Desk', detail: '+63 32 888 8888', icon: '📞', action: 'tel' },
-    { name: 'Customer Support', detail: 'support@cebugrand.ph', icon: '✉️', action: 'email' },
-    { name: 'Duty Manager', detail: '+63 32 888 8899', icon: '👔', action: 'tel' },
+    { name: 'Front Desk', detail: '+63 32 888 8888', icon: Headphones, action: 'tel', phone: '+63328888888' },
+    { name: 'Customer Support', detail: 'support@cebugrand.ph', icon: Mail, action: 'email', email: 'support@cebugrand.ph' },
+    { name: 'Duty Manager', detail: '+63 32 888 8899', icon: User, action: 'tel', phone: '+63328888899' },
   ];
 
   const displayRoom = activeRoom || (loadingRoom ? 'Loading...' : 'Not checked in');
@@ -530,7 +509,7 @@ const fetchActiveRoom = async () => {
             <div className="complaint-panel-body">
               <div className="complaint-filter-bar">
                 <div className="complaint-search-wrap">
-                  <span className="complaint-search-ico"><Search size={13} /></span>
+                  <Search size={13} className="complaint-search-ico" />
                   <input
                     className="complaint-search"
                     placeholder="Search complaints..."
@@ -554,7 +533,7 @@ const fetchActiveRoom = async () => {
 
               {loading ? (
                 <div style={{ textAlign: 'center', padding: '2rem' }}>
-                  <div className="complaint-spinner" style={{ borderTopColor: 'var(--gold)', width: 24, height: 24 }} />
+                  <Loader2 size={24} style={{ animation: 'spin 0.7s linear infinite', color: 'var(--gold)' }} />
                   <div style={{ fontSize: '.78rem', color: 'var(--text-muted)', marginTop: '.65rem' }}>Loading complaints...</div>
                 </div>
               ) : filteredComplaints.length === 0 ? (
@@ -570,6 +549,7 @@ const fetchActiveRoom = async () => {
                   const typeInfo = getComplaintTypeInfo(complaint.complaint_type || complaint.complaintType);
                   const statusInfo = getStatusInfo(complaint.status);
                   const StatusIcon = statusInfo.icon;
+                  const TypeIcon = typeInfo.icon;
                   const isExpanded = expandedId === complaint.id;
 
                   return (
@@ -579,10 +559,31 @@ const fetchActiveRoom = async () => {
                       style={{ animationDelay: `${idx * 0.05}s` }}
                     >
                       <div className="complaint-card-hd">
-                        <div className={`complaint-type-badge ${complaint.complaint_type || complaint.complaintType}`}>
-                          <span>{typeInfo.icon}</span> {typeInfo.label}
+                        <div className={`complaint-type-badge`} style={{ 
+                          background: typeInfo.bg, 
+                          color: typeInfo.color,
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '.3rem',
+                          padding: '.2rem .65rem',
+                          borderRadius: '99px',
+                          fontSize: '.65rem',
+                          fontWeight: 700,
+                          border: `1px solid ${typeInfo.color}25`
+                        }}>
+                          <TypeIcon size={12} /> {typeInfo.label}
                         </div>
-                        <div className={`complaint-status-pill ${complaint.status}`}>
+                        <div className={`complaint-status-pill ${complaint.status}`} style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '.25rem',
+                          padding: '.2rem .6rem',
+                          borderRadius: '99px',
+                          fontSize: '.65rem',
+                          fontWeight: 700,
+                          background: statusInfo.bg,
+                          color: statusInfo.color
+                        }}>
                           <StatusIcon size={10} /> {statusInfo.label}
                         </div>
                       </div>
@@ -594,14 +595,16 @@ const fetchActiveRoom = async () => {
                         </div>
 
                         <div className="complaint-meta">
-                          <span>🆔 #{complaint.id}</span>
-                          <span>📅 {formatDate(complaint.created_at || complaint.createdAt)}</span>
-                          {complaint.room_number && <span>🏨 Room {complaint.room_number}</span>}
+                          <span><Calendar size={11} style={{ display: 'inline', marginRight: '.2rem' }} /> {formatDate(complaint.created_at || complaint.createdAt)}</span>
+                          {complaint.room_number && <span><Building2 size={11} style={{ display: 'inline', marginRight: '.2rem' }} /> Room {complaint.room_number}</span>}
+                          <span><Flag size={11} style={{ display: 'inline', marginRight: '.2rem' }} /> #{complaint.id}</span>
                         </div>
 
                         {complaint.response && (
                           <div className="complaint-response">
-                            <strong style={{ color: 'var(--gold-dark)', fontSize: '.7rem' }}>📝 Staff Response:</strong><br />
+                            <strong style={{ color: 'var(--gold-dark)', fontSize: '.7rem', display: 'flex', alignItems: 'center', gap: '.3rem' }}>
+                              <CornerDownRight size={12} /> Staff Response:
+                            </strong>
                             {complaint.response}
                           </div>
                         )}
@@ -615,7 +618,7 @@ const fetchActiveRoom = async () => {
                                 <div key={i} className="complaint-timeline-item">
                                   <div className="complaint-timeline-dot" style={{ background: itemStatus.color }} />
                                   <div style={{ flex: 1 }}>
-                                    <div style={{ fontWeight: 600, fontSize: '.7rem', color: itemStatus.color }}>
+                                    <div style={{ fontWeight: 600, fontSize: '.7rem', color: itemStatus.color, display: 'flex', alignItems: 'center', gap: '.3rem' }}>
                                       <ItemIcon size={10} /> {itemStatus.label}
                                     </div>
                                     <div style={{ fontSize: '.68rem', color: 'var(--text-muted)' }}>{formatDate(item.created_at || item.timestamp)}</div>
@@ -672,7 +675,9 @@ const fetchActiveRoom = async () => {
                       onChange={e => setForm({ ...form, complaintType: e.target.value })}
                     >
                       {COMPLAINT_TYPES.map(type => (
-                        <option key={type.value} value={type.value}>{type.icon} {type.label}</option>
+                        <option key={type.value} value={type.value}>
+                          {type.label}
+                        </option>
                       ))}
                     </select>
                   </div>
@@ -711,19 +716,16 @@ const fetchActiveRoom = async () => {
                     </select>
                   </div>
 
-                  <div style={{ 
-                    fontSize: '.72rem', 
-                    color: 'var(--text-muted)', 
-                    marginBottom: '.85rem', 
-                    background: 'var(--surface2)', 
-                    padding: '.65rem', 
-                    borderRadius: 8,
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center'
-                  }}>
-                    <span>🏨 Room: <strong>{displayRoom}</strong></span>
-                    <span>👤 Guest: <strong>{guestName}</strong></span>
+                  <div className="room-info-box">
+                    <div>
+                      <div className="room-info-label">Current Room</div>
+                      <div className="room-info-value">{displayRoom}</div>
+                    </div>
+                    <div>
+                      <div className="room-info-label">Guest</div>
+                      <div className="room-info-value">{guestName}</div>
+                    </div>
+                    <Building2 size={18} color="var(--gold-dark)" />
                   </div>
 
                   <button
@@ -732,7 +734,7 @@ const fetchActiveRoom = async () => {
                     onClick={submitComplaint}
                   >
                     {submitting ? (
-                      <><div className="complaint-spinner" /> Submitting...</>
+                      <><Loader2 size={15} className="complaint-spinner" /> Submitting...</>
                     ) : (
                       <><Send size={15} /> Submit Complaint</>
                     )}
@@ -751,17 +753,18 @@ const fetchActiveRoom = async () => {
             </div>
             <div className="complaint-panel-body">
               {contacts.map((contact, i) => {
+                const IconComponent = contact.icon;
                 const handleClick = () => {
                   if (contact.action === 'tel') {
-                    window.location.href = `tel:${contact.detail.replace(/\D/g, '')}`;
+                    window.location.href = `tel:${contact.phone}`;
                   } else if (contact.action === 'email') {
-                    window.location.href = `mailto:${contact.detail}`;
+                    window.location.href = `mailto:${contact.email}`;
                   }
                 };
                 return (
-                  <div key={i} className="complaint-contact-card" onClick={handleClick} style={{ marginBottom: i < contacts.length - 1 ? '.65rem' : 0 }}>
+                  <div key={i} className="complaint-contact-card" onClick={handleClick}>
                     <div className="complaint-contact-icon">
-                      <span style={{ fontSize: '1.3rem' }}>{contact.icon}</span>
+                      <IconComponent size={22} />
                     </div>
                     <div className="complaint-contact-name">{contact.name}</div>
                     <div className="complaint-contact-detail">{contact.detail}</div>
@@ -774,15 +777,19 @@ const fetchActiveRoom = async () => {
           {/* Info Note */}
           <div style={{
             marginTop: '1rem',
-            padding: '.75rem',
+            padding: '.75rem 1rem',
             background: 'var(--gold-bg)',
-            borderRadius: '10px',
+            borderRadius: '12px',
             border: '1px solid rgba(201,168,76,0.25)',
             fontSize: '.72rem',
             color: 'var(--text-sub)',
             textAlign: 'center',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '.5rem',
           }}>
-            <Flag size={14} style={{ display: 'inline', marginRight: '.3rem', verticalAlign: 'middle' }} />
+            <Flag size={14} />
             For urgent matters, please call the front desk immediately.
           </div>
         </div>

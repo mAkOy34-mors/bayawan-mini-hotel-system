@@ -264,7 +264,7 @@ EMAIL_PORT          = 587
 EMAIL_USE_TLS       = True
 EMAIL_HOST_USER     = env('EMAIL_HOST_USER', default='michomoreno34@gmail.com')
 EMAIL_HOST_PASSWORD = env('EMAIL_HOST_PASSWORD')
-DEFAULT_FROM_EMAIL  = f'Bayawan Mini Hotel <{EMAIL_HOST_USER}>'
+DEFAULT_FROM_EMAIL  = f'Cebu Mini Hotel <{EMAIL_HOST_USER}>'
 
 from corsheaders.defaults import default_headers
 

@@ -148,6 +148,14 @@ export const SHARED_CSS = `
   .ap-toast{position:fixed;bottom:1.5rem;left:50%;transform:translateX(-50%);z-index:9999;display:flex;align-items:center;gap:.65rem;padding:.75rem 1.3rem;border-radius:10px;font-size:.83rem;font-family:'DM Sans',sans-serif;font-weight:600;animation:fadeUp .3s cubic-bezier(.22,1,.36,1) both;box-shadow:0 8px 24px rgba(0,0,0,.15);min-width:220px;max-width:400px}
   .ap-toast.success{background:#1a1f2e;color:#fff;border:1px solid rgba(45,155,111,0.4)}
   .ap-toast.error{background:#1a1f2e;color:#fff;border:1px solid rgba(220,53,69,0.4)}
+
+  .ap-stat.purple::before {
+  background: linear-gradient(to right, #7c3aed, #a78bfa);
+}
+.ap-stat.purple .ap-stat-icon {
+  background: rgba(124,58,237,0.1);
+  color: #7c3aed;
+}
 `;
 
 export function Pill({ status, label }) {

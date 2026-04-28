@@ -15,6 +15,7 @@ import { EmergencyPage } from './pages/EmergencyPage';
 import { EmergencyProvider } from './context/EmergencyContext';
 import { GuestComplaintPage } from './pages/GuestComplaintPage';
 import GuestPartnerServices from './pages/GuestPartnerServices';
+import { NotificationProvider } from './context/NotificationContext';
 import { StaffApp } from './staff/StaffApp';
 import { RewardsPage, SettingsPage, SupportPage } from './pages/OtherPages';
 import { PAGE_TITLES } from './constants/config';
@@ -37,24 +38,19 @@ function GuestApp() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // ── Single profile fetch on mount ──────────────────────────
-  // Fetched here ONCE and cached. ProfilePage receives it as
-  // `initialProfile` so it never needs its own API call —
-  // the page appears instantly instead of showing a loading state.
   const [cachedProfile, setCachedProfile] = useState(null);
 
   useEffect(() => {
     if (!token) return;
     fetchProfile(token)
       .then(profile => { if (profile) setCachedProfile(profile); })
-      .catch(() => {}); // non-critical — silently ignore
+      .catch(() => {});
   }, [token]);
 
-  // Merge profilePicture into user object so Sidebar & Topbar display it
   const userWithPic = cachedProfile?.profilePicture
     ? { ...user, profilePicture: cachedProfile.profilePicture }
     : user;
 
-  // After ProfilePage saves, update the cache so Sidebar/Topbar reflect changes instantly
   const handleProfileSave = (savedProfile) => {
     if (savedProfile) setCachedProfile(savedProfile);
   };
@@ -74,8 +70,6 @@ function GuestApp() {
       case 'payments':
         return <PaymentsPage {...props} />;
       case 'profile':
-        // initialProfile = already-fetched data → ProfilePage skips its own fetch
-        // onProfileSave  = updates cachedProfile so Sidebar/Topbar stay in sync
         return (
           <ProfilePage
             {...props}
@@ -97,45 +91,49 @@ function GuestApp() {
         return <GuestServiceRequest {...props} roomNumber={roomNumber} />;
       case 'partner-services':
         return <GuestPartnerServices {...props} />;
-    // ✅ Partner Services - Category subpages
-    case 'partner-services-spa':
-      return <GuestPartnerServices {...props} initialCategory="SPA" />;
-    case 'partner-services-tours':
-      return <GuestPartnerServices {...props} initialCategory="TOUR_GUIDE" />;
-    case 'partner-services-transport':
-      return <GuestPartnerServices {...props} initialCategory="TRANSPORT" />;
-    case 'partner-services-dining':
-      return <GuestPartnerServices {...props} initialCategory="DINING" />;
-    case 'partner-services-salon':
-      return <GuestPartnerServices {...props} initialCategory="SALON" />;  
+      case 'partner-services-spa':
+        return <GuestPartnerServices {...props} initialCategory="SPA" />;
+      case 'partner-services-tours':
+        return <GuestPartnerServices {...props} initialCategory="TOUR_GUIDE" />;
+      case 'partner-services-transport':
+        return <GuestPartnerServices {...props} initialCategory="TRANSPORT" />;
+      case 'partner-services-dining':
+        return <GuestPartnerServices {...props} initialCategory="DINING" />;
+      case 'partner-services-salon':
+        return <GuestPartnerServices {...props} initialCategory="SALON" />;
       default:
         return <Homepage {...props} setPage={setPage} />;
     }
   };
 
   return (
-    <div className="flex h-screen overflow-hidden">
-      <Sidebar
-        page={page}
-        setPage={setPage}
-        user={userWithPic}
-        onLogout={logout}
-        open={sidebarOpen}
-        onClose={() => setSidebarOpen(false)}
-      />
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <Topbar
-          title={PAGE_TITLES[page] || page}
+    // ── NotificationProvider wraps the entire guest shell so
+    //    Topbar (bell), and any future page that calls
+    //    useNotifications(), all share the same polling state.
+    <NotificationProvider token={token}>
+      <div className="flex h-screen overflow-hidden">
+        <Sidebar
+          page={page}
+          setPage={setPage}
           user={userWithPic}
-          onMenuClick={() => setSidebarOpen(true)}
-          lang={lang}
-          setLang={setLang}
+          onLogout={logout}
+          open={sidebarOpen}
+          onClose={() => setSidebarOpen(false)}
         />
-        <main className="flex-1 overflow-auto bg-[#f8f3e8]">
-          {renderPage()}
-        </main>
+        <div className="flex-1 flex flex-col overflow-hidden">
+          <Topbar
+            title={PAGE_TITLES[page] || page}
+            user={userWithPic}
+            onMenuClick={() => setSidebarOpen(true)}
+            lang={lang}
+            setLang={setLang}
+          />
+          <main className="flex-1 overflow-auto bg-[#f8f3e8]">
+            {renderPage()}
+          </main>
+        </div>
       </div>
-    </div>
+    </NotificationProvider>
   );
 }
 

@@ -418,7 +418,25 @@ export function AdminRooms({ token }) {
                       <div style={{ padding: '.9rem 1rem' }}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '.45rem' }}>
                           <span style={{ fontSize: '.62rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.1em', color: 'var(--text-muted)' }}>{r.roomType}</span>
-                          <Pill status={r.available ? 'active' : 'inactive'} label={r.available ? 'Available' : 'Unavailable'} />
+                          {(() => {
+                            const isMaintenance = (r.status === 'MAINTENANCE') || (!r.available && r.currentStatus === 'UNAVAILABLE' && r.status === 'MAINTENANCE');
+                            if (r.available) {
+                              return <Pill status="active" label="Available" />;
+                            } else if (r.status === 'MAINTENANCE') {
+                              return (
+                                <span style={{
+                                  fontSize: '.62rem', fontWeight: 700, padding: '.2rem .55rem', borderRadius: 99,
+                                  background: 'rgba(220,53,69,0.12)', color: '#dc3545',
+                                  border: '1px solid rgba(220,53,69,0.3)',
+                                  display: 'inline-flex', alignItems: 'center', gap: '.25rem'
+                                }}>
+                                  🔧 Under Maintenance
+                                </span>
+                              );
+                            } else {
+                              return <Pill status="inactive" label="Unavailable" />;
+                            }
+                          })()}
                         </div>
                         <div style={{ fontWeight: 700, fontSize: '.95rem', color: 'var(--text)', marginBottom: '.35rem' }}>Room #{r.roomNumber}</div>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '.22rem', marginBottom: '.75rem' }}>

@@ -142,10 +142,11 @@ export const getStaffTasks = async (token) => {
   if (!response.ok) throw new Error('Failed to fetch staff tasks');
   const data = await response.json();
   
-  // Filter for housekeeping/cleaning tasks only
+  // Include housekeeping/cleaning tasks AND any task linked to a service request
   return data.filter(task => 
     task.task_type === 'HOUSEKEEPING' || 
-    task.task_type === 'CLEANING'
+    task.task_type === 'CLEANING' ||
+    task.service_request_id !== null  // ← include service-linked tasks
   );
 };
 
@@ -208,5 +209,75 @@ export const updateServiceRequestStatus = async (token, serviceId, status, notes
     body: JSON.stringify({ status, notes }),
   });
   if (!response.ok) throw new Error('Failed to update service request');
+  return response.json();
+};
+
+// Add these to housekeeper/housekeeperService.js
+
+// ── Supply Requests ──────────────────────────────────────────────────────
+export const getMySupplyRequests = async (token) => {
+  const response = await fetch(`${API_BASE}/housekeepers/supply-requests/my-requests/`, {
+    headers: getHeaders(token),
+  });
+  if (!response.ok) throw new Error('Failed to fetch supply requests');
+  return response.json();
+};
+
+export const createSupplyRequest = async (token, data) => {
+  const response = await fetch(`${API_BASE}/housekeepers/supply-requests/create/`, {
+    method: 'POST',
+    headers: getHeaders(token),
+    body: JSON.stringify({
+      itemName: data.itemName,
+      quantity: data.quantity,
+      unit: data.unit || 'piece(s)',
+      reason: data.reason,
+      priority: data.priority || 'MEDIUM',
+    }),
+  });
+  if (!response.ok) throw new Error('Failed to create supply request');
+  return response.json();
+};
+// ── Room Issues ──────────────────────────────────────────────────────────
+export const getRoomIssues = async (token) => {
+  const response = await fetch(`${API_BASE}/housekeepers/room-issues/`, {
+    headers: getHeaders(token),
+  });
+  if (!response.ok) throw new Error('Failed to fetch room issues');
+  return response.json();
+};
+
+export const createRoomIssue = async (token, data) => {
+  const response = await fetch(`${API_BASE}/housekeepers/room-issues/create/`, {
+    method: 'POST',
+    headers: getHeaders(token),
+    body: JSON.stringify({
+      issueType: data.issueType,
+      title: data.title,
+      description: data.description,
+      roomNumber: data.roomNumber,
+      priority: data.priority,
+      notes: data.notes,
+    }),
+  });
+  if (!response.ok) throw new Error('Failed to create room issue');
+  return response.json();
+};
+
+export const updateRoomIssueStatus = async (token, issueId, status, data = {}) => {
+  const response = await fetch(`${API_BASE}/housekeepers/room-issues/${issueId}/status/`, {
+    method: 'PATCH',
+    headers: getHeaders(token),
+    body: JSON.stringify({ status, ...data }),
+  });
+  if (!response.ok) throw new Error('Failed to update issue status');
+  return response.json();
+};
+
+export const getRoomIssueDetail = async (token, issueId) => {
+  const response = await fetch(`${API_BASE}/housekeepers/room-issues/${issueId}/`, {
+    headers: getHeaders(token),
+  });
+  if (!response.ok) throw new Error('Failed to fetch issue details');
   return response.json();
 };

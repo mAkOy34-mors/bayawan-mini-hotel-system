@@ -1,29 +1,21 @@
-// ReceptionistGuests.jsx — View guest profiles, edit contact details (no delete)
+// ReceptionistGuests.jsx — View guest profiles (no edit, no delete)
 import { useState } from 'react';
 import { Modal } from 'react-bootstrap';
-import { SHARED_CSS, fmt, fmtDate, Pill, Spinner, useToast, Toast } from '../admin/adminShared';
+import { SHARED_CSS, fmtDate, Pill, Spinner, useToast, Toast } from '../admin/adminShared';
 import {
-  Users, Search, User, Mail, Phone, BedDouble,
-  Edit3, Save, X, CheckCircle2, AlertTriangle,
+  Users, Search, User, Mail, Phone,
+  CheckCircle2, XCircle, Calendar, Hash,
 } from 'lucide-react';
 
 const BASE = 'http://127.0.0.1:8000/api/v1';
 const h  = (t) => ({ Authorization:`Bearer ${t}`,'ngrok-skip-browser-warning':'true' });
-const hj = (t) => ({ ...h(t),'Content-Type':'application/json' });
 
 export function ReceptionistGuests({ token }) {
   const [query,    setQuery]    = useState('');
   const [guests,   setGuests]   = useState([]);
   const [loading,  setLoading]  = useState(false);
   const [selected, setSelected] = useState(null);
-  const [bookings, setBookings] = useState([]);
-  const [bLoading, setBLoading] = useState(false);
   const [searched, setSearched] = useState(false);
-
-  // Edit modal
-  const [editOpen,  setEditOpen]  = useState(false);
-  const [editData,  setEditData]  = useState({});
-  const [saving,    setSaving]    = useState(false);
   const { toast, show } = useToast();
 
   const search = async () => {
@@ -41,44 +33,8 @@ export function ReceptionistGuests({ token }) {
     finally { setLoading(false); }
   };
 
-  const selectGuest = async (guest) => {
+  const selectGuest = (guest) => {
     setSelected(guest);
-    setBLoading(true);
-    try {
-      const res  = await fetch(`${BASE}/admin/bookings/?search=${encodeURIComponent(guest.email)}`, { headers: h(token) });
-      const data = await res.json().catch(() => []);
-      setBookings(Array.isArray(data) ? data : []);
-    } catch { setBookings([]); }
-    finally { setBLoading(false); }
-  };
-
-  const openEdit = () => {
-    setEditData({
-      username: selected.username || '',
-      email:    selected.email    || '',
-      phone:    selected.phone    || selected.profile?.phone || '',
-    });
-    setEditOpen(true);
-  };
-
-  const saveContact = async () => {
-    setSaving(true);
-    try {
-      const res = await fetch(`${BASE}/admin/guests/${selected.id}/`, {
-        method: 'PATCH', headers: hj(token),
-        body: JSON.stringify({ username: editData.username, phone: editData.phone }),
-      });
-      if (!res.ok) {
-        const d = await res.json().catch(() => ({}));
-        throw new Error(d.message || 'Failed to update guest');
-      }
-      const updated = await res.json().catch(() => ({ ...selected, ...editData }));
-      setSelected(prev => ({ ...prev, ...editData, ...updated }));
-      setGuests(prev => prev.map(g => g.id === selected.id ? { ...g, ...editData } : g));
-      show('Guest contact updated!');
-      setEditOpen(false);
-    } catch (e) { show(e.message, 'error'); }
-    finally { setSaving(false); }
   };
 
   return (
@@ -91,7 +47,7 @@ export function ReceptionistGuests({ token }) {
           <h1 className="ap-title" style={{ display:'flex', alignItems:'center', gap:'.6rem' }}>
             <Users size={22} color="var(--gold-dark)"/>Guest Profiles
           </h1>
-          <p className="ap-sub">Search and manage guest information · Edit contact details</p>
+          <p className="ap-sub">Search and view guest information</p>
         </div>
       </div>
 
@@ -162,11 +118,6 @@ export function ReceptionistGuests({ token }) {
             <div className="ap-panel-title">
               {selected ? `${selected.username||selected.email?.split('@')[0]}'s Profile` : 'Guest Profile'}
             </div>
-            {selected && (
-              <button className="ap-btn-ghost" onClick={openEdit}>
-                <Edit3 size={14}/>Edit Contact
-              </button>
-            )}
           </div>
 
           {!selected ? (
@@ -177,97 +128,120 @@ export function ReceptionistGuests({ token }) {
           ) : (
             <div className="ap-panel-body">
               {/* Profile card */}
-              <div style={{ display:'flex', alignItems:'center', gap:'1rem', marginBottom:'1.1rem', padding:'.9rem', background:'var(--surface2)', borderRadius:12, border:'1px solid var(--border)' }}>
-                <div style={{ width:52, height:52, borderRadius:14, background:'linear-gradient(135deg,#9a7a2e,#C9A84C)', display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', fontFamily:"'Cormorant Garamond',serif", fontSize:'1.25rem', fontWeight:600, flexShrink:0 }}>
-                  {(selected.username||selected.email||'G').slice(0,2).toUpperCase()}
-                </div>
-                <div style={{ flex:1 }}>
-                  <div style={{ fontFamily:"'Cormorant Garamond',serif", fontSize:'1.2rem', fontWeight:600, color:'var(--text)', marginBottom:'.25rem' }}>
-                    {selected.username||'—'}
+              <div style={{ 
+                background: 'linear-gradient(135deg, #1a1209 0%, #2d1f08 60%, #3a2610 100%)',
+                borderRadius: 16,
+                padding: '1.25rem',
+                marginBottom: '1rem',
+                color: '#fff'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+                  <div style={{ 
+                    width: 64, height: 64, borderRadius: 16, 
+                    background: 'linear-gradient(135deg,#9a7a2e,#C9A84C)', 
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', 
+                    color: '#fff', fontFamily: "'Cormorant Garamond',serif", 
+                    fontSize: '1.5rem', fontWeight: 600, flexShrink: 0,
+                    boxShadow: '0 4px 16px rgba(201,168,76,.35)'
+                  }}>
+                    {(selected.username||selected.email||'G').slice(0,2).toUpperCase()}
                   </div>
-                  <div style={{ display:'flex', flexDirection:'column', gap:'.18rem' }}>
-                    <div style={{ fontSize:'.78rem', color:'var(--text-muted)', display:'flex', alignItems:'center', gap:'.35rem' }}>
-                      <Mail size={12}/>{selected.email}
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: '1.3rem', fontWeight: 600, marginBottom: '.35rem' }}>
+                      {selected.username || '—'}
                     </div>
-                    {(selected.phone||selected.profile?.phone) && (
-                      <div style={{ fontSize:'.78rem', color:'var(--text-muted)', display:'flex', alignItems:'center', gap:'.35rem' }}>
-                        <Phone size={12}/>{selected.phone||selected.profile?.phone}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '.2rem' }}>
+                      <div style={{ fontSize: '.8rem', opacity: 0.75, display: 'flex', alignItems: 'center', gap: '.4rem' }}>
+                        <Mail size={12}/>{selected.email}
                       </div>
-                    )}
+                      {(selected.phone||selected.profile?.phone) && (
+                        <div style={{ fontSize: '.8rem', opacity: 0.75, display: 'flex', alignItems: 'center', gap: '.4rem' }}>
+                          <Phone size={12}/>{selected.phone||selected.profile?.phone}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <span style={{ 
+                    fontSize: '.7rem', padding: '.25rem .8rem', borderRadius: 99, 
+                    background: selected.isActive ?? selected.is_active ? 'rgba(34,197,94,.15)' : 'rgba(239,68,68,.15)', 
+                    color: selected.isActive ?? selected.is_active ? '#4ade80' : '#f87171', 
+                    fontWeight: 700, 
+                    border: `1px solid ${selected.isActive ?? selected.is_active ? 'rgba(34,197,94,.25)' : 'rgba(239,68,68,.25)'}`
+                  }}>
+                    {selected.isActive ?? selected.is_active ? '● Active' : '● Inactive'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Additional details */}
+              <div style={{ marginTop: '1rem' }}>
+                <div style={{ 
+                  fontSize: '.68rem', textTransform: 'uppercase', letterSpacing: '.08em', 
+                  color: 'var(--text-muted)', fontWeight: 700, marginBottom: '.75rem', 
+                  display: 'flex', alignItems: 'center', gap: '.4rem' 
+                }}>
+                  <User size={12}/>Account Information
+                </div>
+                
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '.75rem' }}>
+                  <div style={{ background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 10, padding: '.75rem 1rem' }}>
+                    <div style={{ fontSize: '.6rem', textTransform: 'uppercase', letterSpacing: '.08em', color: 'var(--text-muted)', marginBottom: '.25rem', display: 'flex', alignItems: 'center', gap: '.3rem' }}>
+                      <Hash size={10}/>Role
+                    </div>
+                    <div style={{ fontSize: '.85rem', fontWeight: 500, color: 'var(--text)' }}>
+                      {selected.role || 'GUEST'}
+                    </div>
+                  </div>
+                  <div style={{ background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 10, padding: '.75rem 1rem' }}>
+                    <div style={{ fontSize: '.6rem', textTransform: 'uppercase', letterSpacing: '.08em', color: 'var(--text-muted)', marginBottom: '.25rem', display: 'flex', alignItems: 'center', gap: '.3rem' }}>
+                      <Calendar size={10}/>Member Since
+                    </div>
+                    <div style={{ fontSize: '.85rem', fontWeight: 500, color: 'var(--text)' }}>
+                      {fmtDate(selected.createdAt)}
+                    </div>
                   </div>
                 </div>
-                <span style={{ fontSize:'.7rem', padding:'.25rem .7rem', borderRadius:99, background:selected.isActive ?? selected.is_active?'var(--green-bg)':'var(--red-bg)', color:selected.isActive ?? selected.is_active?'var(--green)':'var(--red)', fontWeight:700, border:`1px solid ${selected.isActive ?? selected.is_active?'rgba(45,155,111,0.25)':'rgba(220,53,69,0.25)'}` }}>
-                  {selected.isActive ?? selected.is_active?'Active':'Inactive'}
-                </span>
+
+                {selected.profile?.address && (
+                  <div style={{ marginTop: '.75rem', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 10, padding: '.75rem 1rem' }}>
+                    <div style={{ fontSize: '.6rem', textTransform: 'uppercase', letterSpacing: '.08em', color: 'var(--text-muted)', marginBottom: '.25rem' }}>
+                      Address
+                    </div>
+                    <div style={{ fontSize: '.85rem', color: 'var(--text)' }}>
+                      {selected.profile.address}
+                    </div>
+                  </div>
+                )}
+
+                {selected.profile?.nationality && (
+                  <div style={{ marginTop: '.75rem', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 10, padding: '.75rem 1rem' }}>
+                    <div style={{ fontSize: '.6rem', textTransform: 'uppercase', letterSpacing: '.08em', color: 'var(--text-muted)', marginBottom: '.25rem' }}>
+                      Nationality
+                    </div>
+                    <div style={{ fontSize: '.85rem', color: 'var(--text)' }}>
+                      {selected.profile.nationality}
+                    </div>
+                  </div>
+                )}
               </div>
 
-              {/* Booking history */}
-              <div style={{ fontSize:'.68rem', textTransform:'uppercase', letterSpacing:'.08em', color:'var(--text-muted)', fontWeight:700, marginBottom:'.5rem', display:'flex', alignItems:'center', gap:'.4rem' }}>
-                <BedDouble size={12}/>Booking History ({bookings.length})
+              {/* Note about edit permissions */}
+              <div style={{ 
+                marginTop: '1.5rem', 
+                padding: '.75rem 1rem', 
+                background: 'rgba(201,168,76,0.06)', 
+                borderRadius: 10, 
+                border: '1px solid rgba(201,168,76,0.15)',
+                fontSize: '.72rem',
+                color: 'var(--text-muted)',
+                textAlign: 'center'
+              }}>
+                <span style={{ opacity: 0.6 }}>ℹ️</span> Guest information is view-only. Contact an administrator to make changes.
               </div>
-
-              {bLoading ? (
-                <div style={{ display:'flex', justifyContent:'center', padding:'1.5rem' }}><Spinner/></div>
-              ) : bookings.length === 0 ? (
-                <div style={{ textAlign:'center', padding:'1.5rem', color:'var(--text-muted)', fontSize:'.8rem' }}>No bookings on record</div>
-              ) : (
-                <div style={{ overflowX:'auto' }}>
-                  <table className="ap-tbl">
-                    <thead><tr><th>Reference</th><th>Room</th><th>Check-In</th><th>Check-Out</th><th>Total</th><th>Status</th></tr></thead>
-                    <tbody>
-                      {bookings.slice(0,10).map(b => (
-                        <tr key={b.id}>
-                          <td style={{ fontFamily:'monospace', fontSize:'.72rem', color:'var(--gold-dark)', fontWeight:700 }}>{b.bookingReference}</td>
-                          <td style={{ fontSize:'.78rem', whiteSpace:'nowrap' }}>{b.roomType} #{b.roomNumber}</td>
-                          <td style={{ fontSize:'.75rem', color:'var(--text-muted)', whiteSpace:'nowrap' }}>{fmtDate(b.checkInDate)}</td>
-                          <td style={{ fontSize:'.75rem', color:'var(--text-muted)', whiteSpace:'nowrap' }}>{fmtDate(b.checkOutDate)}</td>
-                          <td style={{ fontSize:'.78rem', fontWeight:700 }}>{fmt(b.totalAmount)}</td>
-                          <td><Pill status={b.status}/></td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
             </div>
           )}
         </div>
       </div>
-
-      {/* Edit Contact Modal */}
-      <Modal show={editOpen} onHide={() => setEditOpen(false)} centered className="ap-modal">
-        <Modal.Header closeButton>
-          <Modal.Title style={{ display:'flex', alignItems:'center', gap:'.5rem' }}>
-            <Edit3 size={16}/>Edit Contact Details
-          </Modal.Title>
-        </Modal.Header>
-        <Modal.Body>
-          <div style={{ background:'rgba(245,158,11,0.07)', border:'1px solid rgba(245,158,11,0.2)', borderRadius:9, padding:'.65rem .9rem', marginBottom:'1rem', fontSize:'.79rem', color:'var(--orange)', display:'flex', gap:'.5rem' }}>
-            <AlertTriangle size={14} style={{ flexShrink:0, marginTop:1 }}/>
-            You can edit name and phone number. Email and account settings can only be changed by admin.
-          </div>
-          <div className="ap-form-grid">
-            <div className="ap-field">
-              <label className="ap-label">Full Name</label>
-              <input className="ap-input" value={editData.username||''} onChange={e => setEditData(d=>({...d,username:e.target.value}))}/>
-            </div>
-            <div className="ap-field">
-              <label className="ap-label">Email <span style={{ color:'var(--text-muted)', fontWeight:400, textTransform:'none' }}>(read-only)</span></label>
-              <input className="ap-input" value={editData.email||''} disabled style={{ background:'var(--surface2)', color:'var(--text-muted)' }}/>
-            </div>
-            <div className="ap-field">
-              <label className="ap-label">Phone</label>
-              <input className="ap-input" value={editData.phone||''} onChange={e => setEditData(d=>({...d,phone:e.target.value}))} placeholder="+63 9XX XXX XXXX"/>
-            </div>
-          </div>
-        </Modal.Body>
-        <Modal.Footer>
-          <button className="ap-btn-ghost" onClick={() => setEditOpen(false)}>Cancel</button>
-          <button className="ap-btn-primary" disabled={saving} onClick={saveContact}>
-            {saving ? <><div className="ap-spin-sm"/>Saving…</> : <><Save size={14}/>Save Changes</>}
-          </button>
-        </Modal.Footer>
-      </Modal>
     </div>
   );
 }

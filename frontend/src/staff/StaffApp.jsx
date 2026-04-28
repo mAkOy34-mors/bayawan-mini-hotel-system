@@ -9,6 +9,7 @@ import { StaffTaskDetail } from './StaffTaskDetail';
 import { StaffEmergency } from './StaffEmergency';
 import { StaffProfile } from './StaffProfile';
 import { StaffServiceTasks } from './StaffServiceTasks'; // ← Add this import
+import { StaffMaintenanceRequests } from './StaffMaintenanceRequests';
 import { API_BASE } from '../constants/config';
 
 const LAYOUT_CSS = `
@@ -148,6 +149,7 @@ const PAGE_TITLES = {
   dashboard: 'Staff Dashboard',
   tasks: 'My Tasks',
   'service-tasks': 'Service Tasks', // ← Add this
+  'maintenance-requests': 'Maintenance Requests',
   emergency: 'Emergency Response',
   profile: 'My Profile',
 };
@@ -222,6 +224,8 @@ function StaffShell({ user, token, onLogout }) {
         return <StaffTasks user={user} token={token} />;
       case 'service-tasks':
         return <StaffServiceTasks user={user} token={token} />; // ← Add this case
+      case 'maintenance-requests':
+        return <StaffMaintenanceRequests user={user} token={token} />;
       case 'emergency':
         return <StaffEmergency user={user} token={token} />;
       case 'profile':

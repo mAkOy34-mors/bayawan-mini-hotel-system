@@ -2,7 +2,8 @@
 import { Offcanvas } from 'react-bootstrap';
 import { LayoutDashboard, ClipboardList, Sparkles, AlertTriangle, User, LogOut, Hotel, Wrench } from 'lucide-react';
 
-const NAV_ITEMS = [
+// Define NAV_ITEMS that are always visible to all staff
+const COMMON_NAV_ITEMS = [
   { key: 'dashboard', label: 'Dashboard', Icon: LayoutDashboard },
   { key: 'tasks', label: 'My Tasks', Icon: ClipboardList },
   { key: 'service-tasks', label: 'Service Tasks', Icon: Sparkles },
@@ -10,7 +11,43 @@ const NAV_ITEMS = [
   { key: 'profile', label: 'My Profile', Icon: User },
 ];
 
+// Role-specific nav items
+const ROLE_SPECIFIC_NAV_ITEMS = {
+  MAINTENANCE: [
+    { key: 'maintenance-requests', label: 'Maintenance', Icon: Wrench },
+  ],
+  HOUSEKEEPER: [
+    // Add housekeeper-specific items here if needed
+  ],
+  SECURITY: [
+    // Add security-specific items here if needed
+  ],
+  FRONT_DESK: [
+    // Add front desk-specific items here if needed
+  ],
+};
+
 function SidebarContent({ page, setPage, user, onLogout }) {
+  // Get user role
+  const userRole = user?.role || 'STAFF';
+  
+  // Combine nav items based on role
+  const roleSpecificItems = ROLE_SPECIFIC_NAV_ITEMS[userRole] || [];
+  const navItems = [...COMMON_NAV_ITEMS, ...roleSpecificItems];
+
+  // Get role display name
+  const getRoleDisplay = (role) => {
+    const roleMap = {
+      'MAINTENANCE': 'Maintenance',
+      'HOUSEKEEPER': 'Housekeeping',
+      'SECURITY': 'Security',
+      'FRONT_DESK': 'Front Desk',
+      'MANAGEMENT': 'Management',
+      'STAFF': 'Staff'
+    };
+    return roleMap[role] || role || 'Staff';
+  };
+
   return (
     <>
       <div style={{ padding: '1.2rem 1rem', borderBottom: '1px solid #e2e8f0' }}>
@@ -32,13 +69,13 @@ function SidebarContent({ page, setPage, user, onLogout }) {
           </div>
           <div>
             <div style={{ fontSize: '0.82rem', fontWeight: 600 }}>{user?.username || 'Staff'}</div>
-            <div style={{ fontSize: '0.62rem', color: '#3b82f6', textTransform: 'uppercase' }}>Staff</div>
+            <div style={{ fontSize: '0.62rem', color: '#3b82f6', textTransform: 'uppercase' }}>{getRoleDisplay(userRole)}</div>
           </div>
         </div>
       </div>
 
       <nav style={{ flex: 1, padding: '0.75rem 0.65rem' }}>
-        {NAV_ITEMS.map(({ key, label, Icon }) => (
+        {navItems.map(({ key, label, Icon }) => (
           <button
             key={key}
             onClick={() => setPage(key)}

@@ -3,6 +3,10 @@ import { useState, useEffect, useCallback } from 'react';
 import { Modal } from 'react-bootstrap';
 import { adminGetBookings, adminGetBooking, adminSetBookingStatus } from './adminApi';
 import { SHARED_CSS, fmt, fmtDate, fmtDT, Pill, Skel, Spinner, Pager, Toast, useToast } from './adminShared';
+import { 
+  User, Mail, Calendar, CreditCard, AlertTriangle, 
+  XCircle, Ban, UserX, Clock, Info, FileText 
+} from 'lucide-react';
 
 const PAGE_SIZE = 10;
 const STATUS_OPTIONS = ['PENDING_DEPOSIT','CONFIRMED','CHECKED_IN','CHECKED_OUT','COMPLETED','CANCELLED'];
@@ -116,7 +120,7 @@ export function AdminBookings({ token }) {
 
     .ab-detail-grid {
       display: grid;
-      grid-template-columns: 1fr 1fr 1fr;
+      grid-template-columns: repeat(3, 1fr);
       gap: .6rem;
       margin-bottom: .85rem;
     }
@@ -138,7 +142,63 @@ export function AdminBookings({ token }) {
     .ab-detail-val.green  { color: #2d9b6f; }
     .ab-detail-val.orange { color: #f59e0b; }
     .ab-detail-val.red    { color: #dc3545; }
+
+    /* Cancellation Info Card */
+    .cancellation-info-card {
+      background: linear-gradient(135deg, rgba(220,53,69,0.08), rgba(220,53,69,0.02));
+      border: 1px solid rgba(220,53,69,0.25);
+      border-radius: 12px;
+      padding: 1rem;
+      margin-bottom: 1rem;
+    }
+    .cancellation-info-title {
+      font-size: .7rem;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: #dc3545;
+      font-weight: 700;
+      margin-bottom: .75rem;
+      display: flex;
+      align-items: center;
+      gap: .5rem;
+    }
+    .cancellation-detail-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: .4rem 0;
+      border-bottom: 1px solid rgba(220,53,69,0.1);
+    }
+    .cancellation-detail-row:last-child {
+      border-bottom: none;
+    }
+    .cancellation-label {
+      font-size: .72rem;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: .3rem;
+    }
+    .cancellation-value {
+      font-size: .8rem;
+      font-weight: 600;
+      color: var(--text);
+      text-align: right;
+    }
   `;
+
+  // Function to format cancellation date nicely
+  const formatCancellationDate = (dateString) => {
+    if (!dateString) return '—';
+    const date = new Date(dateString);
+    return date.toLocaleString('en-PH', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
 
   return (
     <div className="ap-root">
@@ -158,6 +218,7 @@ export function AdminBookings({ token }) {
           { label:'Checked In',value: items.filter(b=>b.status==='CHECKED_IN').length,       color:'teal'   },
           { label:'Completed', value: items.filter(b=>b.status==='COMPLETED').length,        color:'green'  },
           { label:'Cancelled', value: items.filter(b=>b.status==='CANCELLED').length,        color:'red'    },
+          { label:'Cancel Req', value: items.filter(b=>b.status==='CANCELLATION_PENDING').length, color:'purple' },
         ].map((s,i) => (
           <div key={i} className={`ap-stat ${s.color}`}
             style={{ animationDelay:`${i*0.05}s`, padding:'.9rem 1rem', cursor:s.label!=='Total'?'pointer':'default' }}
@@ -233,8 +294,8 @@ export function AdminBookings({ token }) {
                             <button className="ap-btn-ghost" style={{ padding:'.28rem .65rem', fontSize:'.72rem' }} onClick={()=>openDetail(b.id)}>
                               View
                             </button>
-                          </td>
-                        </tr>
+                           </td>
+                         </tr>
                       ))}
                     </tbody>
                   </table>
@@ -244,7 +305,7 @@ export function AdminBookings({ token }) {
         }
       </div>
 
-      {/* ── Detail Modal ── */}
+      {/* ── Detail Modal with Cancellation Details ── */}
       <Modal show={showDetail} onHide={()=>setShowDetail(false)} size="lg" centered className="ap-modal">
         <Modal.Header closeButton style={{ padding:'.9rem 1.35rem', borderBottom:'1px solid var(--border)' }}>
           <Modal.Title style={{ display:'flex', alignItems:'center', gap:'.65rem' }}>
@@ -279,6 +340,39 @@ export function AdminBookings({ token }) {
                         This reservation was cancelled and cannot be modified. Status updates are disabled.
                       </div>
                     </div>
+                  </div>
+                )}
+
+                {/* ── Cancellation Details Card (Only shown for cancelled bookings) ── */}
+                {isCancelled(detail.status) && (detail.cancellationReason|| detail.cancelledBy ||  detail.cancelledAt) && (
+                  <div className="cancellation-info-card">
+                    <div className="cancellation-info-title">
+                      <Ban size={14} /> Cancellation Information
+                    </div>
+                    {detail.cancellationReason && (
+                      <div className="cancellation-detail-row">
+                        <div className="cancellation-label">
+                          <FileText size={12} /> Reason
+                        </div>
+                        <div className="cancellation-value">{detail.cancellationReason}</div>
+                      </div>
+                    )}
+                    {detail.cancelledBy && (
+                      <div className="cancellation-detail-row">
+                        <div className="cancellation-label">
+                          <UserX size={12} /> Cancelled By
+                        </div>
+                        <div className="cancellation-value">{detail.cancelledBy}</div>
+                      </div>
+                    )}
+                    {detail.cancelledAt && (
+                      <div className="cancellation-detail-row">
+                        <div className="cancellation-label">
+                          <Clock size={12} /> Cancelled At
+                        </div>
+                        <div className="cancellation-value">{formatCancellationDate(detail.cancelledAt)}</div>
+                      </div>
+                    )}
                   </div>
                 )}
 
