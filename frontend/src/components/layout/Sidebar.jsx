@@ -314,13 +314,12 @@ function SidebarContent({ page, setPage, user, onLogout, onClose }) {
     { key: 'support',  label: t.support || 'Support',  Icon: MessageCircle },
   ];
 
-  // Partner Services submenu items
   const PARTNER_SUBMENU = [
-    { key: 'partner-services-spa', label: 'Spa & Wellness', Icon: Heart },
-    { key: 'partner-services-tours', label: 'Tours & Guides', Icon: Map },
-    { key: 'partner-services-transport', label: 'Transportation', Icon: Car },
-    { key: 'partner-services-dining', label: 'Dining', Icon: UtensilsCrossed },
-    { key: 'partner-services-salon', label: 'Salon', Icon: Scissors },
+    { key: 'partner-services-spa',       label: t.partnerServicesSpa       || 'Spa & Wellness',   Icon: Heart },
+    { key: 'partner-services-tours',     label: t.partnerServicesTours     || 'Tours & Guides',   Icon: Map },
+    { key: 'partner-services-transport', label: t.partnerServicesTransport || 'Transportation',   Icon: Car },
+    { key: 'partner-services-dining',    label: t.partnerServicesDining    || 'Dining',           Icon: UtensilsCrossed },
+    { key: 'partner-services-salon',     label: t.partnerServicesSalon     || 'Salon',            Icon: Scissors },
   ];
 
   // Define exact page matches
@@ -354,12 +353,12 @@ function SidebarContent({ page, setPage, user, onLogout, onClose }) {
         <Avatar user={user} size={36} radius={10} fontSize=".95rem" />
         <div>
           <div className="sb-uname">{uname(user)}</div>
-          <div className="sb-urole">Guest</div>
+          <div className="sb-urole">{t.guestRole || 'Guest'}</div>
         </div>
       </div>
 
       <nav className="sb-nav">
-        <div className="sb-sec">Navigation</div>
+        <div className="sb-sec">{t.navSection || 'Navigation'}</div>
         {NAV_MAIN.map(({ key, label, Icon }) => (
           <button 
             key={key} 
@@ -377,7 +376,7 @@ function SidebarContent({ page, setPage, user, onLogout, onClose }) {
           onClick={() => handleNavigation('services')}
         >
           <span className="sb-icon"><Sparkles size={15} /></span>
-          Guest Services
+          {t.services || 'Guest Services'}
         </button>
 
         {/* Partner Services with Submenu */}
@@ -387,7 +386,7 @@ function SidebarContent({ page, setPage, user, onLogout, onClose }) {
             onClick={() => setPartnerOpen(!partnerOpen)}
           >
             <span className="sb-icon"><Sparkles size={15} /></span>
-            Partner Services
+            {t.partnerServices || 'Partner Services'}
             <span className={`sb-expand-icon ${partnerOpen ? 'open' : ''}`}>
               <ChevronDown size={14} />
             </span>
@@ -415,7 +414,7 @@ function SidebarContent({ page, setPage, user, onLogout, onClose }) {
           onClick={() => handleNavigation('complaints')}
         >
           <span className="sb-icon"><Flag size={15} /></span>
-          Guest Complaints
+          {t.complaints || 'Guest Complaints'}
         </button>
 
         {/* Emergency Button */}
@@ -424,10 +423,10 @@ function SidebarContent({ page, setPage, user, onLogout, onClose }) {
           onClick={() => handleNavigation('emergency')}
         >
           <span className="sb-icon"><AlertTriangle size={15} /></span>
-          Emergency
+          {t.emergency || 'Emergency'}
         </button>
 
-        <div className="sb-sec" style={{ marginTop: '.65rem' }}>Account</div>
+        <div className="sb-sec" style={{ marginTop: '.65rem' }}>{t.accountSection || 'Account'}</div>
         {NAV_ACCOUNT.map(({ key, label, Icon }) => (
           <button 
             key={key} 
@@ -441,7 +440,7 @@ function SidebarContent({ page, setPage, user, onLogout, onClose }) {
 
         <button className="sb-out" onClick={onLogout}>
           <span className="sb-out-icon"><LogOut size={15} /></span>
-          Sign Out
+          {t.signout || 'Sign Out'}
         </button>
       </nav>
 

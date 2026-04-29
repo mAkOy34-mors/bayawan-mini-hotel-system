@@ -1,6 +1,8 @@
 """apps/users/urls.py"""
 
 from django.urls import path
+
+from .googel_views import GoogleLoginRedirectView, GoogleCallbackView
 from .views import LoginView, RegisterView, ResendOtpView, VerifyOtpView
 
 urlpatterns = [

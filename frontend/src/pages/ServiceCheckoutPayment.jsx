@@ -2,8 +2,10 @@
 import { useState, useEffect } from 'react';
 import { API_BASE } from '../constants/config';
 import { CreditCard, Banknote, Smartphone, Hotel, CheckCircle2 } from 'lucide-react';
+import { useTranslation } from 'react-i18next'
 
 export function ServiceCheckoutPayment({ token, onClose }) {
+  const { t } = useTranslation()
   const [unpaidServices, setUnpaidServices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [paymentMethod, setPaymentMethod] = useState('ROOM_CHARGE');
@@ -13,7 +15,7 @@ export function ServiceCheckoutPayment({ token, onClose }) {
   const loadUnpaidServices = async () => {
     try {
       const response = await fetch(`${API_BASE}/services/guest/`, {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: t('bearerToken', 'Bearer {{token}}', { token }) }
       });
       if (response.ok) {
         const services = await response.json();
@@ -35,7 +37,7 @@ export function ServiceCheckoutPayment({ token, onClose }) {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
+          Authorization: t('bearerToken', 'Bearer {{token}}', { token })
         },
         body: JSON.stringify({
           service_ids: unpaidServices.map(s => s.id),
@@ -62,43 +64,43 @@ export function ServiceCheckoutPayment({ token, onClose }) {
 
   return (
     <div style={{ padding: '1rem' }}>
-      <h3>Service Charges</h3>
+      <h3>{t('serviceCharges', 'Service Charges')}</h3>
       
       {loading ? (
         <div>Loading...</div>
       ) : unpaidServices.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '2rem' }}>
           <CheckCircle2 size={48} color="#10b981" />
-          <p>No outstanding service charges</p>
+          <p>{t('noOutstandingServiceCharges', 'No outstanding service charges')}</p>
         </div>
       ) : paid ? (
         <div style={{ textAlign: 'center', padding: '2rem' }}>
           <CheckCircle2 size={48} color="#10b981" />
-          <p>Payment successful!</p>
+          <p>{t('paymentSuccessful', 'Payment successful!')}</p>
         </div>
       ) : (
         <>
           <div style={{ marginBottom: '1rem' }}>
             {unpaidServices.map(service => (
               <div key={service.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.5rem 0', borderBottom: '1px solid #e2e8f0' }}>
-                <span>{service.service_type_label} - Room {service.room_number}</span>
-                <span>₱{service.service_charge}</span>
+                <span>{t('service_type_labelRoomRoom_number', '{{service_type_label}} - Room {{room_number}}', { service_type_label: service.service_type_label, room_number: service.room_number })}</span>
+                <span>{t('service_charge', '₱{{service_charge}}', { service_charge: service.service_charge })}</span>
               </div>
             ))}
             <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, marginTop: '0.5rem', paddingTop: '0.5rem', borderTop: '2px solid #e2e8f0' }}>
-              <span>Total</span>
-              <span>₱{totalAmount}</span>
+              <span>{t('total', 'Total')}</span>
+              <span>{t('totalamount', '₱{{totalAmount}}', { totalAmount })}</span>
             </div>
           </div>
 
           <div className="ap-field" style={{ marginBottom: '1rem' }}>
-            <label className="ap-label">Payment Method</label>
+            <label className="ap-label">{t('paymentMethod', 'Payment Method')}</label>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
               {[
-                { value: 'ROOM_CHARGE', label: 'Room Charge', icon: <Hotel size={16} /> },
-                { value: 'CASH', label: 'Cash', icon: <Banknote size={16} /> },
-                { value: 'CARD', label: 'Credit Card', icon: <CreditCard size={16} /> },
-                { value: 'GCASH', label: 'GCash', icon: <Smartphone size={16} /> },
+                { value: 'ROOM_CHARGE', label: t('roomCharge', 'Room Charge'), icon: <Hotel size={16} /> },
+                { value: 'CASH', label: t('cash', 'Cash'), icon: <Banknote size={16} /> },
+                { value: 'CARD', label: t('creditCard', 'Credit Card'), icon: <CreditCard size={16} /> },
+                { value: 'GCASH', label: t('gcash', 'GCash'), icon: <Smartphone size={16} /> },
               ].map(method => (
                 <button
                   key={method.value}
@@ -126,7 +128,7 @@ export function ServiceCheckoutPayment({ token, onClose }) {
             disabled={processing}
             onClick={handlePayment}
           >
-            {processing ? <div className="ap-spin-sm" /> : `Pay ₱${totalAmount}`}
+            {processing ? <div className="ap-spin-sm" /> : t('payTotalamount', 'Pay ₱{{totalAmount}}', { totalAmount })}
           </button>
         </>
       )}

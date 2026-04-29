@@ -27,7 +27,6 @@ import { ReceptionistApp } from './receptionist/ReceptionistApp';
 import { HousekeeperApp } from './housekeeper/HousekeeperApp';
 import Homepage from './pages/Homepage';
 import { fetchProfile } from './services/api';
-
 // ─────────────────────────────────────────────────────────────
 // GuestApp — authenticated guest shell
 // ─────────────────────────────────────────────────────────────
@@ -178,11 +177,37 @@ function PublicApp() {
 // ─────────────────────────────────────────────────────────────
 // Root — routes by auth state and role
 // ─────────────────────────────────────────────────────────────
+// App.jsx — replace your Root component at the bottom
+
 export default function App() {
-  const { isAuthed, user, token, logout } = useAuth();
+  const { isAuthed, user, token, logout, login } = useAuth();
+
+  // ── Handle Google OAuth callback (/auth/callback?token=...&role=...) ──
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const cbToken = params.get('token');
+    const role    = (params.get('role') || 'USER').toUpperCase();
+    const email   = params.get('email')    || '';
+    const username= params.get('username') || '';
+    const id      = params.get('id')       || '';
+    const authError = params.get('auth_error');
+
+    if (authError) {
+      // Clean the URL — let PublicApp show with an error
+      window.history.replaceState({}, '', '/');
+      return;
+    }
+
+    if (cbToken) {
+      // Log the user in using your existing AuthContext login
+      login(cbToken, { id, username, email, role });
+      // Clean the token out of the URL
+      window.history.replaceState({}, '', '/');
+    }
+  }, []);
 
   if (isAuthed) {
-    if (user?.role === 'ADMIN')        return <AdminApp       user={user} token={token} onLogout={logout} />;
+    if (user?.role === 'ADMIN')        return <AdminApp        user={user} token={token} onLogout={logout} />;
     if (user?.role === 'RECEPTIONIST') return <ReceptionistApp user={user} token={token} onLogout={logout} />;
     if (user?.role === 'HOUSEKEEPER')  return <HousekeeperApp  user={user} token={token} onLogout={logout} />;
 

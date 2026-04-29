@@ -1,4 +1,4 @@
-// LoginPage.jsx — Bayawan Mini Hotel (Modal with description panel)
+// LoginPage.jsx — Bayawan Mini Hotel (Modal with description panel + Google)
 import { useState, useEffect } from 'react';
 import { loginUser } from '../services/api';
 import {
@@ -50,20 +50,27 @@ const css = `
     to   { opacity: 1; }
   }
 
-  /* ── Modal shell ── */
+  /* ── Modal shell ──
+     FIX: removed overflow:hidden so the icon box-shadow isn't clipped.
+     Each panel manages its own overflow instead.
+  */
   .lp-modal {
     width: 100%;
     max-width: 860px;
     max-height: 90vh;
     display: flex;
     border-radius: 22px;
-    overflow: hidden;
+    overflow: visible;          /* ← was hidden; caused icon clip */
     box-shadow: var(--shadow-lg);
     font-family: 'DM Sans', sans-serif;
     color: var(--text);
     animation: lp-slideup .32s cubic-bezier(.22,1,.36,1) both;
     position: relative;
   }
+  /* Re-clip the corners on each direct child so the modal still looks rounded */
+  .lp-left  { border-radius: 22px 0 0 22px; overflow: hidden; }
+  .lp-right { border-radius: 0 22px 22px 0; overflow: hidden; }
+
   .lp-modal * { box-sizing: border-box; }
   @keyframes lp-slideup {
     from { opacity: 0; transform: translateY(22px) scale(0.97); }
@@ -94,7 +101,11 @@ const css = `
     color: #fff;
   }
 
-  /* ══ Left decorative panel ══ */
+  /* ══ Left decorative panel ══
+     FIX: use a proper column layout so footer always stays at the bottom.
+     Removed overflow-y:auto — content fits without scroll now that
+     lp-features is removed.
+  */
   .lp-left {
     width: 340px;
     min-width: 340px;
@@ -103,7 +114,6 @@ const css = `
     background: #1a1505;
     padding: 2.4rem 2.2rem;
     position: relative;
-    overflow: hidden;
   }
 
   /* Gold grid lines */
@@ -169,9 +179,10 @@ const css = `
     display: flex;
     align-items: center;
     gap: .65rem;
-    margin-bottom: 2.8rem;
+    margin-bottom: 2rem;
     position: relative;
     z-index: 2;
+    flex-shrink: 0;
   }
   .lp-brand-mark {
     width: 38px;
@@ -199,6 +210,8 @@ const css = `
     letter-spacing: .14em;
   }
 
+  /* FIX: flex:1 + flex-direction column so it fills remaining space
+     and pushes the footer down naturally */
   .lp-left-body {
     flex: 1;
     display: flex;
@@ -207,6 +220,7 @@ const css = `
     position: relative;
     z-index: 2;
   }
+
   .lp-eyebrow {
     font-size: .62rem;
     letter-spacing: .2em;
@@ -231,36 +245,22 @@ const css = `
     font-size: .8rem;
     color: rgba(255,255,255,0.45);
     line-height: 1.75;
-    margin-bottom: 2rem;
   }
 
-  .lp-features { display: flex; flex-direction: column; gap: .8rem; }
-  .lp-feature  { display: flex; align-items: center; gap: .8rem; }
-  .lp-feature-ico {
-    width: 36px;
-    height: 36px;
-    border-radius: 10px;
-    background: rgba(201,168,76,0.1);
-    border: 1px solid rgba(201,168,76,0.18);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: var(--gold);
-    flex-shrink: 0;
-  }
-  .lp-feature-title { font-weight: 600; color: rgba(255,255,255,0.88); font-size: .81rem; }
-  .lp-feature-text  { font-size: .73rem; color: rgba(255,255,255,0.38); margin-top: 1px; }
-
+  /* FIX: footer is now a flex-shrink:0 sibling of lp-left-body,
+     not a child — so it always sits at the bottom of lp-left */
   .lp-left-footer {
+    flex-shrink: 0;
     position: relative;
     z-index: 2;
     margin-top: 2rem;
     padding-top: 1.25rem;
     border-top: 1px solid rgba(255,255,255,0.07);
     font-size: .62rem;
-    color: rgba(255,255,255,0.22);
+    color: rgba(255,255,255,0.35);
     letter-spacing: .1em;
     text-transform: uppercase;
+    text-align: center;
   }
 
   /* ══ Right form panel ══ */
@@ -269,10 +269,23 @@ const css = `
     background: var(--surface);
     overflow-y: auto;
     display: flex;
-    align-items: center;
+    align-items: flex-start;      /* ← was center; allows scrolling from top */
     justify-content: center;
     position: relative;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(201,168,76,0.5) rgba(201,168,76,0.1);
   }
+  .lp-right::-webkit-scrollbar { width: 5px; }
+  .lp-right::-webkit-scrollbar-track {
+    background: rgba(201,168,76,0.1);
+    border-radius: 10px;
+    margin: 10px 0;
+  }
+  .lp-right::-webkit-scrollbar-thumb {
+    background: rgba(201,168,76,0.5);
+    border-radius: 10px;
+  }
+  .lp-right::-webkit-scrollbar-thumb:hover { background: rgba(201,168,76,0.8); }
 
   /* Top gold accent bar */
   .lp-right::before {
@@ -284,6 +297,8 @@ const css = `
     right: 0;
     height: 3px;
     background: linear-gradient(to right, #9a7a2e, #C9A84C, #9a7a2e);
+    z-index: 1;
+    flex-shrink: 0;
   }
 
   .lp-form-inner {
@@ -291,29 +306,41 @@ const css = `
     padding: 2.2rem 2rem 2rem;
   }
 
-  /* Card header */
-  .lp-head { text-align: center; margin-bottom: 1.4rem; padding-top: .25rem; }
+  /* Card header
+     FIX: padding-top gives the icon room to breathe above the bar */
+  .lp-head {
+    text-align: center;
+    margin-bottom: 1.8rem;
+    padding-top: 1rem;        /* ← space so icon isn't cut by the gold bar */
+  }
   .lp-icon {
-    width: 50px;
-    height: 50px;
-    border-radius: 14px;
+    width: 56px;
+    height: 56px;
+    border-radius: 16px;
     background: linear-gradient(135deg, #9a7a2e, #C9A84C);
     display: flex;
     align-items: center;
     justify-content: center;
     color: #fff;
-    margin: 0 auto .8rem;
+    margin: 0 auto 1rem;
     box-shadow: 0 5px 20px rgba(201,168,76,0.3);
+    flex-shrink: 0;
+    position: relative;   /* ← ensures it layers above the ::before bar */
+    z-index: 2;
   }
   .lp-card-title {
     font-family: 'Cormorant Garamond', serif;
     font-size: 2rem;
     font-weight: 600;
     color: var(--text);
-    margin: 0 0 .2rem;
-    line-height: 1.15;
+    margin: 0 0 0.25rem;
+    line-height: 1.2;
   }
-  .lp-card-sub { font-size: .8rem; color: var(--text-muted); }
+  .lp-card-sub {
+    font-size: .85rem;
+    color: var(--text-muted);
+    margin-bottom: 0;
+  }
 
   /* Alerts */
   .lp-alert {
@@ -431,6 +458,36 @@ const css = `
   .lp-btn:active:not(:disabled) { transform: translateY(0); }
   .lp-btn:disabled { opacity: .5; cursor: not-allowed; }
 
+  /* Google Button */
+  .lp-google-btn {
+    width: 100%;
+    padding: .75rem 1rem;
+    border: 1.5px solid #e0e0e0;
+    border-radius: 12px;
+    font-size: .89rem;
+    font-family: 'DM Sans', sans-serif;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all .25s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: .6rem;
+    background: #ffffff;
+    color: #1a1f2e;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    margin-bottom: 1rem;
+  }
+  .lp-google-btn:hover:not(:disabled) {
+    border-color: #C9A84C;
+    background: #faf8f4;
+    transform: translateY(-2px);
+    box-shadow: 0 3px 12px rgba(0,0,0,0.12);
+  }
+  .lp-google-btn:active:not(:disabled) { transform: translateY(0); }
+  .lp-google-btn:disabled { opacity: .5; cursor: not-allowed; }
+  .lp-google-icon { width: 20px; height: 20px; flex-shrink: 0; }
+
   @keyframes lp-spin { to { transform: rotate(360deg); } }
   .lp-spinner {
     width: 15px;
@@ -464,6 +521,7 @@ const css = `
     text-align: center;
     font-size: .8rem;
     color: var(--text-muted);
+    margin-top: 1rem;
   }
   .lp-register button {
     background: none;
@@ -478,31 +536,54 @@ const css = `
   }
   .lp-register button:hover { color: var(--gold); text-decoration: underline; }
 
-  /* ── Responsive: hide left panel on small screens ── */
+  /* Forgot password */
+  .lp-forgot { text-align: right; margin-bottom: 0.5rem; }
+  .lp-forgot button {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: .72rem;
+    cursor: pointer;
+    transition: color .18s;
+    font-family: inherit;
+  }
+  .lp-forgot button:hover { color: var(--gold-dark); text-decoration: underline; }
+
+  /* ── Responsive ── */
   @media (max-width: 640px) {
     .lp-left { display: none; }
     .lp-modal { max-width: 420px; }
+    .lp-right { border-radius: 22px; }
   }
 `;
 
+/* Google Icon */
+const GoogleIcon = () => (
+  <svg className="lp-google-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+    <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+    <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+    <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/>
+    <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+  </svg>
+);
+
 /* ─── Component ───────────────────────────────────────────────────────────── */
 export function LoginPage({ onLogin, onClose, onGoRegister }) {
-  const [email,    setEmail]    = useState('');
-  const [password, setPassword] = useState('');
-  const [remember, setRemember] = useState(false);
-  const [showPw,   setShowPw]   = useState(false);
-  const [loading,  setLoading]  = useState(false);
-  const [error,    setError]    = useState('');
-  const [success,  setSuccess]  = useState('');
+  const [email,         setEmail]         = useState('');
+  const [password,      setPassword]      = useState('');
+  const [remember,      setRemember]      = useState(false);
+  const [showPw,        setShowPw]        = useState(false);
+  const [loading,       setLoading]       = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
+  const [error,         setError]         = useState('');
+  const [success,       setSuccess]       = useState('');
 
-  // Close on Escape key
   useEffect(() => {
     const handler = e => { if (e.key === 'Escape') onClose?.(); };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [onClose]);
 
-  // Check for post-registration success flag
   useEffect(() => {
     if (sessionStorage.getItem('regSuccess') === 'true') {
       setSuccess('Account verified! You can now sign in.');
@@ -531,10 +612,8 @@ export function LoginPage({ onLogin, onClose, onGoRegister }) {
         remember,
         role,
       );
-
       onClose?.();
       window.location.href = '/dashboard';
-
     } catch (err) {
       setError(err.message || 'Connection error. Please try again.');
     } finally {
@@ -542,7 +621,12 @@ export function LoginPage({ onLogin, onClose, onGoRegister }) {
     }
   };
 
-  // Close when clicking backdrop
+  const handleGoogleLogin = () => {
+    setGoogleLoading(true);
+    setError('');
+    window.location.href = 'http://localhost:8000/api/v1/auth/google/';
+  };
+
   const handleBackdropClick = e => {
     if (e.target === e.currentTarget) onClose?.();
   };
@@ -572,6 +656,7 @@ export function LoginPage({ onLogin, onClose, onGoRegister }) {
             </div>
           </div>
 
+          {/* lp-left-body fills remaining space, footer stays pinned below it */}
           <div className="lp-left-body">
             <p className="lp-eyebrow">✦ Welcome Back</p>
             <div className="lp-rule"><div className="lp-rule-gem" /></div>
@@ -583,23 +668,9 @@ export function LoginPage({ onLogin, onClose, onGoRegister }) {
             <p className="lp-left-sub">
               Sign in to manage your bookings, track rewards, and enjoy a seamless luxury experience in Bayawan City.
             </p>
-            <div className="lp-features">
-              {[
-                { Icon: BedDouble, title: 'Manage Bookings', text: 'View and update your reservations' },
-                { Icon: Star,      title: 'Loyalty Rewards', text: 'Earn points with every stay' },
-                { Icon: Shield,    title: 'Secure Account',  text: 'Bank-grade data protection' },
-              ].map((f, i) => (
-                <div key={i} className="lp-feature">
-                  <div className="lp-feature-ico"><f.Icon size={14} /></div>
-                  <div>
-                    <div className="lp-feature-title">{f.title}</div>
-                    <div className="lp-feature-text">{f.text}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
           </div>
 
+          {/* Footer is now a direct child of lp-left, not inside lp-left-body */}
           <div className="lp-left-footer">© 2026 Bayawan Mini Hotel · Negros Oriental</div>
         </div>
 
@@ -608,7 +679,7 @@ export function LoginPage({ onLogin, onClose, onGoRegister }) {
           <div className="lp-form-inner">
 
             <div className="lp-head">
-              <div className="lp-icon"><LogIn size={21} /></div>
+              <div className="lp-icon"><LogIn size={22} /></div>
               <h2 className="lp-card-title">Welcome Back</h2>
               <p className="lp-card-sub">Sign in to your account to continue</p>
             </div>
@@ -626,13 +697,22 @@ export function LoginPage({ onLogin, onClose, onGoRegister }) {
               </div>
             )}
 
-            <form onSubmit={handleSubmit}>
+            {/* Google Sign In */}
+            <button
+              type="button"
+              onClick={handleGoogleLogin}
+              disabled={googleLoading}
+              className="lp-google-btn"
+            >
+              <GoogleIcon />
+              <span>{googleLoading ? 'Connecting...' : 'Continue with Google'}</span>
+            </button>
 
-              {/* Email */}
+            <div className="lp-divider">or sign in with email</div>
+
+            <form onSubmit={handleSubmit}>
               <div className="lp-field">
-                <label className="lp-label">
-                  <Mail size={10} /> Email Address
-                </label>
+                <label className="lp-label"><Mail size={10} /> Email Address</label>
                 <div className="lp-input-wrap">
                   <Mail size={14} className="lp-input-icon" />
                   <input
@@ -647,11 +727,8 @@ export function LoginPage({ onLogin, onClose, onGoRegister }) {
                 </div>
               </div>
 
-              {/* Password */}
               <div className="lp-field">
-                <label className="lp-label">
-                  <Lock size={10} /> Password
-                </label>
+                <label className="lp-label"><Lock size={10} /> Password</label>
                 <div className="lp-input-wrap">
                   <Lock size={14} className="lp-input-icon" />
                   <input
@@ -674,7 +751,12 @@ export function LoginPage({ onLogin, onClose, onGoRegister }) {
                 </div>
               </div>
 
-              {/* Remember me */}
+              <div className="lp-forgot">
+                <button type="button" onClick={() => alert('Password reset link will be sent to your email.')}>
+                  Forgot password?
+                </button>
+              </div>
+
               <div className="lp-row">
                 <div className="lp-remember" onClick={() => setRemember(v => !v)}>
                   <div className={`lp-check ${remember ? 'on' : ''}`}>
@@ -691,8 +773,6 @@ export function LoginPage({ onLogin, onClose, onGoRegister }) {
                 }
               </button>
             </form>
-
-            <div className="lp-divider">or</div>
 
             <p className="lp-register">
               No account yet?{' '}

@@ -6,7 +6,8 @@ import {
   Users, BedDouble, Calendar, Clock, CreditCard, 
   Search, RefreshCw, User, Phone, Mail, AlertCircle,
   CheckCircle2, XCircle, Eye, ChevronRight, Home, LogOut,
-  Hash, Calendar as CalendarIcon, DollarSign, FileText, MapPin, Smartphone, CreditCard as CreditCardIcon
+  Hash, Calendar as CalendarIcon, DollarSign, FileText, MapPin, Smartphone, CreditCard as CreditCardIcon,
+  Globe, IdCard, Shield
 } from 'lucide-react';
 
 import { API_BASE as BASE } from '../constants/config';
@@ -279,31 +280,6 @@ export function ReceptionistInHouse({ token, setPage }) {
     setSelectedGuest(guest);
   };
 
-  const handleCheckOut = async (guest) => {
-    if (!window.confirm(`Check out ${guest.guestUsername || guest.guestEmail} from Room ${guest.roomNumber}?`)) {
-      return;
-    }
-    
-    try {
-      const res = await fetch(`${BASE}/receptionist/bookings/${guest.id}/checkout/`, {
-        method: 'POST',
-        headers: hj(token),
-        body: JSON.stringify({})
-      });
-      
-      if (!res.ok) {
-        const error = await res.json();
-        throw new Error(error.message || 'Check-out failed');
-      }
-      
-      show(`${guest.guestUsername || guest.guestEmail} checked out successfully!`, 'success');
-      setSelectedGuest(null);
-      loadCheckedInGuests();
-    } catch (error) {
-      show(error.message, 'error');
-    }
-  };
-
   return (
     <div className="ap-root">
       <style>{SHARED_CSS}{EXTRA_CSS}</style>
@@ -398,9 +374,18 @@ export function ReceptionistInHouse({ token, setPage }) {
                     width: 40, height: 40, borderRadius: 10, 
                     background: 'linear-gradient(135deg, #9a7a2e, #C9A84C)',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    color: '#fff', fontWeight: 600, fontSize: '1rem'
+                    color: '#fff', fontWeight: 600, fontSize: '1rem',
+                    overflow: 'hidden', flexShrink: 0
                   }}>
-                    {(guest.guestUsername || guest.guestEmail || 'G').slice(0, 2).toUpperCase()}
+                    {guest.profilePicture ? (
+                      <img
+                        src={guest.profilePicture.startsWith('data:') ? guest.profilePicture : `data:image/jpeg;base64,${guest.profilePicture}`}
+                        alt="Guest"
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                      />
+                    ) : (
+                      (guest.guestUsername || guest.guestEmail || 'G').slice(0, 2).toUpperCase()
+                    )}
                   </div>
                   <div>
                     <div style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--text)' }}>
@@ -461,13 +446,6 @@ export function ReceptionistInHouse({ token, setPage }) {
                       onClick={() => handleViewDetails(guest)}
                     >
                       <Eye size={12}/> View
-                    </button>
-                    <button 
-                      className="ap-btn-primary" 
-                      style={{ padding: '0.3rem 0.8rem', fontSize: '0.7rem', background: 'linear-gradient(135deg,#d97706,#fbbf24)' }}
-                      onClick={() => handleCheckOut(guest)}
-                    >
-                      <LogOut size={12}/> Check Out
                     </button>
                   </div>
                 </div>
@@ -554,6 +532,55 @@ export function ReceptionistInHouse({ token, setPage }) {
                 )}
               </div>
 
+              {/* Guest Profile */}
+              {selectedGuest.guestProfile && (
+                <div className="detail-section">
+                  <div className="detail-section-title"><User size={12}/> Guest Profile</div>
+                  {(selectedGuest.guestProfile.firstName || selectedGuest.guestProfile.lastName) && (
+                    <div className="detail-row">
+                      <span className="detail-label"><User size={11}/> Full Name</span>
+                      <span className="detail-value">
+                        {[selectedGuest.guestProfile.firstName, selectedGuest.guestProfile.lastName].filter(Boolean).join(' ')}
+                      </span>
+                    </div>
+                  )}
+                  {selectedGuest.guestProfile.contactNumber && (
+                    <div className="detail-row">
+                      <span className="detail-label"><Phone size={11}/> Contact</span>
+                      <span className="detail-value">{selectedGuest.guestProfile.contactNumber}</span>
+                    </div>
+                  )}
+                  {selectedGuest.guestProfile.nationality && (
+                    <div className="detail-row">
+                      <span className="detail-label"><Globe size={11}/> Nationality</span>
+                      <span className="detail-value">{selectedGuest.guestProfile.nationality}</span>
+                    </div>
+                  )}
+                  {selectedGuest.guestProfile.homeAddress && (
+                    <div className="detail-row">
+                      <span className="detail-label"><MapPin size={11}/> Address</span>
+                      <span className="detail-value" style={{ fontSize: '0.75rem', textAlign: 'right', maxWidth: '60%' }}>
+                        {selectedGuest.guestProfile.homeAddress}
+                      </span>
+                    </div>
+                  )}
+                  {selectedGuest.guestProfile.idType && (
+                    <div className="detail-row">
+                      <span className="detail-label"><Shield size={11}/> ID Type</span>
+                      <span className="detail-value">{selectedGuest.guestProfile.idType.replace('_', ' ')}</span>
+                    </div>
+                  )}
+                  {selectedGuest.guestProfile.idNumber && (
+                    <div className="detail-row">
+                      <span className="detail-label"><Hash size={11}/> ID Number</span>
+                      <span className="detail-value" style={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>
+                        {selectedGuest.guestProfile.idNumber}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Payment Info */}
               <div className="detail-section">
                 <div className="detail-section-title"><DollarSign size={12}/> Payment</div>
@@ -589,13 +616,6 @@ export function ReceptionistInHouse({ token, setPage }) {
             <div className="detail-modal-footer">
               <button className="ap-btn-ghost" onClick={() => setSelectedGuest(null)} style={{ fontSize: '0.8rem' }}>
                 Close
-              </button>
-              <button 
-                className="ap-btn-primary" 
-                onClick={() => handleCheckOut(selectedGuest)}
-                style={{ background: 'linear-gradient(135deg,#d97706,#fbbf24)', fontSize: '0.8rem' }}
-              >
-                <LogOut size={14}/> Check Out
               </button>
             </div>
           </>

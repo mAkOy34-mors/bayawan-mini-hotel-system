@@ -5,6 +5,7 @@ import { LangProvider } from './context/LangContext';
 import './styles/main.css';        // ✅ import Tailwind + Bootstrap + custom styles
 import App from './App';
 import 'bootstrap/dist/js/bootstrap.bundle.min.js';
+import './i18n'
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <AuthProvider>

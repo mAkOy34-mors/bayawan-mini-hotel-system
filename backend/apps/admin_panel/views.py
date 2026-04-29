@@ -432,13 +432,28 @@ class AdminGuestsView(APIView):
         if not is_admin(request.user):
             qs = qs.filter(role="USER")
 
+        # Fetch profiles for all guests in one query
+        user_ids    = list(qs.values_list("id", flat=True))
+        profiles    = GuestInformation.objects.filter(
+            user_id__in=user_ids
+        ).values("user_id", "first_name", "last_name", "profile_picture")
+        profile_map = {p["user_id"]: p for p in profiles}
+
         data = AdminGuestSerializer(qs, many=True).data
+
+        # Attach profile to each guest
+        for guest in data:
+            p = profile_map.get(guest["id"])
+            guest["profile"] = {
+                "firstName":      p["first_name"]      if p else None,
+                "lastName":       p["last_name"]        if p else None,
+                "profilePicture": p["profile_picture"]  if p else None,
+            } if p else None
 
         if not search:
             cache.set("admin_guests_all", data, timeout=60)
 
         return Response(data)
-
 
 class AdminGuestDetailView(APIView):
     """GET/PATCH /api/v1/admin/guests/<pk>/"""
@@ -561,20 +576,29 @@ class AdminGuestDetailView(APIView):
             for f in feedback_qs
         ]
 
+
         # ── Assemble ──────────────────────────────────────────
         data = AdminGuestSerializer(guest).data
-        data["bookingCount"]    = bookings.count()
+        data["bookingCount"] = bookings.count()
         data["profile"] = {
-            "firstName":     profile.first_name     if profile else None,
-            "lastName":      profile.last_name      if profile else None,
+            "firstName": profile.first_name if profile else None,
+            "lastName": profile.last_name if profile else None,
+            "gender": profile.gender if profile else None,
+            "dateOfBirth": profile.date_of_birth if profile else None,
             "contactNumber": profile.contact_number if profile else None,
-            "nationality":   profile.nationality    if profile else None,
-            "address":       getattr(profile, "home_address", None) if profile else None,
+            "nationality": profile.nationality if profile else None,
+            "address": profile.home_address if profile else None,
+            "idType": profile.id_type if profile else None,
+            "idNumber": profile.id_number if profile else None,
+            "passportNumber": profile.passport_number if profile else None,
+            "visaType": profile.visa_type if profile else None,
+            "visaExpiryDate": profile.visa_expiry_date if profile else None,
+            "profilePicture": profile.profile_picture if profile else None,
         } if profile else None
-        data["bookings"]        = bookings_data
-        data["payments"]        = payments_data
+        data["bookings"] = bookings_data
+        data["payments"] = payments_data
         data["serviceRequests"] = service_requests_data
-        data["feedback"]        = feedback_data
+        data["feedback"] = feedback_data
 
         cache.set(cache_key, data, timeout=60)
         return Response(data)

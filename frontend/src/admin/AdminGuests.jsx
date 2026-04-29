@@ -76,6 +76,10 @@ const GUEST_CSS = `
     flex-shrink: 0;
     box-shadow: 0 4px 16px rgba(201,168,76,.35);
     border: 2px solid rgba(201,168,76,.4);
+    overflow: hidden;
+  }
+  .gd-avatar-lg img {
+    width: 100%; height: 100%; object-fit: cover; border-radius: 12px;
   }
   .gd-hero-info { flex: 1; min-width: 0; }
   .gd-hero-name { font-family: 'Cormorant Garamond', serif; font-size: 1.25rem; font-weight: 600; color: #fff; line-height: 1.2; }
@@ -154,6 +158,34 @@ const GUEST_CSS = `
   .gd-info-value { font-size: .85rem; color: var(--text, #1a1a1a); font-weight: 500; font-family: 'DM Sans', sans-serif; word-break: break-word; }
   .gd-info-value.empty { color: var(--text-muted, #aaa); font-style: italic; font-weight: 400; }
 
+  /* Profile picture block */
+  .gd-profile-pic-block {
+    display: flex; align-items: center; gap: 1.1rem;
+    background: var(--surface2, #f8f7f5);
+    border: 1px solid var(--border, #e5e5e5);
+    border-radius: 12px; padding: 1rem 1.2rem;
+    margin-bottom: .75rem;
+  }
+  .gd-profile-pic {
+    width: 72px; height: 72px; border-radius: 14px; object-fit: cover;
+    border: 2px solid rgba(201,168,76,.4);
+    box-shadow: 0 4px 16px rgba(201,168,76,.2);
+    flex-shrink: 0;
+  }
+  .gd-profile-pic-initials {
+    width: 72px; height: 72px; border-radius: 14px;
+    background: linear-gradient(135deg, #9a7a2e, #C9A84C);
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 2rem; font-weight: 700; color: #fff;
+    flex-shrink: 0;
+    box-shadow: 0 4px 16px rgba(201,168,76,.3);
+    border: 2px solid rgba(201,168,76,.4);
+  }
+  .gd-profile-pic-name { font-family: 'Cormorant Garamond', serif; font-size: 1.15rem; font-weight: 600; color: var(--text, #1a1a1a); line-height: 1.2; }
+  .gd-profile-pic-email { font-size: .75rem; color: var(--text-muted, #888); margin-top: .2rem; font-family: 'DM Sans', sans-serif; }
+  .gd-profile-pic-sub { font-size: .7rem; color: var(--text-muted, #aaa); margin-top: .35rem; font-style: italic; font-family: 'DM Sans', sans-serif; }
+
   /* Section headers */
   .gd-section-hd {
     font-size: .62rem; text-transform: uppercase; letter-spacing: .1em;
@@ -222,6 +254,7 @@ const GUEST_CSS = `
     .gd-stat-cell { border-bottom: 1px solid var(--border, #e5e5e5); }
     .gd-stat-cell:nth-child(2) { border-right: none; }
     .gd-stat-cell:nth-child(3), .gd-stat-cell:nth-child(4) { border-bottom: none; }
+    .gd-profile-pic-block { flex-direction: column; text-align: center; }
   }
 `;
 
@@ -255,41 +288,95 @@ const Stars = ({ rating = 0 }) => (
   </div>
 );
 
+/* ─── Profile picture helper ───────────────────────────────── */
+const resolveAvatar = (src) => {
+  if (!src) return null;
+  if (src.startsWith('data:')) return src;
+  if (src.startsWith('http')) return src;
+  return `data:image/jpeg;base64,${src}`;
+};
+
 /* ─── Tab panels ───────────────────────────────────────────── */
 const TabOverview = ({ detail }) => {
   const p = detail.profile || {};
   const fullName = [p.firstName, p.lastName].filter(Boolean).join(' ');
+  const avatarSrc = resolveAvatar(p.profilePicture);
+
+  const infoVal = (v) => (!v || v === 'Invalid Date') ? null : v;
 
   return (
     <div>
+      {/* ── Profile picture card ── */}
+      <div className="gd-section-hd"><User size={12}/> Profile</div>
+      <div className="gd-profile-pic-block">
+        {avatarSrc ? (
+          <img src={avatarSrc} alt={fullName || detail.username} className="gd-profile-pic"/>
+        ) : (
+          <div className="gd-profile-pic-initials">
+            {(p.firstName || detail.username || '?').slice(0, 1).toUpperCase()}
+          </div>
+        )}
+        <div>
+          <div className="gd-profile-pic-name">{fullName || detail.username}</div>
+          <div className="gd-profile-pic-email">{detail.email}</div>
+          {!avatarSrc && (
+            <div className="gd-profile-pic-sub">No profile picture uploaded</div>
+          )}
+        </div>
+      </div>
+
+      {/* ── Personal Information ── */}
       <div className="gd-section-hd"><User size={12}/> Personal Information</div>
       <div className="gd-info-grid">
         {[
-          { label: 'Full Name', icon: <User size={10}/>, value: fullName || '—' },
-          { label: 'Username', icon: <Hash size={10}/>, value: detail.username },
-          { label: 'Email Address', icon: <Mail size={10}/>, value: detail.email },
-          { label: 'Contact Number', icon: <Phone size={10}/>, value: p.contactNumber || '—' },
-          { label: 'Nationality', icon: <Globe size={10}/>, value: p.nationality || '—' },
+          { label: 'First Name',     icon: <User size={10}/>,        value: infoVal(p.firstName) },
+          { label: 'Last Name',      icon: <User size={10}/>,        value: infoVal(p.lastName) },
+          { label: 'Username',       icon: <Hash size={10}/>,        value: infoVal(detail.username) },
+          { label: 'Email Address',  icon: <Mail size={10}/>,        value: infoVal(detail.email) },
+          { label: 'Contact Number', icon: <Phone size={10}/>,       value: infoVal(p.contactNumber) },
+          { label: 'Gender',         icon: <User size={10}/>,        value: infoVal(p.gender) },
+          { label: 'Date of Birth',  icon: <Calendar size={10}/>,    value: infoVal(fmtDate(p.dateOfBirth)) },
+          { label: 'Nationality',    icon: <Globe size={10}/>,       value: infoVal(p.nationality) },
           { label: 'Account Status', icon: <CheckCircle size={10}/>, value: detail.isActive ? 'Active' : 'Inactive' },
-          { label: 'Role', icon: <User size={10}/>, value: detail.role },
-          { label: 'Member Since', icon: <Calendar size={10}/>, value: fmtDate(detail.createdAt) },
+          { label: 'Role',           icon: <User size={10}/>,        value: infoVal(detail.role) },
+          { label: 'Member Since',   icon: <Calendar size={10}/>,    value: infoVal(fmtDate(detail.createdAt)) },
         ].map(({ label, icon, value }) => (
           <div key={label} className="gd-info-field">
             <div className="gd-info-label">{icon} {label}</div>
-            <div className={`gd-info-value${value === '—' ? ' empty' : ''}`}>{value}</div>
+            <div className={`gd-info-value${!value ? ' empty' : ''}`}>
+              {value || 'Not provided'}
+            </div>
           </div>
         ))}
       </div>
 
-      {detail.profile?.address && (
-        <>
-          <div className="gd-section-hd"><MapPin size={12}/> Address</div>
-          <div className="gd-info-field" style={{ gridColumn: 'span 2' }}>
-            <div className="gd-info-label"><MapPin size={10}/> Home Address</div>
-            <div className="gd-info-value">{detail.profile.address}</div>
+      {/* ── Home Address ── */}
+      <div className="gd-section-hd"><MapPin size={12}/> Address</div>
+      <div className="gd-info-field">
+        <div className="gd-info-label"><MapPin size={10}/> Home Address</div>
+        <div className={`gd-info-value${!p.address ? ' empty' : ''}`}>
+          {p.address || 'Not provided'}
+        </div>
+      </div>
+
+      {/* ── Identification & Travel ── */}
+      <div className="gd-section-hd"><CreditCard size={12}/> Identification &amp; Travel</div>
+      <div className="gd-info-grid">
+        {[
+          { label: 'ID Type',         icon: <CreditCard size={10}/>, value: infoVal(p.idType) },
+          { label: 'ID Number',       icon: <Hash size={10}/>,       value: infoVal(p.idNumber) },
+          { label: 'Passport Number', icon: <Hash size={10}/>,       value: infoVal(p.passportNumber) },
+          { label: 'Visa Type',       icon: <Globe size={10}/>,      value: infoVal(p.visaType) },
+          { label: 'Visa Expiry',     icon: <Calendar size={10}/>,   value: infoVal(fmtDate(p.visaExpiryDate)) },
+        ].map(({ label, icon, value }) => (
+          <div key={label} className="gd-info-field">
+            <div className="gd-info-label">{icon} {label}</div>
+            <div className={`gd-info-value${!value ? ' empty' : ''}`}>
+              {value || 'Not provided'}
+            </div>
           </div>
-        </>
-      )}
+        ))}
+      </div>
     </div>
   );
 };
@@ -517,21 +604,22 @@ function GuestDetailModal({ show, onHide, detail, detailLoading, onToggle }) {
 
   useEffect(() => { if (show) setTab('overview'); }, [show]);
 
-  const bookings       = detail?.bookings       || [];
-  const payments       = detail?.payments       || [];
-  const serviceRequests= detail?.serviceRequests|| [];
-  const feedback       = detail?.feedback       || [];
+  const bookings        = detail?.bookings        || [];
+  const payments        = detail?.payments        || [];
+  const serviceRequests = detail?.serviceRequests || [];
+  const feedback        = detail?.feedback        || [];
 
   const tabs = [
-    { id: 'overview', label: 'Profile',   Icon: User,          count: null },
-    { id: 'bookings', label: 'Bookings',  Icon: BedDouble,     count: bookings.length },
-    { id: 'payments', label: 'Payments',  Icon: CreditCard,    count: payments.length },
-    { id: 'services', label: 'Requests',  Icon: Wrench,        count: serviceRequests.length },
-    { id: 'feedback', label: 'Feedback',  Icon: MessageSquare, count: feedback.length },
+    { id: 'overview', label: 'Profile',  Icon: User,          count: null },
+    { id: 'bookings', label: 'Bookings', Icon: BedDouble,     count: bookings.length },
+    { id: 'payments', label: 'Payments', Icon: CreditCard,    count: payments.length },
+    { id: 'services', label: 'Requests', Icon: Wrench,        count: serviceRequests.length },
+    { id: 'feedback', label: 'Feedback', Icon: MessageSquare, count: feedback.length },
   ];
 
-  const p = detail?.profile || {};
+  const p        = detail?.profile || {};
   const fullName = [p.firstName, p.lastName].filter(Boolean).join(' ') || detail?.username || '?';
+  const avatarSrc = resolveAvatar(p.profilePicture);
 
   return (
     <Modal show={show} onHide={onHide} size="lg" centered className="gd-modal ap-modal">
@@ -548,7 +636,12 @@ function GuestDetailModal({ show, onHide, detail, detailLoading, onToggle }) {
           <>
             {/* Hero */}
             <div className="gd-hero">
-              <div className="gd-avatar-lg">{fullName.slice(0,1).toUpperCase()}</div>
+              <div className="gd-avatar-lg">
+                {avatarSrc
+                  ? <img src={avatarSrc} alt={fullName}/>
+                  : fullName.slice(0,1).toUpperCase()
+                }
+              </div>
               <div className="gd-hero-info">
                 <div className="gd-hero-name">{fullName}</div>
                 <div className="gd-hero-email">{detail.email}</div>
@@ -611,13 +704,13 @@ function GuestDetailModal({ show, onHide, detail, detailLoading, onToggle }) {
 
 /* ─── Main component ────────────────────────────────────────── */
 export function AdminGuests({ token }) {
-  const [guests,       setGuests]       = useState([]);
-  const [loading,      setLoading]      = useState(true);
-  const [search,       setSearch]       = useState('');
-  const [page,         setPage]         = useState(1);
-  const [detail,       setDetail]       = useState(null);
-  const [showDetail,   setShowDetail]   = useState(false);
-  const [detailLoading,setDetailLoading]= useState(false);
+  const [guests,        setGuests]        = useState([]);
+  const [loading,       setLoading]       = useState(true);
+  const [search,        setSearch]        = useState('');
+  const [page,          setPage]          = useState(1);
+  const [detail,        setDetail]        = useState(null);
+  const [showDetail,    setShowDetail]    = useState(false);
+  const [detailLoading, setDetailLoading] = useState(false);
   const { toast, show } = useToast();
 
   const load = useCallback(async (q = '') => {
@@ -665,9 +758,9 @@ export function AdminGuests({ token }) {
       {/* Stats */}
       <div className="ap-stats" style={{ gridTemplateColumns: 'repeat(3,1fr)', maxWidth: 600 }}>
         {[
-          { Icon: Users,         label: 'Total Guests', value: guests.length,            color: 'blue'  },
-          { Icon: CheckCircle2,  label: 'Active',       value: active,                   color: 'green' },
-          { Icon: XCircle,       label: 'Inactive',     value: guests.length - active,   color: 'red'   },
+          { Icon: Users,        label: 'Total Guests', value: guests.length,          color: 'blue'  },
+          { Icon: CheckCircle2, label: 'Active',       value: active,                 color: 'green' },
+          { Icon: XCircle,      label: 'Inactive',     value: guests.length - active, color: 'red'   },
         ].map((s, i) => (
           <div key={i} className={`ap-stat ${s.color}`} style={{ animationDelay: `${i * 0.06}s` }}>
             <div className="ap-stat-icon" style={{ background: 'rgba(255,255,255,.15)', borderRadius: 9 }}>
@@ -733,8 +826,12 @@ export function AdminGuests({ token }) {
                       <td style={{ color: 'var(--text-muted)', fontSize: '.75rem' }}>{(page - 1) * PAGE_SIZE + i + 1}</td>
                       <td>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '.55rem' }}>
-                          <div style={{ width: 32, height: 32, borderRadius: 8, background: 'linear-gradient(135deg,#9a7a2e,#C9A84C)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Cormorant Garamond',serif", fontSize: '.88rem', fontWeight: 700, color: '#fff', flexShrink: 0 }}>
-                            {g.username?.slice(0, 1).toUpperCase() || '?'}
+                          {/* Avatar in table row — show profile pic if available */}
+                          <div style={{ width: 32, height: 32, borderRadius: 8, background: 'linear-gradient(135deg,#9a7a2e,#C9A84C)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Cormorant Garamond',serif", fontSize: '.88rem', fontWeight: 700, color: '#fff', flexShrink: 0, overflow: 'hidden' }}>
+                            {resolveAvatar(g.profile?.profilePicture)
+                              ? <img src={resolveAvatar(g.profile.profilePicture)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }}/>
+                              : (g.username?.slice(0, 1).toUpperCase() || '?')
+                            }
                           </div>
                           <div>
                             <div style={{ fontWeight: 600, color: 'var(--text)', fontSize: '.84rem' }}>{g.username}</div>

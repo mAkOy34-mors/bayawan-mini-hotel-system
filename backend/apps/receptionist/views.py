@@ -1111,11 +1111,21 @@ def _booking_detail(booking):
     except Exception:
         profile = None
 
+    profile_picture = None
+    try:
+        profile_picture = booking.user.profile_picture.image_base64
+    except Exception:
+        pass
+    if not profile_picture and profile:
+        profile_picture = profile.profile_picture or None
+
     return {
         "id":               booking.id,
+        "userId":           booking.user.id,
         "bookingReference": booking.booking_reference,
         "guestEmail":       booking.user.email,
         "guestUsername":    booking.user.username,
+        "profilePicture":   profile_picture,
         "roomNumber":       booking.room.room_number,
         "roomType":         booking.room.room_type,
         "checkInDate":      str(booking.check_in_date),

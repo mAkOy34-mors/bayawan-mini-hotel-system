@@ -266,6 +266,11 @@ EMAIL_HOST_USER     = env('EMAIL_HOST_USER', default='michomoreno34@gmail.com')
 EMAIL_HOST_PASSWORD = env('EMAIL_HOST_PASSWORD')
 DEFAULT_FROM_EMAIL  = f'Cebu Mini Hotel <{EMAIL_HOST_USER}>'
 
+# ─── Google OAuth ─────────────────────────────────────────────────────────────
+GOOGLE_CLIENT_ID     = env("GOOGLE_CLIENT_ID")
+GOOGLE_CLIENT_SECRET = env("GOOGLE_CLIENT_SECRET")
+GOOGLE_REDIRECT_URI  = env("GOOGLE_REDIRECT_URI", default="http://localhost:8000/api/v1/auth/google/callback/")
+
 from corsheaders.defaults import default_headers
 
 CORS_ALLOW_HEADERS = list(default_headers) + [

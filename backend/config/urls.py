@@ -12,6 +12,8 @@ from drf_spectacular.views import (
 from django.conf import settings
 from django.conf.urls.static import static
 from apps.services import third_party_views
+from apps.users.googel_views import GoogleLoginRedirectView, GoogleCallbackView
+
 # ── OpenAPI schema endpoints ──────────────────────────────────────────────────
 schema_patterns = [
     path("schema/", SpectacularAPIView.as_view(), name="schema"),
@@ -38,7 +40,8 @@ api_v1_patterns = [
     path("complaints/", include("apps.complaints.urls")),
     path('services/', include('apps.services.urls')),
     path('feedback/', include('apps.feedback.urls')),
-
+    path("auth/google/", GoogleLoginRedirectView.as_view()),
+    path("auth/google/callback/", GoogleCallbackView.as_view()),
     *schema_patterns,
 ]
 
