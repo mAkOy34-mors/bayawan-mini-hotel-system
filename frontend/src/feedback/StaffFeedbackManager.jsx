@@ -1,5 +1,6 @@
 // src/feedback/StaffFeedbackManager.jsx
 import { useState, useEffect } from 'react';
+import { API_BASE } from '../constants/config';
 import {
   MessageCircle, Send, CheckCircle, Clock, AlertCircle, 
   Star, User, Calendar, Search, Reply, Check, X, Eye, Flag,
@@ -699,7 +700,6 @@ const StaffFeedbackManager = ({ token, user, role = 'receptionist' }) => {
     setTimeout(() => setToast(null), 3000);
   };
 
-  const API_BASE = `http://127.0.0.1:8000/api/v1`;
 
   const fetchFeedbacks = async () => {
     setLoading(true);
