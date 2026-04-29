@@ -807,7 +807,7 @@ export function RegisterPage({ onGoLogin, onClose }) {
 
   const handleGoogleRegister = () => {
     setGoogleLoading(true);
-    window.location.href = 'http://localhost:8000/api/v1/auth/google/';
+    window.location.href = 'https://cebu-mini-hotel-system.onrender.com/api/v1/auth/google/';
   };
 
   const pwMatch    = form.confirmPassword && form.password === form.confirmPassword;

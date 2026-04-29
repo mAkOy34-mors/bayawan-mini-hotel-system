@@ -624,7 +624,7 @@ export function LoginPage({ onLogin, onClose, onGoRegister }) {
   const handleGoogleLogin = () => {
     setGoogleLoading(true);
     setError('');
-    window.location.href = 'http://localhost:8000/api/v1/auth/google/';
+    window.location.href = 'https://cebu-mini-hotel-system.onrender.com/api/v1/auth/google/';
   };
 
   const handleBackdropClick = e => {
