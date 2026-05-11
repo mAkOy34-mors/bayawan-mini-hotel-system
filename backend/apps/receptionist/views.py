@@ -1353,6 +1353,13 @@ class VerifyQRCheckOutView(APIView):
                 "booking": {"reference": booking.booking_reference, "status": booking.status}
             }, status=status.HTTP_400_BAD_REQUEST)
 
+        # Calculate number of nights
+        if booking.check_in_date and booking.check_out_date:
+            delta = booking.check_out_date - booking.check_in_date
+            number_of_nights = delta.days
+        else:
+            number_of_nights = 1
+
         # Get today's date for validation
         today = timezone.now().date()
         check_out_date = booking.check_out_date
@@ -1411,7 +1418,10 @@ class VerifyQRCheckOutView(APIView):
                 "totalAmount": float(booking.total_amount or 0),
                 "depositPaid": float(booking.deposit_amount or 0),
                 "remainingBalance": remaining_balance,
-                "status": booking.status
+                "status": booking.status,
+                "numberOfNights": booking.number_of_nights,  # ADD THIS
+                "numberOfGuests": booking.number_of_guests,  # ADD THIS (assuming this field exists)
+                "ratePerNight": float(booking.rate_per_night or 0) if hasattr(booking, 'rate_per_night') else (float(booking.total_amount or 0) / number_of_nights if number_of_nights > 0 else 0),  # ADD THIS
             },
             "charges": outstanding_charges,
             "summary": {
@@ -1423,10 +1433,11 @@ class VerifyQRCheckOutView(APIView):
                 "is_late_checkout": is_late_checkout,
                 "check_out_date": str(check_out_date),
                 "today": str(today),
-                "days_difference": days_difference
+                "days_difference": days_difference,
+                "nights": number_of_nights,  # ADD THIS
+                "guests": booking.number_of_guests,  # ADD THIS
             }
         })
-
 
 class ProcessQRCheckOutView(APIView):
     """

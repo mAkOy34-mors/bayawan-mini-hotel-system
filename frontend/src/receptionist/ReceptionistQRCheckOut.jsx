@@ -13,6 +13,689 @@ import {
 
 import { API_BASE } from '../constants/config';
 
+// Receipt Modal Component
+const ReceiptModal = ({ show, onHide, bookingData, paymentDetails, charges, summary }) => {
+  const receiptRef = useRef(null);
+  
+  const handlePrint = () => {
+    const printContent = receiptRef.current;
+    if (!printContent) return;
+    
+    const originalTitle = document.title;
+    document.title = `Receipt_${bookingData?.reference || 'checkout'}`;
+    
+    const printWindow = window.open('', '_blank');
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Check-out Receipt - Cebu Mini Hotel</title>
+          <meta charset="utf-8" />
+          <style>
+            * {
+              margin: 0;
+              padding: 0;
+              box-sizing: border-box;
+            }
+            body {
+              font-family: 'DM Sans', 'Helvetica Neue', Arial, sans-serif;
+              background: #fff;
+              padding: 2rem;
+              display: flex;
+              justify-content: center;
+              align-items: center;
+              min-height: 100vh;
+            }
+            .receipt-print {
+              max-width: 500px;
+              width: 100%;
+              margin: 0 auto;
+              background: white;
+            }
+            @media print {
+              body {
+                padding: 0;
+                margin: 0;
+              }
+              .no-print {
+                display: none;
+              }
+            }
+          </style>
+          <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+        </head>
+        <body>
+          ${printContent.innerHTML}
+          <script>
+            window.onload = () => {
+              window.print();
+              setTimeout(() => window.close(), 500);
+            };
+          <\/script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+    document.title = originalTitle;
+  };
+  
+  if (!bookingData) return null;
+  
+  // Calculate payment amounts correctly
+  const totalPaidAtCheckout = paymentDetails?.amountCollected || 0;
+  const totalDue = summary?.total_due || 0;
+  const depositPaid = summary?.deposit_paid || 0;
+  const roomSubtotal = summary?.subtotal || bookingData.totalAmount || 0;
+  const serviceCharges = summary?.service_charges || 0;
+  const totalBill = roomSubtotal + serviceCharges;
+  
+  // Total amount actually paid (deposit + checkout payment)
+  const totalAmountPaid = depositPaid + totalPaidAtCheckout;
+  const changeAmount = totalPaidAtCheckout > totalDue ? totalPaidAtCheckout - totalDue : 0;
+  const isFullyPaidByDeposit = totalDue === 0 && depositPaid > 0 && totalPaidAtCheckout === 0;
+  
+  const receiptNumber = `RCP-${bookingData.id}-${Date.now().toString().slice(-6)}`;
+  const paymentReference = paymentDetails?.reference || `PAY-${bookingData.id}-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
+  const today = new Date();
+  const nights = bookingData.numberOfNights || 1;
+  const ratePerNight = bookingData.ratePerNight || (roomSubtotal / nights);
+  
+  return (
+    <Modal show={show} onHide={onHide} centered size="lg" className="receipt-modal">
+      <Modal.Body style={{ padding: 0, overflow: 'hidden' }}>
+        <div ref={receiptRef} className="receipt-container">
+          {/* Hotel Header */}
+          <div className="receipt-header">
+            <div className="hotel-icon">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2h-5v-7H7v7H5a2 2 0 0 1-2-2z"/>
+                <polyline points="9 22 9 12 15 12 15 22"/>
+              </svg>
+            </div>
+            <h1 className="hotel-name">Cebu Mini Hotel</h1>
+            <div className="hotel-tagline">Your Home Away From Home • Est. 2010</div>
+            <div className="hotel-address">
+              123 Queen's Street, Cebu City, Philippines 6000<br/>
+              Tel: +63 (32) 123 4567 • Email: hello@cebuminihotel.com
+            </div>
+          </div>
+          
+          <div className="receipt-divider"></div>
+          
+          {/* Receipt Title */}
+          <div className="receipt-title-section">
+            <h2 className="receipt-title">OFFICIAL CHECK-OUT RECEIPT</h2>
+            <div className="receipt-badge">{isFullyPaidByDeposit ? 'DEPOSIT PAID' : 'COMPLETED'}</div>
+          </div>
+          
+          {/* Receipt Info */}
+          <div className="receipt-info-grid">
+            <div className="receipt-info-item">
+              <span className="info-label">Receipt #:</span>
+              <span className="info-value">{receiptNumber}</span>
+            </div>
+            <div className="receipt-info-item">
+              <span className="info-label">Date:</span>
+              <span className="info-value">{today.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
+            </div>
+            <div className="receipt-info-item">
+              <span className="info-label">Time:</span>
+              <span className="info-value">{today.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</span>
+            </div>
+            <div className="receipt-info-item">
+              <span className="info-label">Booking Ref:</span>
+              <span className="info-value">{bookingData.reference}</span>
+            </div>
+          </div>
+          
+          <div className="receipt-divider-light"></div>
+          
+          {/* Guest & Room Info */}
+          <div className="receipt-section">
+            <h3 className="section-title">GUEST & ROOM INFORMATION</h3>
+            <div className="info-row">
+              <div className="info-row-label">Guest Name:</div>
+              <div className="info-row-value">{bookingData.guestName}</div>
+            </div>
+            <div className="info-row">
+              <div className="info-row-label">Room Number:</div>
+              <div className="info-row-value">{bookingData.roomNumber} ({bookingData.roomType})</div>
+            </div>
+            <div className="info-row">
+              <div className="info-row-label">Check-in:</div>
+              <div className="info-row-value">{fmtDate(bookingData.checkInDate)}</div>
+            </div>
+            <div className="info-row">
+              <div className="info-row-label">Check-out:</div>
+              <div className="info-row-value">{fmtDate(bookingData.checkOutDate)}</div>
+            </div>
+            <div className="info-row">
+              <div className="info-row-label">Nights Stayed:</div>
+              <div className="info-row-value"><strong>{nights}</strong> {nights === 1 ? 'night' : 'nights'}</div>
+            </div>
+            <div className="info-row">
+              <div className="info-row-label">Guests:</div>
+              <div className="info-row-value"><strong>{bookingData.numberOfGuests || 1}</strong> {bookingData.numberOfGuests === 1 ? 'guest' : 'guests'}</div>
+            </div>
+          </div>
+          
+          <div className="receipt-divider-light"></div>
+          
+          {/* Charges Breakdown */}
+          <div className="receipt-section">
+            <h3 className="section-title">CHARGES BREAKDOWN</h3>
+            
+            {/* Room Charges */}
+            <div className="charge-row">
+              <div className="charge-details">
+                <div className="charge-name">Room Charges</div>
+                <div className="charge-desc">{bookingData.roomType} Room • {nights} night(s) @ {fmt(ratePerNight)}/night</div>
+              </div>
+              <div className="charge-amount">{fmt(roomSubtotal)}</div>
+            </div>
+            
+            {/* Service/Extra Charges from charges array */}
+            {charges && charges.filter(c => c.type !== 'ROOM_BALANCE').map((charge, idx) => (
+              <div key={idx} className="charge-row">
+                <div className="charge-details">
+                  <div className="charge-name">{charge.description || getChargeTypeLabel(charge.type)}</div>
+                  <div className="charge-desc">{charge.type?.replace(/_/g, ' ') || 'Additional charge'}</div>
+                </div>
+                <div className="charge-amount">{fmt(charge.amount)}</div>
+              </div>
+            ))}
+          </div>
+          
+          <div className="receipt-divider-light"></div>
+          
+          {/* Payment Summary */}
+          <div className="receipt-total-section">
+            <div className="total-row">
+              <span>Room Charges:</span>
+              <span>{fmt(roomSubtotal)}</span>
+            </div>
+            {serviceCharges > 0 && (
+              <div className="total-row">
+                <span>Service Charges:</span>
+                <span>{fmt(serviceCharges)}</span>
+              </div>
+            )}
+            <div className="total-row grand-total">
+              <span>TOTAL BILL:</span>
+              <span>{fmt(totalBill)}</span>
+            </div>
+            
+            {/* Deposit Payment */}
+            {depositPaid > 0 && (
+              <div className="total-row deposit-row">
+                <span>Deposit Paid (at booking):</span>
+                <span className="paid-amount">-{fmt(depositPaid)}</span>
+              </div>
+            )}
+            
+            {/* Checkout Payment */}
+            {totalPaidAtCheckout > 0 && (
+              <div className="total-row">
+                <span>Payment at Checkout:</span>
+                <span className="paid-amount">-{fmt(totalPaidAtCheckout)}</span>
+              </div>
+            )}
+            
+            <div className="total-divider"></div>
+            
+            {/* Balance Due */}
+            <div className="total-row amount-due">
+              <span>BALANCE DUE:</span>
+              <span className={totalDue > 0 ? 'amount-due-text' : 'zero-balance'}>
+                {fmt(totalDue)}
+              </span>
+            </div>
+            
+            {/* Total Paid */}
+            <div className="total-row amount-paid">
+              <span>TOTAL PAID:</span>
+              <span className="paid-amount">{fmt(totalAmountPaid)}</span>
+            </div>
+            
+            {/* Change (if any) */}
+            {changeAmount > 0 && (
+              <div className="total-row change">
+                <span>Change:</span>
+                <span>{fmt(changeAmount)}</span>
+              </div>
+            )}
+            
+            {/* Payment Status Message */}
+            <div className="payment-summary">
+              {isFullyPaidByDeposit && (
+                <div className="payment-status deposit-paid">
+                  <CheckCircle2 size={14} />
+                  <span>✓ Full payment received via deposit (₱{depositPaid.toLocaleString()})</span>
+                </div>
+              )}
+              {totalDue === 0 && totalPaidAtCheckout > 0 && (
+                <div className="payment-status paid">
+                  <CheckCircle2 size={14} />
+                  <span>✓ Balance paid at checkout: {fmt(totalPaidAtCheckout)}</span>
+                </div>
+              )}
+              {totalDue === 0 && depositPaid > 0 && totalPaidAtCheckout === 0 && (
+                <div className="payment-status deposit-covered">
+                  <CheckCircle2 size={14} />
+                  <span>✓ Fully covered by deposit • No payment collected at checkout</span>
+                </div>
+              )}
+              {totalDue > 0 && (
+                <div className="payment-status pending">
+                  <AlertTriangle size={14} />
+                  <span>⚠ Remaining balance: {fmt(totalDue)}</span>
+                </div>
+              )}
+            </div>
+          </div>
+          
+          <div className="receipt-divider-light"></div>
+          
+          {/* Payment Details */}
+          <div className="receipt-section">
+            <h3 className="section-title">PAYMENT DETAILS</h3>
+            <div className="info-row">
+              <div className="info-row-label">Payment Method:</div>
+              <div className="info-row-value">
+                {isFullyPaidByDeposit ? 'Deposit (Online)' : (
+                  <>
+                    {paymentDetails?.method === 'CASH' && 'Cash 💵'}
+                    {paymentDetails?.method === 'CARD' && 'Credit Card 💳'}
+                    {paymentDetails?.method === 'GCASH' && 'GCash 📱'}
+                    {!paymentDetails?.method && 'Deposit'}
+                  </>
+                )}
+              </div>
+            </div>
+            <div className="info-row">
+              <div className="info-row-label">Reference #:</div>
+              <div className="info-row-value">{paymentReference}</div>
+            </div>
+            <div className="info-row">
+              <div className="info-row-label">Payment Status:</div>
+              <div className="info-row-value status-completed">
+                {totalDue === 0 ? 'PAID IN FULL ✓' : 'PARTIALLY PAID'}
+              </div>
+            </div>
+            <div className="info-row">
+              <div className="info-row-label">Processed By:</div>
+              <div className="info-row-value">{paymentDetails?.processedBy || 'Front Desk Staff'}</div>
+            </div>
+          </div>
+          
+          <div className="receipt-divider"></div>
+          
+          {/* Footer */}
+          <div className="receipt-footer">
+            <div className="thank-you-message">
+              ✦ Maraming Salamat! Thank you for staying! ✦
+            </div>
+            <div className="footer-message">
+              We hope to welcome you again soon!<br/>
+              For feedback: feedback@cebuminihotel.com
+            </div>
+            <div className="qr-footer-note">
+              This is an electronically generated receipt — no signature required.
+            </div>
+          </div>
+        </div>
+        
+        {/* Action Buttons */}
+        <div className="receipt-actions no-print" style={{ padding: '1rem', borderTop: '1px solid #e2e8f0', display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', background: '#f8f9fb' }}>
+          <button className="ap-btn-ghost" onClick={onHide}>Close</button>
+          <button className="ap-btn-primary" onClick={handlePrint} style={{ background: 'linear-gradient(135deg, #9a7a2e, #C9A84C)' }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: '0.35rem' }}>
+              <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>
+              <path d="M6 9V3h12v6"/>
+              <rect x="6" y="15" width="12" height="6" rx="2"/>
+            </svg>
+            Print / Download Receipt
+          </button>
+        </div>
+      </Modal.Body>
+      
+      <style>{`
+        .receipt-modal .modal-content {
+          border-radius: 20px;
+          overflow: hidden;
+          max-width: 600px;
+          margin: 0 auto;
+        }
+        
+        .receipt-container {
+          background: white;
+          padding: 2rem;
+          font-family: 'DM Sans', sans-serif;
+        }
+        
+        .receipt-header {
+          text-align: center;
+          margin-bottom: 1rem;
+        }
+        
+        .hotel-icon {
+          display: flex;
+          justify-content: center;
+          margin-bottom: 0.5rem;
+          color: #C9A84C;
+        }
+        
+        .hotel-name {
+          font-family: 'Cormorant Garamond', serif;
+          font-size: 1.6rem;
+          font-weight: 700;
+          color: #1a1f2e;
+          margin: 0;
+          letter-spacing: 1px;
+        }
+        
+        .hotel-tagline {
+          font-size: 0.7rem;
+          color: #C9A84C;
+          letter-spacing: 2px;
+          text-transform: uppercase;
+          margin-top: 0.2rem;
+        }
+        
+        .hotel-address {
+          font-size: 0.7rem;
+          color: #8a96a8;
+          margin-top: 0.5rem;
+          line-height: 1.4;
+        }
+        
+        .receipt-divider {
+          height: 2px;
+          background: linear-gradient(90deg, transparent, #C9A84C, #C9A84C, transparent);
+          margin: 1rem 0;
+        }
+        
+        .receipt-divider-light {
+          height: 1px;
+          background: #e2e8f0;
+          margin: 0.75rem 0;
+        }
+        
+        .receipt-title-section {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 1rem;
+        }
+        
+        .receipt-title {
+          font-family: 'Cormorant Garamond', serif;
+          font-size: 1.1rem;
+          font-weight: 600;
+          color: #1a1f2e;
+          margin: 0;
+          letter-spacing: 1px;
+        }
+        
+        .receipt-badge {
+          background: linear-gradient(135deg, #10b981, #34d399);
+          color: white;
+          padding: 0.2rem 0.8rem;
+          border-radius: 20px;
+          font-size: 0.7rem;
+          font-weight: 700;
+        }
+        
+        .receipt-info-grid {
+          display: grid;
+          grid-template-columns: repeat(2, 1fr);
+          gap: 0.5rem;
+          margin-bottom: 1rem;
+        }
+        
+        .receipt-info-item {
+          display: flex;
+          justify-content: space-between;
+          font-size: 0.75rem;
+        }
+        
+        .info-label {
+          color: #8a96a8;
+          font-weight: 500;
+        }
+        
+        .info-value {
+          color: #1a1f2e;
+          font-weight: 600;
+        }
+        
+        .receipt-section {
+          margin: 1rem 0;
+        }
+        
+        .section-title {
+          font-size: 0.7rem;
+          font-weight: 700;
+          color: #C9A84C;
+          letter-spacing: 2px;
+          text-transform: uppercase;
+          margin-bottom: 0.75rem;
+          border-left: 3px solid #C9A84C;
+          padding-left: 0.6rem;
+        }
+        
+        .info-row {
+          display: flex;
+          justify-content: space-between;
+          margin-bottom: 0.5rem;
+          font-size: 0.8rem;
+        }
+        
+        .info-row-label {
+          color: #8a96a8;
+        }
+        
+        .info-row-value {
+          color: #1a1f2e;
+          font-weight: 500;
+        }
+        
+        .status-completed {
+          color: #10b981;
+          font-weight: 700;
+        }
+        
+        .charge-row {
+          display: flex;
+          justify-content: space-between;
+          margin-bottom: 0.65rem;
+          padding-bottom: 0.65rem;
+          border-bottom: 1px dashed #f1f5f9;
+        }
+        
+        .charge-row:last-child {
+          border-bottom: none;
+        }
+        
+        .charge-details {
+          flex: 1;
+        }
+        
+        .charge-name {
+          font-size: 0.8rem;
+          font-weight: 600;
+          color: #1a1f2e;
+        }
+        
+        .charge-desc {
+          font-size: 0.65rem;
+          color: #8a96a8;
+          margin-top: 0.15rem;
+        }
+        
+        .charge-amount {
+          font-size: 0.8rem;
+          font-weight: 600;
+          color: #1a1f2e;
+        }
+        
+        .receipt-total-section {
+          background: #f8f9fb;
+          padding: 1rem;
+          border-radius: 12px;
+          margin: 1rem 0;
+        }
+        
+        .total-row {
+          display: flex;
+          justify-content: space-between;
+          font-size: 0.8rem;
+          margin-bottom: 0.5rem;
+          color: #4a5568;
+        }
+        
+        .total-row.grand-total {
+          font-weight: 700;
+          color: #1a1f2e;
+          font-size: 0.9rem;
+          border-top: 1px solid #e2e8f0;
+          padding-top: 0.5rem;
+          margin-top: 0.25rem;
+        }
+        
+        .total-row.deposit-row {
+          color: #10b981;
+        }
+        
+        .paid-amount {
+          color: #2d9b6f;
+          font-weight: 600;
+        }
+        
+        .total-divider {
+          height: 1px;
+          background: linear-gradient(90deg, transparent, #C9A84C, transparent);
+          margin: 0.5rem 0;
+        }
+        
+        .total-row.amount-due {
+          font-weight: 700;
+          font-size: 1rem;
+          margin-top: 0.5rem;
+          padding-top: 0.5rem;
+        }
+        
+        .amount-due-text {
+          color: #dc3545;
+        }
+        
+        .zero-balance {
+          color: #2d9b6f;
+        }
+        
+        .total-row.amount-paid {
+          font-weight: 700;
+          color: #2d9b6f;
+          font-size: 1rem;
+        }
+        
+        .total-row.change {
+          color: #64748b;
+          border-top: 1px solid #e2e8f0;
+          padding-top: 0.5rem;
+          margin-top: 0.25rem;
+        }
+        
+        .payment-summary {
+          margin-top: 0.75rem;
+          padding-top: 0.75rem;
+          border-top: 1px solid #e2e8f0;
+        }
+        
+        .payment-status {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+          padding: 0.5rem;
+          border-radius: 8px;
+          font-size: 0.75rem;
+          font-weight: 600;
+        }
+        
+        .payment-status.deposit-paid {
+          background: rgba(45, 155, 111, 0.1);
+          color: #2d9b6f;
+        }
+        
+        .payment-status.deposit-covered {
+          background: rgba(59, 130, 246, 0.1);
+          color: #3b82f6;
+        }
+        
+        .payment-status.paid {
+          background: rgba(45, 155, 111, 0.1);
+          color: #2d9b6f;
+        }
+        
+        .payment-status.pending {
+          background: rgba(245, 158, 11, 0.1);
+          color: #f59e0b;
+        }
+        
+        .receipt-footer {
+          text-align: center;
+          margin-top: 1.5rem;
+        }
+        
+        .thank-you-message {
+          font-family: 'Cormorant Garamond', serif;
+          font-size: 1rem;
+          font-weight: 600;
+          color: #C9A84C;
+          margin-bottom: 0.5rem;
+        }
+        
+        .footer-message {
+          font-size: 0.7rem;
+          color: #8a96a8;
+          line-height: 1.5;
+        }
+        
+        .qr-footer-note {
+          font-size: 0.6rem;
+          color: #cbd5e1;
+          margin-top: 0.75rem;
+        }
+        
+        @media print {
+          .receipt-modal .modal-content {
+            box-shadow: none;
+            border-radius: 0;
+          }
+          .receipt-container {
+            padding: 0.5rem;
+          }
+          .no-print {
+            display: none !important;
+          }
+        }
+      `}</style>
+    </Modal>
+  );
+};
+
+// Helper function for charge type labels
+const getChargeTypeLabel = (type) => {
+  switch (type) {
+    case 'ROOM_BALANCE': return 'Room Balance';
+    case 'SERVICE_CHARGE': return 'Service Charge';
+    case 'MINIBAR': return 'Minibar Items';
+    case 'LAUNDRY': return 'Laundry Service';
+    case 'RESTAURANT': return 'Restaurant Charges';
+    default: return 'Additional Charges';
+  }
+};
+
 const EXTRA_CSS = `
   .qr-scanner-container {
     position: relative;
@@ -154,7 +837,9 @@ export function ReceptionistQRCheckOut({ token, setPage }) {
   const [processingCheckout, setProcessingCheckout] = useState(false);
   const [checkoutSuccess, setCheckoutSuccess] = useState(false);
   const [forceCheckout, setForceCheckout] = useState(false);
-  
+  const [showReceipt, setShowReceipt] = useState(false);
+  const [receiptPaymentDetails, setReceiptPaymentDetails] = useState(null);
+
   const { toast, show } = useToast();
   const scannerRef = useRef(null);
   const containerId = 'qr-reader-checkout';
@@ -230,14 +915,30 @@ export function ReceptionistQRCheckOut({ token, setPage }) {
       const data = await response.json();
       
       if (response.ok && data.success) {
-        setBookingData(data.booking);
+        const checkIn = new Date(data.booking.checkInDate);
+        const checkOut = new Date(data.booking.checkOutDate);
+        const diffTime = Math.abs(checkOut - checkIn);
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        
+        const enhancedBooking = {
+          ...data.booking,
+          numberOfNights: data.booking.numberOfNights || diffDays,
+          numberOfGuests: data.booking.numberOfGuests || data.summary?.guests || 1,
+          ratePerNight: data.booking.ratePerNight || (data.booking.totalAmount / diffDays),
+        };
+        
+        setBookingData(enhancedBooking);
         setCharges(data.charges || []);
-        setSummary(data.summary);
+        setSummary({
+          ...data.summary,
+          nights: data.summary?.nights || diffDays,
+          guests: data.summary?.guests || enhancedBooking.numberOfGuests,
+        });
         setPaymentAmount(data.summary?.total_due || 0);
         setShowCharges(true);
         setLastResult({
           valid: true,
-          booking: data.booking,
+          booking: enhancedBooking,
           error: null,
           scannedAt: new Date().toISOString()
         });
@@ -310,20 +1011,24 @@ export function ReceptionistQRCheckOut({ token, setPage }) {
       const data = await response.json();
       
       if (response.ok && data.success) {
+        setReceiptPaymentDetails({
+          amountCollected: paymentAmount,
+          method: paymentMethod,
+          reference: data.payment_reference || `PAY-${bookingData?.id}-${Date.now().toString().slice(-6)}`,
+          processedBy: data.processed_by || 'Front Desk Staff'
+        });
+        
         setCheckoutSuccess(true);
         show(data.message, 'success');
+        
         setTimeout(() => {
           setCheckoutSuccess(false);
-          setShowCharges(false);
-          setBookingData(null);
-          resetScanner();
-        }, 3000);
+          setShowReceipt(true);
+        }, 2000);
       } else {
         if (data.can_force) {
-          // Show force checkout option
           if (window.confirm(`${data.error}\n\nDo you want to force early check-out?`)) {
             setForceCheckout(true);
-            // Retry with force checkout
             const forceResponse = await fetch(`${API_BASE}/receptionist/process-qr-checkout/`, {
               method: 'POST',
               headers: {
@@ -339,14 +1044,18 @@ export function ReceptionistQRCheckOut({ token, setPage }) {
             });
             const forceData = await forceResponse.json();
             if (forceResponse.ok && forceData.success) {
+              setReceiptPaymentDetails({
+                amountCollected: paymentAmount,
+                method: paymentMethod,
+                reference: forceData.payment_reference || `PAY-${bookingData?.id}-${Date.now().toString().slice(-6)}`,
+                processedBy: forceData.processed_by || 'Front Desk Staff'
+              });
               setCheckoutSuccess(true);
               show(forceData.message, 'success');
               setTimeout(() => {
                 setCheckoutSuccess(false);
-                setShowCharges(false);
-                setBookingData(null);
-                resetScanner();
-              }, 3000);
+                setShowReceipt(true);
+              }, 2000);
             } else {
               show(forceData.error || 'Force check-out failed', 'error');
             }
@@ -363,6 +1072,15 @@ export function ReceptionistQRCheckOut({ token, setPage }) {
       setForceCheckout(false);
     }
   };
+
+  const handleReceiptClose = () => {
+    setShowReceipt(false);
+    setShowCharges(false);
+    setBookingData(null);
+    setCharges([]);
+    setSummary(null);
+    resetScanner();
+  };
   
   const getChargeIcon = (type) => {
     switch (type) {
@@ -370,15 +1088,6 @@ export function ReceptionistQRCheckOut({ token, setPage }) {
       case 'SERVICE_CHARGE': return <Wrench size={14} />;
       case 'MINIBAR': return <Coffee size={14} />;
       default: return <Receipt size={14} />;
-    }
-  };
-  
-  const getChargeTypeLabel = (type) => {
-    switch (type) {
-      case 'ROOM_BALANCE': return 'Room Balance';
-      case 'SERVICE_CHARGE': return 'Service Charge';
-      case 'MINIBAR': return 'Minibar';
-      default: return 'Other';
     }
   };
 
@@ -764,6 +1473,16 @@ export function ReceptionistQRCheckOut({ token, setPage }) {
           )}
         </Modal.Body>
       </Modal>
+      
+      {/* Receipt Modal */}
+      <ReceiptModal 
+        show={showReceipt}
+        onHide={handleReceiptClose}
+        bookingData={bookingData}
+        paymentDetails={receiptPaymentDetails}
+        charges={charges}
+        summary={summary}
+      />
     </div>
   );
 }
