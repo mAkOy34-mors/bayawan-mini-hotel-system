@@ -1,4 +1,3 @@
-// pages/GuestServiceRequest.jsx
 import { useState, useEffect } from 'react';
 import { Alert } from '../components/ui/Alert';
 import { useAlert } from '../hooks/useAlert';
@@ -356,6 +355,7 @@ const PRIORITY_OPTIONS = [
 export function GuestServiceRequest({ token, user }) {
   const [selectedType, setSelectedType] = useState('CLEANING');
   const [description, setDescription] = useState('');
+  const [otherRequest, setOtherRequest] = useState('');
   const [priority, setPriority] = useState('MEDIUM');
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -366,48 +366,31 @@ export function GuestServiceRequest({ token, user }) {
   const guestName = user?.fullName || user?.username || user?.email?.split('@')[0] || 'Guest';
   const guestEmail = user?.email || '';
 
-  // Fetch the actual room number from active booking
   useEffect(() => {
     const fetchActiveRoom = async () => {
       if (!token) return;
-      
       setLoadingRoom(true);
       try {
         const response = await fetch(`${API_BASE}/bookings/my-bookings/`, {
           headers: { Authorization: `Bearer ${token}` },
         });
-        
         if (response.ok) {
           const bookings = await response.json();
           const today = new Date().toISOString().split('T')[0];
-          
-          // Find active booking (CHECKED_IN status)
-          const activeBooking = bookings.find(b => 
+          const activeBooking = bookings.find(b =>
             b.status === 'CHECKED_IN' &&
-            b.checkInDate <= today && 
+            b.checkInDate <= today &&
             b.checkOutDate >= today
           );
-          
           if (activeBooking) {
-            // Try multiple possible field names for room number
-            let roomNum = null;
-            if (activeBooking.roomNumber) {
-              roomNum = activeBooking.roomNumber;
-            } else if (activeBooking.room_number) {
-              roomNum = activeBooking.room_number;
-            } else if (activeBooking.room?.roomNumber) {
-              roomNum = activeBooking.room.roomNumber;
-            } else if (activeBooking.room?.room_number) {
-              roomNum = activeBooking.room.room_number;
-            } else if (activeBooking.room?.number) {
-              roomNum = activeBooking.room.number;
-            }
-            
-            if (roomNum) {
-              setActiveRoom(String(roomNum));
-            } else {
-              setActiveRoom('');
-            }
+            const roomNum =
+              activeBooking.roomNumber ||
+              activeBooking.room_number ||
+              activeBooking.room?.roomNumber ||
+              activeBooking.room?.room_number ||
+              activeBooking.room?.number ||
+              null;
+            setActiveRoom(roomNum ? String(roomNum) : '');
           } else {
             setActiveRoom('');
           }
@@ -421,20 +404,28 @@ export function GuestServiceRequest({ token, user }) {
         setLoadingRoom(false);
       }
     };
-    
     fetchActiveRoom();
   }, [token]);
 
   const roomNumber = activeRoom;
 
   const handleSubmit = async () => {
-    if (!roomNumber || roomNumber === '') {
+    if (!roomNumber) {
       showAlert('Room number is required. Please check in first at the front desk.', 'error');
       return;
     }
-    
+
+    if (selectedType === 'OTHER' && !otherRequest.trim()) {
+      showAlert('Please describe what you need.', 'error');
+      return;
+    }
+
     setSubmitting(true);
     try {
+      const finalDescription = selectedType === 'OTHER'
+        ? `${otherRequest.trim()}${description.trim() ? ` — ${description.trim()}` : ''}`
+        : description;
+
       const response = await fetch(`${API_BASE}/services/guest/`, {
         method: 'POST',
         headers: {
@@ -443,7 +434,7 @@ export function GuestServiceRequest({ token, user }) {
         },
         body: JSON.stringify({
           service_type: selectedType,
-          description: description,
+          description: finalDescription,
           room_number: roomNumber,
           priority: priority
         })
@@ -452,6 +443,7 @@ export function GuestServiceRequest({ token, user }) {
       if (response.ok) {
         setSubmitted(true);
         setDescription('');
+        setOtherRequest('');
         setTimeout(() => setSubmitted(false), 3000);
         showAlert('Service request submitted successfully!', 'success');
       } else {
@@ -489,8 +481,8 @@ export function GuestServiceRequest({ token, user }) {
             Your request has been sent to our team.<br />
             We'll handle it promptly and notify you once completed.
           </div>
-          <button 
-            className="submit-btn" 
+          <button
+            className="submit-btn"
             style={{ maxWidth: 200, margin: '0 auto' }}
             onClick={() => setSubmitted(false)}
           >
@@ -505,13 +497,18 @@ export function GuestServiceRequest({ token, user }) {
             </div>
           </div>
           <div className="sr-panel-body">
+
             {/* Service Types */}
             <div className="service-types">
               {SERVICE_TYPES.map(type => (
                 <div
                   key={type.value}
                   className={`service-type-card ${selectedType === type.value ? 'selected' : ''}`}
-                  onClick={() => setSelectedType(type.value)}
+                  onClick={() => {
+                    setSelectedType(type.value);
+                    setOtherRequest('');
+                    setDescription('');
+                  }}
                 >
                   <div className="service-type-icon">{type.icon}</div>
                   <div className="service-type-name">{type.label}</div>
@@ -524,16 +521,17 @@ export function GuestServiceRequest({ token, user }) {
 
             {/* Charge Notice */}
             {selectedService?.charge > 0 && (
-              <div style={{ 
-                background: 'rgba(201,168,76,0.08)', 
-                padding: '0.75rem 1rem', 
-                borderRadius: 10, 
+              <div style={{
+                background: 'rgba(201,168,76,0.08)',
+                padding: '0.75rem 1rem',
+                borderRadius: 10,
                 marginBottom: '1rem',
-                borderLeft: `3px solid var(--gold)`,
+                borderLeft: '3px solid var(--gold)',
                 fontSize: '0.8rem',
                 color: 'var(--gold-dark)',
               }}>
-                <strong>💰 Service Charge:</strong> This service has an additional charge of <strong>₱{selectedService.charge}</strong> that will be added to your bill.
+                <strong>💰 Service Charge:</strong> This service has an additional charge of{' '}
+                <strong>₱{selectedService.charge}</strong> that will be added to your bill.
               </div>
             )}
 
@@ -559,13 +557,50 @@ export function GuestServiceRequest({ token, user }) {
               </div>
             </div>
 
-            {/* Description - Fixed alignment */}
+            {/* Other — manual request input */}
+            {selectedType === 'OTHER' && (
+              <div className="ap-field">
+                <label className="ap-label">
+                  Describe Your Request <span style={{ color: '#ef4444' }}>*</span>
+                </label>
+                <input
+                  style={{
+                    background: '#fff',
+                    border: '1px solid var(--border)',
+                    color: 'var(--text)',
+                    borderRadius: 8,
+                    padding: '0.65rem 0.9rem',
+                    fontSize: '0.875rem',
+                    fontFamily: "'DM Sans', sans-serif",
+                    outline: 'none',
+                    width: '100%',
+                    boxSizing: 'border-box',
+                    transition: 'border-color 0.2s, box-shadow 0.2s',
+                  }}
+                  placeholder="e.g. Extra hangers, iron, wake-up call at 7am..."
+                  value={otherRequest}
+                  onChange={e => setOtherRequest(e.target.value)}
+                  onFocus={e => {
+                    e.target.style.borderColor = 'var(--gold)';
+                    e.target.style.boxShadow = '0 0 0 3px rgba(201,168,76,0.12)';
+                  }}
+                  onBlur={e => {
+                    e.target.style.borderColor = 'var(--border)';
+                    e.target.style.boxShadow = 'none';
+                  }}
+                />
+              </div>
+            )}
+
+            {/* Additional Details */}
             <div className="ap-field">
-              <label className="ap-label">Additional Details</label>
+              <label className="ap-label">
+                {selectedType === 'OTHER' ? 'Additional Details (Optional)' : 'Additional Details'}
+              </label>
               <textarea
                 className="ap-textarea"
                 rows={3}
-                placeholder="Tell us more about your request (e.g., specific items, timing, special instructions)..."
+                placeholder="Tell us more about your request (e.g., timing, special instructions)..."
                 value={description}
                 onChange={e => setDescription(e.target.value)}
               />
@@ -594,9 +629,7 @@ export function GuestServiceRequest({ token, user }) {
                     <span className="loading-room" style={{ padding: 0 }}>
                       <div className="room-spinner" /> Loading...
                     </span>
-                  ) : (
-                    displayRoom
-                  )}
+                  ) : displayRoom}
                 </span>
               </div>
             </div>
@@ -615,7 +648,7 @@ export function GuestServiceRequest({ token, user }) {
             </button>
 
             {/* Info Note */}
-            <div style={{ 
+            <div style={{
               marginTop: '1rem',
               padding: '0.65rem',
               background: 'rgba(59,130,246,0.05)',
@@ -626,12 +659,12 @@ export function GuestServiceRequest({ token, user }) {
               border: '1px solid rgba(59,130,246,0.1)'
             }}>
               <Clock size={12} style={{ display: 'inline', marginRight: '0.3rem', verticalAlign: 'middle' }} />
-              Estimated response time: 5-10 minutes for urgent requests, 15-20 minutes for standard requests
+              Estimated response time: 5–10 minutes for urgent requests, 15–20 minutes for standard requests
             </div>
 
             {/* Check-in reminder */}
             {!loadingRoom && !roomNumber && (
-              <div style={{ 
+              <div style={{
                 marginTop: '1rem',
                 padding: '0.75rem',
                 background: 'rgba(239,68,68,0.08)',
@@ -645,6 +678,7 @@ export function GuestServiceRequest({ token, user }) {
                 Please check in at the front desk first to request services.
               </div>
             )}
+
           </div>
         </div>
       )}

@@ -183,7 +183,7 @@ function deriveReceptionistNotifs(data) {
   // 5. Service Requests
   const services = data.serviceRequests || [];
   services.forEach(service => {
-    const serviceType = service.service_type_label || service.service_type || 'Service';
+    const serviceType = service.service_type_display || service.service_type || 'Service';
     notifs.push({
       id: `service-${service.id}`,
       type: 'service_request',

@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 def send_walkin_welcome_email(user, temp_password, booking, guest_info):
     """Send welcome email with temporary password"""
 
-    subject = "Welcome to Bayawan Mini Hotel - Your Walk-in Booking Confirmation"
+    subject = "Welcome to Cebu Mini Hotel - Your Walk-in Booking Confirmation"
 
     # Get guest name
     guest_name = guest_info.first_name or guest_info.last_name or user.username
@@ -19,7 +19,7 @@ def send_walkin_welcome_email(user, temp_password, booking, guest_info):
     plain_message = f"""
 Dear {guest_name},
 
-Welcome to Bayawan Mini Hotel!
+Welcome to Cebu Mini Hotel!
 
 Your walk-in booking has been confirmed.
 
@@ -45,7 +45,7 @@ IMPORTANT: Please change your password after logging in.
 We look forward to serving you!
 
 Best regards,
-Bayawan Mini Hotel Team
+Cebu Mini Hotel Team
 """
 
     # HTML version
@@ -71,14 +71,14 @@ Bayawan Mini Hotel Team
 <body>
     <div class="container">
         <div class="header">
-            <h1>🏨 Bayawan Mini Hotel</h1>
+            <h1>🏨 Cebu Mini Hotel</h1>
             <p>Your Walk-in Booking Confirmation</p>
         </div>
 
         <div class="content">
             <p>Dear <strong>{guest_name}</strong>,</p>
 
-            <p>Thank you for choosing Bayawan Mini Hotel! Your walk-in booking has been confirmed.</p>
+            <p>Thank you for choosing Cebu Mini Hotel! Your walk-in booking has been confirmed.</p>
 
             <div class="booking-details">
                 <h3>📋 Booking Details</h3>
@@ -103,11 +103,11 @@ Bayawan Mini Hotel Team
             <p>We look forward to serving you!</p>
 
             <p>Best regards,<br>
-            <strong>Bayawan Mini Hotel Team</strong></p>
+            <strong>Cebu Mini Hotel Team</strong></p>
         </div>
 
         <div class="footer">
-            <p>© 2026 Bayawan Mini Hotel. All rights reserved.</p>
+            <p>© 2026 Cebu Mini Hotel. All rights reserved.</p>
         </div>
     </div>
 </body>

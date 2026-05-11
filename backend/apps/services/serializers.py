@@ -7,6 +7,7 @@ class ServiceRequestSerializer(serializers.ModelSerializer):
     assigned_to_name = serializers.SerializerMethodField()
     created_by_name = serializers.SerializerMethodField()
     service_type_label = serializers.CharField(source='get_service_type_display', read_only=True)
+    service_type_display = serializers.SerializerMethodField()
     status_label = serializers.CharField(source='get_status_display', read_only=True)
     priority_label = serializers.CharField(source='get_priority_display', read_only=True)
 
@@ -14,7 +15,7 @@ class ServiceRequestSerializer(serializers.ModelSerializer):
         model = ServiceRequest
         fields = [
             'id', 'guest_name', 'guest_email', 'room_number',
-            'service_type', 'service_type_label', 'description',
+            'service_type', 'service_type_label', 'service_type_display', 'description',
             'priority', 'priority_label', 'status', 'status_label',
             'assigned_to', 'assigned_to_name', 'created_by', 'created_by_name',
             'created_at', 'updated_at', 'started_at', 'completed_at',
@@ -28,6 +29,10 @@ class ServiceRequestSerializer(serializers.ModelSerializer):
     def get_created_by_name(self, obj):
         return obj.created_by.username if obj.created_by else None
 
+    def get_service_type_display(self, obj):
+        if obj.service_type == 'OTHER' and obj.description:
+            return obj.description
+        return obj.get_service_type_display()
 
 class CreateServiceRequestSerializer(serializers.ModelSerializer):
     class Meta:

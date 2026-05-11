@@ -193,14 +193,14 @@ def send_booking_confirmation_email(booking, user):
     <body>
         <div class="container">
             <div class="header">
-                <h1>🏨 Bayawan Mini Hotel</h1>
+                <h1>🏨 Cebu Mini Hotel</h1>
                 <p>Your Booking is Confirmed!</p>
             </div>
 
             <div class="content">
                 <p>Dear <strong>{guest_name}</strong>,</p>
 
-                <p>Thank you for choosing Bayawan Mini Hotel! Your online reservation has been successfully confirmed.</p>
+                <p>Thank you for choosing Cebu Mini Hotel! Your online reservation has been successfully confirmed.</p>
 
                 <div class="booking-details">
                     <h3>📋 Booking Details</h3>
@@ -274,14 +274,14 @@ def send_booking_confirmation_email(booking, user):
                 <p>We look forward to providing you with a wonderful stay!</p>
 
                 <p>Best regards,<br>
-                <strong>Bayawan Mini Hotel Team</strong></p>
+                <strong>Cebu Mini Hotel Team</strong></p>
             </div>
 
             <div class="footer">
-                <p class="highlight">🏨 Bayawan Mini Hotel</p>
+                <p class="highlight">🏨 Cebu Mini Hotel</p>
                 <p>📍 [Your Hotel Address]</p>
-                <p>📞 +63 XXX XXX XXXX | ✉️ info@bayawanhotel.com</p>
-                <p>© 2026 Bayawan Mini Hotel. All rights reserved.</p>
+                <p>📞 +63 XXX XXX XXXX | ✉️ info@cebuhotel.com</p>
+                <p>© 2026 Cebu Mini Hotel. All rights reserved.</p>
                 <p style="font-size: 11px;">This is an automated message, please do not reply.</p>
             </div>
         </div>

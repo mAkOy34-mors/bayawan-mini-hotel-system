@@ -148,10 +148,9 @@ class AssignServiceRequestView(APIView):
                 pass
 
         # Create the task title and description
-        # Create the task title and description - CLEAN AND PRECISE
-        task_title = f"{service.service_type} - Room {service.room_number}"
-        task_description = f"Guest: {service.guest_name} | Room: {service.room_number} | Type: {service.service_type} | Priority: {service.priority} | Request: #{service.id} - {service.description or 'No description'}"
-
+        service_display = service.description if service.service_type == 'OTHER' and service.description else service.get_service_type_display()
+        task_title = f"{service_display} - Room {service.room_number}"
+        task_description = f"Guest: {service.guest_name} | Room: {service.room_number} | Type: {service_display} | Priority: {service.priority} | Request: #{service.id} - {service.description or 'No description'}"
         # Create the task
         task = Task.objects.create(
             title=task_title,

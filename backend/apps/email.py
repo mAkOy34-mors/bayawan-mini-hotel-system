@@ -33,9 +33,9 @@ def send_booking_cancelled_email(booking, reason, refund_amount=0):
             'deposit_amount': booking.deposit_amount,
             'reason': reason,
             'refund_amount': refund_amount,
-            'hotel_name': 'Bayawan Mini Hotel',
+            'hotel_name': 'Cebu Mini Hotel',
             'hotel_phone': '+63 XXX XXX XXXX',
-            'hotel_email': 'info@bayawanhotel.com'
+            'hotel_email': 'info@cebuhotel.com'
         }
 
         # HTML email template
@@ -85,13 +85,13 @@ def send_booking_cancelled_email(booking, reason, refund_amount=0):
                     ''' if context['refund_amount'] > 0 else ''}
 
                     <p>If you have any questions, please don't hesitate to contact us.</p>
-                    <p>We hope to welcome you at Bayawan Mini Hotel in the future.</p>
+                    <p>We hope to welcome you at Cebu Mini Hotel in the future.</p>
                 </div>
                 <div class="footer">
                     <p>{context['hotel_name']}<br>
                     Phone: {context['hotel_phone']}<br>
                     Email: {context['hotel_email']}</p>
-                    <p>© 2026 Bayawan Mini Hotel. All rights reserved.</p>
+                    <p>© 2026 Cebu Mini Hotel. All rights reserved.</p>
                 </div>
             </div>
         </body>
@@ -118,13 +118,24 @@ def send_booking_cancelled_email(booking, reason, refund_amount=0):
 
 
 def send_cancellation_request_email(booking, cancel_request):
-    """
-    Send email to admin when guest requests cancellation
-    """
     try:
         subject = f"⚠️ Cancellation Request - {booking.booking_reference}"
 
-        admin_emails = [admin.email for admin in settings.AUTH_USER_MODEL.objects.filter(is_staff=True)]
+        # CORRECT WAY to get the user model
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+
+        # Get admin/receptionist emails instead of just is_staff
+        admin_emails = list(
+            User.objects.filter(
+                role__in=['ADMIN', 'RECEPTIONIST'],
+                is_active=True
+            ).values_list('email', flat=True)
+        )
+
+        if not admin_emails:
+            logger.warning("No admin/receptionist emails found — cancellation request email not sent.")
+            return False
 
         html_message = f"""
         <!DOCTYPE html>
@@ -151,20 +162,21 @@ def send_cancellation_request_email(booking, cancel_request):
         </html>
         """
 
-        if admin_emails:
-            send_mail(
-                subject=subject,
-                message=strip_tags(html_message),
-                from_email=settings.DEFAULT_FROM_EMAIL,
-                recipient_list=admin_emails,
-                html_message=html_message,
-                fail_silently=False,
-            )
+        send_mail(
+            subject=subject,
+            message=strip_tags(html_message),
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=admin_emails,
+            html_message=html_message,
+            fail_silently=False,
+        )
+
+        logger.info(f"Cancellation request email sent to {admin_emails}")
         return True
+
     except Exception as e:
         logger.error(f"Failed to send cancellation request email: {e}")
         return False
-
 
 def send_cancellation_approved_email(booking, cancel_request):
     """

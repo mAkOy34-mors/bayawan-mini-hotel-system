@@ -57,7 +57,10 @@ class DashboardView(APIView):
         total_guests     = User.objects.filter(role="USER").count()
         total_revenue    = Payment.objects.filter(status="PAID").aggregate(t=Sum("amount"))["t"] or 0
         available_rooms  = Room.objects.filter(available=True).count()
-        todays_checkins  = Booking.objects.filter(check_in_date=today).count()
+        todays_checkins = Booking.objects.filter(
+            check_in_date=today,
+            status='CONFIRMED'
+        ).count()
         todays_checkouts = Booking.objects.filter(check_out_date=today).count()
         pending_bookings = Booking.objects.filter(status="PENDING_DEPOSIT").count()
 

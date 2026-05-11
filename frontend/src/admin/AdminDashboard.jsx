@@ -466,7 +466,13 @@ export function AdminDashboard({ token, setPage }) {
             <Skel h={14} w={80} mb={10} /><Skel h={10} w="60%" mb={8} /><Skel h={26} w="45%" />
           </div>
         )) : [
-          { Icon: LogIn, label: "Today's Check-ins", value: kpi?.todaysCheckins ?? checkins.checkins?.length ?? 0, color: 'blue', sub: 'Expected arrivals' },
+         { 
+  Icon: LogIn, 
+  label: "Today's Check-ins", 
+  value: kpi?.todaysCheckins ?? checkins.checkins?.filter(ci => ci.status === 'CONFIRMED').length ?? 0, 
+  color: 'blue', 
+  sub: 'Expected arrivals' 
+},
           { Icon: LogOut, label: "Today's Check-outs", value: kpi?.todaysCheckouts ?? checkins.checkouts?.length ?? 0, color: 'orange', sub: 'Expected departures' },
           { Icon: Clock, label: 'Pending Deposits', value: kpi?.pendingBookings ?? statusCounts.PENDING_DEPOSIT, color: 'red', sub: 'Awaiting payment' },
           { Icon: CreditCard, label: 'In-House Guests', value: inHouseCount, color: 'purple', sub: 'Currently checked in' },
@@ -478,7 +484,7 @@ export function AdminDashboard({ token, setPage }) {
             <div className="ad-metric-label">{m.label}</div>
             <div className="ad-metric-value">{m.value}</div>
             <div className="ad-metric-sub">{m.sub}</div>
-          </div>
+          </div>  
         ))}
       </div>
 
@@ -795,29 +801,37 @@ export function AdminDashboard({ token, setPage }) {
         {/* Right Column */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
 
-          {/* Today's Arrivals */}
-          <div className="ad-chart-panel">
-            <div className="ad-chart-hd">
-              <div>
-                <div className="ad-chart-title"><LogIn size={15} color="#3b82f6" />Today's Arrivals</div>
-                <div className="ad-chart-sub">{checkins.checkins?.length || 0} expected</div>
-              </div>
+         {/* Today's Arrivals */}
+<div className="ad-chart-panel">
+  <div className="ad-chart-hd">
+    <div>
+      <div className="ad-chart-title"><LogIn size={15} color="#3b82f6" />Today's Arrivals</div>
+      <div className="ad-chart-sub">
+        {checkins.checkins?.filter(ci => ci.status === 'CONFIRMED').length || 0} expected
+      </div>
+    </div>
+  </div>
+  <div style={{ padding: '0 1.25rem' }}>
+    {(checkins.checkins || []).filter(ci => ci.status === 'CONFIRMED').length === 0 ? (
+      <div style={{ textAlign: 'center', color: '#8a96a8', fontSize: '.78rem', padding: '1.25rem 0' }}>
+        No arrivals today
+      </div>
+    ) : (checkins.checkins || [])
+        .filter(ci => ci.status === 'CONFIRMED'  && ci.status !== 'CHECKED_IN')
+        .slice(0, 4)
+        .map((ci, i) => (
+          <div key={i} className="ad-feed-item">
+            <div className="ad-feed-ico check-in"><LogIn size={14} /></div>
+            <div>
+              <div className="ad-feed-name">{ci.user__username || ci.user__email}</div>
+              <div className="ad-feed-sub">Room {ci.room__room_number}</div>
             </div>
-            <div style={{ padding: '0 1.25rem' }}>
-              {(checkins.checkins || []).length === 0 ? (
-                <div style={{ textAlign: 'center', color: '#8a96a8', fontSize: '.78rem', padding: '1.25rem 0' }}>No arrivals today</div>
-              ) : (checkins.checkins || []).slice(0, 4).map((ci, i) => (
-                <div key={i} className="ad-feed-item">
-                  <div className="ad-feed-ico check-in"><LogIn size={14} /></div>
-                  <div>
-                    <div className="ad-feed-name">{ci.user__username || ci.user__email}</div>
-                    <div className="ad-feed-sub">Room {ci.room__room_number}</div>
-                  </div>
-                  <div style={{ marginLeft: 'auto' }}><Pill status={ci.status} /></div>
-                </div>
-              ))}
-            </div>
+            <div style={{ marginLeft: 'auto' }}><Pill status={ci.status} /></div>
           </div>
+        ))
+    }
+  </div>
+</div>
 
           {/* Quick Actions */}
           <div className="ad-chart-panel">

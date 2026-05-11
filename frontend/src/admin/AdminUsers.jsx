@@ -344,7 +344,7 @@ export function AdminUsers({ token }) {
       </div>
 
       {/* Stats Cards */}
-      <div className="ap-stats" style={{ gridTemplateColumns: 'repeat(9, 1fr)' }}>
+      <div className="ap-stats" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))' }}>
         {statsList.map((s, i) => (
           <div key={i} className={`ap-stat ${s.color}`}>
             <div className="ap-stat-icon">{s.icon}</div>

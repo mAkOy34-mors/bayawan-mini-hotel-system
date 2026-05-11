@@ -651,6 +651,47 @@ export function ReceptionistBookings({ token }) {
                   </div>
                 </div>
               )}
+{/* Cancellation Reason - handles both guest requests and receptionist cancellations */}
+{(selectedBooking.status === 'CANCELLATION_PENDING' || selectedBooking.status === 'CANCELLED') && 
+ (selectedBooking.cancellation_request?.reason || selectedBooking.cancellationReason || selectedBooking.cancellation_reason) && (
+  <div style={{ 
+    background: 'rgba(139,92,246,0.06)', 
+    border: '1px solid rgba(139,92,246,0.2)', 
+    borderRadius: 10, 
+    padding: '.85rem 1rem', 
+    marginBottom: '1rem' 
+  }}>
+    <div style={{ 
+      display: 'flex', alignItems: 'center', gap: '.4rem',
+      fontSize: '.65rem', textTransform: 'uppercase', letterSpacing: '.08em', 
+      color: '#8b5cf6', fontWeight: 700, marginBottom: '.4rem' 
+    }}>
+      <Bell size={12} />
+      {selectedBooking.cancellation_request?.reason ? 'Guest Cancellation Reason' : 'Cancellation Reason'}
+    </div>
+    <div style={{ fontSize: '.82rem', color: 'var(--text-sub)', lineHeight: 1.55 }}>
+      {selectedBooking.cancellation_request?.reason || selectedBooking.cancellationReason || selectedBooking.cancellation_reason}
+    </div>
+    <div style={{ 
+      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+      marginTop: '.5rem', paddingTop: '.4rem', borderTop: '1px solid rgba(139,92,246,0.15)'
+    }}>
+      <span style={{ fontSize: '.68rem', color: 'var(--text-muted)' }}>
+        {selectedBooking.cancellation_request?.reason 
+          ? '📋 Submitted by guest' 
+          : '🔧 Cancelled by receptionist'}
+      </span>
+      <span style={{
+        fontSize: '.65rem', fontWeight: 700, padding: '.15rem .55rem', borderRadius: 99,
+        background: selectedBooking.status === 'CANCELLATION_PENDING' 
+          ? 'rgba(139,92,246,0.12)' : 'rgba(220,53,69,0.1)',
+        color: selectedBooking.status === 'CANCELLATION_PENDING' ? '#8b5cf6' : '#dc2626'
+      }}>
+        {selectedBooking.status === 'CANCELLATION_PENDING' ? 'PENDING REVIEW' : 'CANCELLED'}
+      </span>
+    </div>
+  </div>
+)}
 
               {/* Booking Details Grid */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '.6rem', marginBottom: '.85rem' }}>

@@ -269,7 +269,7 @@ DEFAULT_FROM_EMAIL  = f'Cebu Mini Hotel <{EMAIL_HOST_USER}>'
 # ─── Google OAuth ─────────────────────────────────────────────────────────────
 GOOGLE_CLIENT_ID     = env("GOOGLE_CLIENT_ID")
 GOOGLE_CLIENT_SECRET = env("GOOGLE_CLIENT_SECRET")
-GOOGLE_REDIRECT_URI  = env("GOOGLE_REDIRECT_URI", default="http://localhost:8000/api/v1/auth/google/callback/")
+GOOGLE_REDIRECT_URI  = env("GOOGLE_REDIRECT_URI", default="https://cebu-mini-hotel-system.onrender.com/api/v1/auth/google/callback/")
 
 from corsheaders.defaults import default_headers
 

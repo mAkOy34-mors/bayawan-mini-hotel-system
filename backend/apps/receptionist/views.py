@@ -37,7 +37,7 @@ from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.bookings.models import Booking
+from apps.bookings.models import Booking, CancellationRequest
 from apps.guests.models import GuestInformation
 from apps.payments.models import Payment
 from apps.rooms.models import Room
@@ -1106,6 +1106,9 @@ class RecordCashPaymentView(APIView):
 
 def _booking_detail(booking):
     """Serialize a booking to a dict for receptionist views."""
+    cancel_req = CancellationRequest.objects.filter(
+        booking=booking
+    ).order_by('-created_at').first()
     try:
         profile = booking.guest_information
     except Exception:
@@ -1147,6 +1150,14 @@ def _booking_detail(booking):
             "idType":        profile.id_type,
             "idNumber":      profile.id_number,
         } if profile else None,
+        "cancellationReason": booking.cancellation_reason if hasattr(booking, 'cancellation_reason') else None,
+        "cancellationRequest": {
+            "id": cancel_req.id,
+            "reason": cancel_req.reason,
+            "status": cancel_req.status,
+            "adminNote": cancel_req.admin_note,
+            "createdAt": cancel_req.created_at.isoformat(),
+        } if cancel_req else None,
     }
 
 
@@ -1796,7 +1807,7 @@ class ReceptionistCancelBookingView(APIView):
         booking.cancelled_by = request.user  # ← THIS SAVES THE USER TO cancelled_by_id
         booking.cancelled_at = timezone.now()
         booking.save()
-
+        cache.delete(f"receptionist_booking_{booking.id}")
         return Response({
             "success": True,
             "message": f"Booking #{booking.booking_reference} has been cancelled successfully.",
