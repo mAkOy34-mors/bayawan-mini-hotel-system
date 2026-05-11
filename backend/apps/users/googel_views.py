@@ -16,7 +16,7 @@ from .google_auth import (
 
 logger = logging.getLogger(__name__)
 
-FRONTEND_URL = getattr(settings, "FRONTEND_URL", "http://localhost:5173")
+FRONTEND_URL = getattr(settings, "FRONTEND_URL", "https://cebu-mini-hotel-system.onrender.com")
 
 
 class GoogleLoginRedirectView(APIView):
