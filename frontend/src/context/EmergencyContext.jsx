@@ -1,12 +1,12 @@
-// src/context/EmergencyContext.jsx - Updated with loading state
+// src/context/EmergencyContext.jsx - Fixed version with proper realtime updates
 
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import { Modal } from 'react-bootstrap';
 import { API_BASE } from '../constants/config';
-import { 
-  Phone, CheckCircle2, Volume2, VolumeX, AlertTriangle, 
+import {
+  Phone, CheckCircle2, Volume2, VolumeX, AlertTriangle,
   Heart, Flame, Shield, Bell, X, PhoneCall, Headphones,
-  Activity, Zap, Music, CircleAlert, Loader2
+  Activity, Zap, Music, CircleAlert, Loader2, ClipboardCheck, Wrench
 } from 'lucide-react';
 
 const EmergencyContext = createContext();
@@ -17,7 +17,8 @@ let currentOscillator = null;
 let currentGain = null;
 let soundInterval = null;
 
-// Initialize audio context
+// ─── Audio helpers ────────────────────────────────────────────────────────────
+
 const initAudioContext = () => {
   if (!audioContext && window.AudioContext) {
     audioContext = new (window.AudioContext || window.webkitAudioContext)();
@@ -25,67 +26,42 @@ const initAudioContext = () => {
   return audioContext;
 };
 
-// Stop any playing sound
 const stopEmergencySound = () => {
-  if (soundInterval) {
-    clearInterval(soundInterval);
-    soundInterval = null;
-  }
+  if (soundInterval) { clearInterval(soundInterval); soundInterval = null; }
   if (currentOscillator) {
-    try {
-      currentOscillator.stop();
-    } catch (e) {}
+    try { currentOscillator.stop(); } catch (e) {}
     currentOscillator = null;
   }
-  if (currentGain) {
-    currentGain = null;
-  }
+  currentGain = null;
 };
 
-// Play emergency sound loop
 const playEmergencySoundLoop = async () => {
   if (!soundEnabled) return;
-  
   try {
     const context = initAudioContext();
     if (!context) return;
-    
-    if (context.state === 'suspended') {
-      await context.resume();
-    }
-    
+    if (context.state === 'suspended') await context.resume();
+
     stopEmergencySound();
-    
+
     const oscillator = context.createOscillator();
     const gainNode = context.createGain();
-    
     oscillator.connect(gainNode);
     gainNode.connect(context.destination);
-    
     oscillator.type = 'sine';
     oscillator.frequency.value = 880;
     gainNode.gain.value = 0.3;
-    
     oscillator.start();
     currentOscillator = oscillator;
     currentGain = gainNode;
-    
+
     let isHigh = true;
     soundInterval = setInterval(() => {
-      if (!soundEnabled) {
-        clearInterval(soundInterval);
-        soundInterval = null;
-        return;
-      }
-      
+      if (!soundEnabled) { clearInterval(soundInterval); soundInterval = null; return; }
       if (currentOscillator) {
-        try {
-          currentOscillator.frequency.value = isHigh ? 880 : 660;
-          isHigh = !isHigh;
-        } catch (e) {}
+        try { currentOscillator.frequency.value = isHigh ? 880 : 660; isHigh = !isHigh; } catch (e) {}
       }
     }, 400);
-    
   } catch (e) {
     console.log('Audio error:', e);
   }
@@ -101,15 +77,45 @@ const showBrowserNotification = (alert) => {
       silent: false,
       vibrate: [200, 100, 200, 100, 200],
     });
-    
-    notification.onclick = () => {
-      window.focus();
-      notification.close();
-    };
-    
+    notification.onclick = () => { window.focus(); notification.close(); };
     setTimeout(() => notification.close(), 30000);
   }
 };
+
+// ─── Status config ────────────────────────────────────────────────────────────
+
+const STATUS_CONFIG = {
+  ACTIVE: {
+    label: 'Active',
+    color: '#dc2626',
+    actionLabel: 'Accept',
+    actionIcon: <ClipboardCheck size={18} />,
+    actionColor: '#f59e0b',
+  },
+  ACCEPTED: {
+    label: 'Accepted',
+    color: '#f59e0b',
+    actionLabel: 'Mark In Progress',
+    actionIcon: <Wrench size={18} />,
+    actionColor: '#3b82f6',
+  },
+  IN_PROGRESS: {
+    label: 'In Progress',
+    color: '#3b82f6',
+    actionLabel: 'Resolve',
+    actionIcon: <CheckCircle2 size={18} />,
+    actionColor: '#2d9b6f',
+  },
+  RESOLVED: {
+    label: 'Resolved',
+    color: '#6b7280',
+    actionLabel: null,
+    actionIcon: null,
+    actionColor: null,
+  },
+};
+
+// ─── Provider ─────────────────────────────────────────────────────────────────
 
 export function EmergencyProvider({ children, token }) {
   const [activeEmergencies, setActiveEmergencies] = useState([]);
@@ -117,30 +123,36 @@ export function EmergencyProvider({ children, token }) {
   const [currentEmergency, setCurrentEmergency] = useState(null);
   const [soundOn, setSoundOn] = useState(false);
   const [wsConnected, setWsConnected] = useState(false);
-  const [isReady, setIsReady] = useState(false); // Add ready state
+  const [isReady, setIsReady] = useState(false);
+  const [advancing, setAdvancing] = useState(false);
   const wsRef = useRef(null);
   const reconnectTimeoutRef = useRef(null);
+  const modalClosedByUserRef = useRef(false);
 
-  // Request notification permission on mount
+  // ── FIX: Keep refs in sync so WebSocket handlers always read fresh state ──
+  // This prevents stale closure bugs where ws.onmessage captures old values.
+  const currentEmergencyRef = useRef(null);
+  const showEmergencyModalRef = useRef(false);
+  const activeEmergenciesRef = useRef([]);
+
+  useEffect(() => { currentEmergencyRef.current = currentEmergency; }, [currentEmergency]);
+  useEffect(() => { showEmergencyModalRef.current = showEmergencyModal; }, [showEmergencyModal]);
+  useEffect(() => { activeEmergenciesRef.current = activeEmergencies; }, [activeEmergencies]);
+
   useEffect(() => {
-    if (Notification.permission === 'default') {
-      Notification.requestPermission();
-    }
+    if (Notification.permission === 'default') Notification.requestPermission();
   }, []);
 
-  // Load active emergencies from API
+  // ── Load active emergencies ──────────────────────────────────────────────
   const loadActiveEmergencies = useCallback(async () => {
-    if (!token) {
-      setIsReady(true);
-      return;
-    }
+    if (!token) { setIsReady(true); return; }
     try {
       const response = await fetch(`${API_BASE}/emergency/all/`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      
       if (response.ok) {
         const data = await response.json();
+        // Include ACTIVE, ACCEPTED, and IN_PROGRESS — not just ACTIVE
         const emergencies = (data.activeEmergencies || []).map(e => ({
           id: e.id,
           emergencyType: e.emergencyType,
@@ -149,11 +161,11 @@ export function EmergencyProvider({ children, token }) {
           roomNumber: e.roomNumber || 'Not assigned',
           guestPhone: e.guestPhone,
           createdAt: e.createdAt,
-          status: 'ACTIVE'
+          status: e.status || 'ACTIVE',
         }));
         setActiveEmergencies(emergencies);
-        
-        if (emergencies.length > 0 && !showEmergencyModal) {
+
+        if (emergencies.length > 0 && !showEmergencyModalRef.current && !modalClosedByUserRef.current) {
           setCurrentEmergency(emergencies[0]);
           setShowEmergencyModal(true);
         }
@@ -163,28 +175,28 @@ export function EmergencyProvider({ children, token }) {
     } finally {
       setIsReady(true);
     }
-  }, [token, showEmergencyModal]);
+  }, [token]); // ← removed showEmergencyModal from deps; use ref instead
 
-  // Connect WebSocket
+  // ── WebSocket ────────────────────────────────────────────────────────────
   const connectWebSocket = useCallback(() => {
     if (!token) return;
     if (wsRef.current?.readyState === WebSocket.OPEN) return;
     if (wsRef.current?.readyState === WebSocket.CONNECTING) return;
 
-    const wsUrl = `ws://localhost:8000/ws/emergency/?token=${token}`;
-    
-    const ws = new WebSocket(wsUrl);
+    const ws = new WebSocket(`ws://localhost:8000/ws/emergency/?token=${token}`);
     wsRef.current = ws;
 
     ws.onopen = () => {
-      console.log('WebSocket connected for emergencies');
+      console.log('WebSocket connected');
       setWsConnected(true);
     };
 
     ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
-        
+        console.log('WebSocket message received:', data);
+
+        // ── New emergency ──────────────────────────────────────────────────
         if (data.type === 'NEW_EMERGENCY') {
           const newEmergency = {
             id: data.id,
@@ -194,24 +206,96 @@ export function EmergencyProvider({ children, token }) {
             roomNumber: data.roomNumber,
             guestPhone: data.guestPhone,
             createdAt: data.createdAt,
-            status: 'ACTIVE'
+            status: 'ACTIVE',
           };
-          
+
           setActiveEmergencies(prev => [newEmergency, ...prev]);
-          setCurrentEmergency(newEmergency);
-          setShowEmergencyModal(true);
-          
+
+          // Use ref so we read fresh modal state — not a stale closure value
+          if (!showEmergencyModalRef.current && !modalClosedByUserRef.current) {
+            setCurrentEmergency(newEmergency);
+            setShowEmergencyModal(true);
+          }
+
           showBrowserNotification(newEmergency);
+
+        // ── Status updated (broadcast from any client or REST endpoint) ───
+        // FIX: accept both casing variants so REST + WS paths both work
+        } else if (
+          data.type === 'EMERGENCY_STATUS_UPDATED' ||
+          data.type === 'emergency_status_updated' ||
+          data.type === 'EMERGENCY_BROADCAST'
+        ) {
+          // Normalise: REST sends emergency_id, WS broadcast also uses emergency_id
+          const emergencyId = data.emergency_id ?? data.emergencyId;
+          const newStatus   = data.status;
+
+          console.log(`Emergency ${emergencyId} status updated to ${newStatus}`);
+
+          setActiveEmergencies(prev => {
+            const updated = prev.map(e =>
+              e.id === emergencyId ? { ...e, status: newStatus } : e
+            );
+            // Remove from active list only when truly resolved
+            if (newStatus === 'RESOLVED') {
+              return updated.filter(e => e.id !== emergencyId);
+            }
+            return updated;
+          });
+
+          // Use ref to read current emergency without stale closure
+          const current = currentEmergencyRef.current;
+          if (current?.id === emergencyId) {
+            if (newStatus === 'RESOLVED') {
+              console.log('Current emergency resolved — closing modal on this page');
+              setShowEmergencyModal(false);
+              setCurrentEmergency(null);
+              stopEmergencySound();
+              modalClosedByUserRef.current = false;
+            } else {
+              // Real-time status pipeline update visible to everyone
+              setCurrentEmergency(prev => prev ? { ...prev, status: newStatus } : prev);
+            }
+          }
+
+        // ── Explicit resolved event (sent by legacy emergency_resolved handler) ──
+        // FIX: normalise emergency_id vs emergencyId field name
         } else if (data.type === 'EMERGENCY_RESOLVED') {
-          setActiveEmergencies(prev => prev.filter(e => e.id !== data.emergencyId));
-          
-          if (activeEmergencies.length <= 1) {
-            stopEmergencySound();
+          const emergencyId = data.emergency_id ?? data.emergencyId;
+          console.log(`Emergency ${emergencyId} resolved`);
+
+          setActiveEmergencies(prev => prev.filter(e => e.id !== emergencyId));
+
+          const current = currentEmergencyRef.current;
+          if (current?.id === emergencyId) {
             setShowEmergencyModal(false);
+            setCurrentEmergency(null);
+            stopEmergencySound();
+            modalClosedByUserRef.current = false;
+          }
+
+        // ── Active emergencies snapshot on connect ─────────────────────────
+        } else if (data.type === 'ACTIVE_EMERGENCIES') {
+          const emergencies = (data.emergencies || []).map(e => ({
+            id: e.id,
+            emergencyType: e.emergencyType,
+            emergencyTypeName: e.emergencyTypeName,
+            guestName: e.guestName,
+            roomNumber: e.roomNumber || 'Not assigned',
+            guestPhone: e.guestPhone || '',
+            createdAt: e.createdAt,
+            status: e.status || 'ACTIVE',
+          }));
+          setActiveEmergencies(emergencies);
+
+          if (emergencies.length > 0 && !showEmergencyModalRef.current && !modalClosedByUserRef.current) {
+            setCurrentEmergency(emergencies[0]);
+            setShowEmergencyModal(true);
           }
         }
+
       } catch (err) {
-        console.error('WebSocket error:', err);
+        console.error('WebSocket parse error:', err);
       }
     };
 
@@ -222,30 +306,68 @@ export function EmergencyProvider({ children, token }) {
       if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
       reconnectTimeoutRef.current = setTimeout(() => connectWebSocket(), 5000);
     };
-  }, [token, activeEmergencies.length]);
+  }, [token]); // ← removed showEmergencyModal from deps; use ref instead
 
-  // Enable sound (requires user interaction)
+  // ── Advance status ────────────────────────────────────────────────────────
+  const advanceEmergencyStatus = async (emergencyId) => {
+    setAdvancing(true);
+    try {
+      const response = await fetch(`${API_BASE}/emergency/${emergencyId}/advance/`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const newStatus = data.status || data.new_status;
+
+        console.log(`Successfully advanced emergency ${emergencyId} to ${newStatus}`);
+
+        // Optimistic local update — WebSocket broadcast will sync all other pages
+        if (newStatus === 'RESOLVED') {
+          setActiveEmergencies(prev => prev.filter(e => e.id !== emergencyId));
+          setShowEmergencyModal(false);
+          setCurrentEmergency(null);
+          stopEmergencySound();
+          modalClosedByUserRef.current = false;
+        } else {
+          setActiveEmergencies(prev =>
+            prev.map(e => e.id === emergencyId ? { ...e, status: newStatus } : e)
+          );
+          setCurrentEmergency(prev =>
+            prev?.id === emergencyId ? { ...prev, status: newStatus } : prev
+          );
+        }
+      } else {
+        const err = await response.json();
+        console.error('Failed to advance status:', err);
+        alert(err.error || 'Failed to update emergency status');
+      }
+    } catch (err) {
+      console.error('Failed to advance emergency status:', err);
+      alert('Network error. Please try again.');
+    } finally {
+      setAdvancing(false);
+    }
+  };
+
+  // ── Sound helpers ─────────────────────────────────────────────────────────
   const enableSound = async () => {
     try {
       const context = initAudioContext();
       if (context) {
-        if (context.state === 'suspended') {
-          await context.resume();
-        }
+        if (context.state === 'suspended') await context.resume();
         soundEnabled = true;
         setSoundOn(true);
-        
         playEmergencySoundLoop();
-        
         setTimeout(() => {
-          if (!showEmergencyModal) {
-            stopEmergencySound();
-          }
+          if (!showEmergencyModalRef.current) stopEmergencySound();
         }, 2000);
       }
-    } catch (e) {
-      console.error('Failed to enable sound:', e);
-    }
+    } catch (e) { console.error('Failed to enable sound:', e); }
   };
 
   const disableSound = () => {
@@ -254,28 +376,26 @@ export function EmergencyProvider({ children, token }) {
     stopEmergencySound();
   };
 
-  const resolveEmergency = async (emergencyId) => {
-    try {
-      const response = await fetch(`${API_BASE}/emergency/${emergencyId}/resolve/`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      });
-      if (response.ok) {
-        setActiveEmergencies(prev => prev.filter(e => e.id !== emergencyId));
-        setShowEmergencyModal(false);
-        stopEmergencySound();
-      }
-    } catch (err) {
-      console.error('Failed to resolve emergency:', err);
-    }
-  };
-
   const closeModal = () => {
+    modalClosedByUserRef.current = true;
     setShowEmergencyModal(false);
     stopEmergencySound();
+    // Allow the flag to reset after a short delay so new emergencies can still show
+    setTimeout(() => {
+      modalClosedByUserRef.current = false;
+    }, 500);
   };
 
-  // Load emergencies and connect WebSocket on mount
+  // ── Show next emergency when current is resolved ──────────────────────────
+  useEffect(() => {
+    if (!showEmergencyModal && activeEmergencies.length > 0 && !modalClosedByUserRef.current) {
+      console.log('Showing next emergency in queue');
+      setCurrentEmergency(activeEmergencies[0]);
+      setShowEmergencyModal(true);
+    }
+  }, [showEmergencyModal, activeEmergencies]);
+
+  // ── Mount / unmount ───────────────────────────────────────────────────────
   useEffect(() => {
     if (token) {
       loadActiveEmergencies();
@@ -283,7 +403,6 @@ export function EmergencyProvider({ children, token }) {
     } else {
       setIsReady(true);
     }
-    
     return () => {
       if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
       if (wsRef.current) wsRef.current.close();
@@ -291,6 +410,7 @@ export function EmergencyProvider({ children, token }) {
     };
   }, [token, loadActiveEmergencies, connectWebSocket]);
 
+  // ── Icon / colour helpers ─────────────────────────────────────────────────
   const getEmergencyIcon = (type) => {
     switch (type) {
       case 'medical': return <Heart size={20} />;
@@ -309,7 +429,6 @@ export function EmergencyProvider({ children, token }) {
     }
   };
 
-  // Always provide a context value, even when loading
   const contextValue = {
     activeEmergencies,
     soundOn,
@@ -319,11 +438,12 @@ export function EmergencyProvider({ children, token }) {
     isReady,
   };
 
+  const statusCfg = currentEmergency ? STATUS_CONFIG[currentEmergency.status] || STATUS_CONFIG.ACTIVE : null;
+
   return (
     <EmergencyContext.Provider value={contextValue}>
       {children}
-      
-      {/* Modal code remains the same */}
+
       <Modal show={showEmergencyModal} onHide={closeModal} centered className="emergency-global-modal">
         <style>{`
           .emergency-global-modal .modal-content {
@@ -332,23 +452,17 @@ export function EmergencyProvider({ children, token }) {
             box-shadow: 0 0 30px rgba(220, 38, 38, 0.5);
             animation: emergencyPulse 1s ease-in-out infinite;
           }
-          
           @keyframes emergencyPulse {
             0%, 100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.7); }
             50% { box-shadow: 0 0 0 15px rgba(220, 38, 38, 0); }
           }
-          
           .emergency-global-modal .modal-header {
             background: linear-gradient(135deg, #dc2626, #ef4444);
             color: white;
             border-bottom: none;
             padding: 1.25rem 1.5rem;
           }
-          
-          .emergency-global-modal .modal-header .btn-close {
-            filter: brightness(0) invert(1);
-          }
-          
+          .emergency-global-modal .modal-header .btn-close { filter: brightness(0) invert(1); }
           .emergency-global-modal .modal-title {
             font-family: 'Cormorant Garamond', serif;
             font-size: 1.4rem;
@@ -357,12 +471,8 @@ export function EmergencyProvider({ children, token }) {
             align-items: center;
             gap: 0.5rem;
           }
-          
-          .emergency-global-modal .modal-body {
-            padding: 1.5rem;
-            text-align: center;
-          }
-          
+          .emergency-global-modal .modal-body { padding: 1.5rem; text-align: center; }
+
           .emergency-details-card {
             background: #fff5f5;
             border-radius: 12px;
@@ -370,21 +480,8 @@ export function EmergencyProvider({ children, token }) {
             margin: 1rem 0;
             border: 1px solid #fee2e2;
           }
-          
-          .emergency-guest-name {
-            font-size: 1.2rem;
-            font-weight: 700;
-            color: #1a1f2e;
-            margin-bottom: 0.5rem;
-          }
-          
-          .emergency-room-number {
-            font-size: 1.8rem;
-            font-weight: 800;
-            color: #dc2626;
-            margin-bottom: 0.5rem;
-          }
-          
+          .emergency-guest-name { font-size: 1.2rem; font-weight: 700; color: #1a1f2e; margin-bottom: 0.5rem; }
+          .emergency-room-number { font-size: 1.8rem; font-weight: 800; color: #dc2626; margin-bottom: 0.5rem; }
           .emergency-type-badge {
             display: inline-flex;
             align-items: center;
@@ -395,14 +492,37 @@ export function EmergencyProvider({ children, token }) {
             font-weight: 700;
             margin-top: 0.5rem;
           }
-          
+
+          .status-pipeline {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 0.25rem;
+            margin: 0.75rem 0 0.25rem;
+            flex-wrap: wrap;
+          }
+          .pipeline-step {
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+            font-size: 0.7rem;
+            font-weight: 600;
+            padding: 0.2rem 0.6rem;
+            border-radius: 99px;
+            transition: all 0.3s;
+          }
+          .pipeline-step.done { background: #dcfce7; color: #16a34a; }
+          .pipeline-step.current { background: #fee2e2; color: #dc2626; font-weight: 800; }
+          .pipeline-step.future { background: #f3f4f6; color: #9ca3af; }
+          .pipeline-arrow { color: #d1d5db; font-size: 0.7rem; }
+
           .emergency-actions {
             display: flex;
             gap: 1rem;
             justify-content: center;
             margin-top: 1rem;
+            flex-wrap: wrap;
           }
-          
           .emergency-call-btn {
             background: #3b82f6;
             border: none;
@@ -416,14 +536,9 @@ export function EmergencyProvider({ children, token }) {
             gap: 0.5rem;
             transition: all 0.2s;
           }
-          
-          .emergency-call-btn:hover {
-            background: #2563eb;
-            transform: translateY(-2px);
-          }
-          
-          .emergency-resolve-btn {
-            background: #2d9b6f;
+          .emergency-call-btn:hover { background: #2563eb; transform: translateY(-2px); }
+
+          .emergency-advance-btn {
             border: none;
             border-radius: 10px;
             padding: 0.75rem 1.5rem;
@@ -434,13 +549,11 @@ export function EmergencyProvider({ children, token }) {
             align-items: center;
             gap: 0.5rem;
             transition: all 0.2s;
+            opacity: 1;
           }
-          
-          .emergency-resolve-btn:hover {
-            background: #238c63;
-            transform: translateY(-2px);
-          }
-          
+          .emergency-advance-btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none !important; }
+          .emergency-advance-btn:not(:disabled):hover { transform: translateY(-2px); filter: brightness(1.1); }
+
           .sound-control {
             margin-top: 1rem;
             padding-top: 0.75rem;
@@ -451,7 +564,6 @@ export function EmergencyProvider({ children, token }) {
             gap: 0.75rem;
             flex-wrap: wrap;
           }
-          
           .sound-toggle-btn {
             background: none;
             border: 1px solid #dc2626;
@@ -465,60 +577,90 @@ export function EmergencyProvider({ children, token }) {
             align-items: center;
             gap: 0.4rem;
           }
-          
-          .sound-toggle-btn:hover {
-            background: #fee2e2;
+          .sound-toggle-btn:hover { background: #fee2e2; }
+          .sound-status-text.active { color: #4ade80; }
+          .sound-status-text.inactive { color: #dc2626; }
+
+          @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
           }
-          
-          .sound-status-text.active {
-            color: #4ade80;
-          }
-          
-          .sound-status-text.inactive {
-            color: #dc2626;
+          .spin {
+            animation: spin 1s linear infinite;
           }
         `}</style>
-        
+
         <Modal.Header closeButton>
           <Modal.Title>
             <AlertTriangle size={28} style={{ color: 'white' }} />
             EMERGENCY ALERT!
           </Modal.Title>
         </Modal.Header>
-        
+
         <Modal.Body>
-          {currentEmergency && (
+          {currentEmergency && statusCfg && (
             <>
               <div className="emergency-details-card">
                 <div className="emergency-guest-name">{currentEmergency.guestName}</div>
                 <div className="emergency-room-number">Room {currentEmergency.roomNumber}</div>
-                <div className="emergency-type-badge" style={{ 
-                  background: `${getEmergencyColor(currentEmergency.emergencyType)}20`,
-                  color: getEmergencyColor(currentEmergency.emergencyType),
-                  border: `1px solid ${getEmergencyColor(currentEmergency.emergencyType)}40`
-                }}>
+                <div
+                  className="emergency-type-badge"
+                  style={{
+                    background: `${getEmergencyColor(currentEmergency.emergencyType)}20`,
+                    color: getEmergencyColor(currentEmergency.emergencyType),
+                    border: `1px solid ${getEmergencyColor(currentEmergency.emergencyType)}40`,
+                  }}
+                >
                   {getEmergencyIcon(currentEmergency.emergencyType)} {currentEmergency.emergencyTypeName}
                 </div>
                 <div style={{ marginTop: '0.5rem', fontSize: '0.8rem', color: '#8a96a8' }}>
                   Received at {new Date(currentEmergency.createdAt).toLocaleTimeString()}
                 </div>
+
+                <div className="status-pipeline">
+                  {['ACTIVE', 'ACCEPTED', 'IN_PROGRESS', 'RESOLVED'].map((step, idx, arr) => {
+                    const steps = ['ACTIVE', 'ACCEPTED', 'IN_PROGRESS', 'RESOLVED'];
+                    const currentIdx = steps.indexOf(currentEmergency.status);
+                    const stepIdx = steps.indexOf(step);
+                    const cls =
+                      stepIdx < currentIdx ? 'done' :
+                      stepIdx === currentIdx ? 'current' : 'future';
+                    return (
+                      <React.Fragment key={step}>
+                        <span className={`pipeline-step ${cls}`}>
+                          {cls === 'done' && '✓ '}
+                          {STATUS_CONFIG[step].label}
+                        </span>
+                        {idx < arr.length - 1 && <span className="pipeline-arrow">›</span>}
+                      </React.Fragment>
+                    );
+                  })}
+                </div>
               </div>
-              
+
               <div className="emergency-actions">
-                <button 
+                <button
                   className="emergency-call-btn"
                   onClick={() => window.location.href = `tel:${currentEmergency.guestPhone || '+63328888888'}`}
                 >
                   <Phone size={18} /> Call Room
                 </button>
-                <button 
-                  className="emergency-resolve-btn"
-                  onClick={() => resolveEmergency(currentEmergency.id)}
-                >
-                  <CheckCircle2 size={18} /> Resolve
-                </button>
+
+                {statusCfg.actionLabel && (
+                  <button
+                    className="emergency-advance-btn"
+                    style={{ background: statusCfg.actionColor }}
+                    disabled={advancing}
+                    onClick={() => advanceEmergencyStatus(currentEmergency.id)}
+                  >
+                    {advancing
+                      ? <><Loader2 size={18} className="spin" /> Processing…</>
+                      : <>{statusCfg.actionIcon} {statusCfg.actionLabel}</>
+                    }
+                  </button>
+                )}
               </div>
-              
+
               <div className="sound-control">
                 {soundOn ? (
                   <>
@@ -538,7 +680,7 @@ export function EmergencyProvider({ children, token }) {
                   </>
                 )}
               </div>
-              
+
               {!soundOn && (
                 <p style={{ fontSize: '0.7rem', color: '#8a96a8', marginTop: '0.75rem', textAlign: 'center' }}>
                   <CircleAlert size={12} style={{ display: 'inline', marginRight: '0.3rem' }} />
@@ -557,7 +699,6 @@ export const useEmergency = () => {
   const context = useContext(EmergencyContext);
   if (!context) {
     console.warn('useEmergency must be used within an EmergencyProvider');
-    // Return a default value instead of throwing error
     return {
       activeEmergencies: [],
       soundOn: false,

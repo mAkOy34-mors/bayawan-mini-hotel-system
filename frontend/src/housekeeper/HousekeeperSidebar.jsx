@@ -95,7 +95,7 @@ function SidebarContent({ page, setPage, user, onLogout }) {
       </nav>
 
       <div style={{ padding: '0.7rem 1rem', borderTop: '1px solid #e2e8f0', background: '#f8f9fb', fontSize: '0.62rem', color: '#cbd5e1', textAlign: 'center' }}>
-        © 2026 Bayawan Mini Hotel
+        © 2026 Cebu Mini Hotel
       </div>
     </>
   );

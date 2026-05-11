@@ -16,8 +16,8 @@ export function PublicFooter() {
         margin: '0 auto'
       }}>
         <div>
-          <h3 style={{ color: 'white', marginBottom: '15px', fontSize: '1.1rem' }}>Bayawan Mini Hotel</h3>
-          <p style={{ fontSize: '0.85rem', lineHeight: 1.6 }}>Experience luxury and comfort in the heart of Bayawan City. Your perfect getaway awaits.</p>
+          <h3 style={{ color: 'white', marginBottom: '15px', fontSize: '1.1rem' }}>Cebu Mini Hotel</h3>
+          <p style={{ fontSize: '0.85rem', lineHeight: 1.6 }}>Experience luxury and comfort in the heart of Cebu City. Your perfect getaway awaits.</p>
         </div>
         <div>
           <h4 style={{ color: 'white', marginBottom: '15px', fontSize: '0.9rem' }}>Quick Links</h4>
@@ -30,9 +30,9 @@ export function PublicFooter() {
         <div>
           <h4 style={{ color: 'white', marginBottom: '15px', fontSize: '0.9rem' }}>Contact</h4>
           <p style={{ fontSize: '0.85rem', lineHeight: 2 }}>
-            <MapPin size={14} style={{ display: 'inline', marginRight: '8px' }} /> Bayawan City, Negros Oriental<br />
+            <MapPin size={14} style={{ display: 'inline', marginRight: '8px' }} /> Cebu City, Cebu<br />
             <Phone size={14} style={{ display: 'inline', marginRight: '8px' }} /> +63 32 888 8888<br />
-            <Mail size={14} style={{ display: 'inline', marginRight: '8px' }} /> info@bayawanhotel.com
+            <Mail size={14} style={{ display: 'inline', marginRight: '8px' }} /> info@cebuminihotel.com
           </p>
         </div>
         <div>
@@ -45,7 +45,7 @@ export function PublicFooter() {
         </div>
       </div>
       <div style={{ textAlign: 'center', paddingTop: '30px', marginTop: '30px', borderTop: '1px solid #2d3748', fontSize: '0.75rem' }}>
-        &copy; 2026 Bayawan Mini Hotel. All rights reserved.
+        &copy; 2026 Cebu Mini Hotel. All rights reserved.
       </div>
     </footer>
   );

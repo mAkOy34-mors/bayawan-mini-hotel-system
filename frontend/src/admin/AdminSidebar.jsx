@@ -1,10 +1,12 @@
 // AdminSidebar.jsx
+import { useState, useEffect, useCallback } from 'react';
 import { Offcanvas } from 'react-bootstrap';
 import {
   LayoutDashboard, BedDouble, Hotel, Users, CreditCard,
   Star, MessageCircle, Settings, LogOut, RefreshCw, ShieldCheck,
-  AlertTriangle, FileText , Building2, BarChart3, Percent, ClipboardList,Package, Wrench// ← Added AlertTriangle and FileText
+  AlertTriangle, FileText, Building2, BarChart3, ClipboardList, Package, Wrench
 } from 'lucide-react';
+import { API_BASE } from '../constants/config';
 
 const css = `
   @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&display=swap');
@@ -29,7 +31,7 @@ const css = `
   .asb-ico{width:28px;height:28px;border-radius:7px;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:#f1f5f9;border:1px solid transparent;transition:background .16s}
   .asb-btn.on .asb-ico{background:rgba(201,168,76,0.15);border-color:rgba(201,168,76,0.2);color:#9a7a2e}
   .asb-btn:hover:not(.on) .asb-ico{background:#e2e8f0}
-  .asb-badge-count{margin-left:auto;min-width:18px;height:18px;border-radius:99px;background:rgba(220,53,69,0.12);color:#dc3545;font-size:.6rem;font-weight:700;display:flex;align-items:center;justify-content:center;padding:0 .35rem}
+  .asb-badge-count{margin-left:auto;min-width:18px;height:18px;border-radius:99px;font-size:.6rem;font-weight:800;display:inline-flex;align-items:center;justify-content:center;padding:0 .35rem;flex-shrink:0;animation:badge-pop .25s cubic-bezier(.34,1.56,.64,1)}
   .asb-out{width:100%;display:flex;align-items:center;gap:.65rem;padding:.54rem .75rem;border-radius:9px;margin-top:.4rem;border:1px solid rgba(220,53,69,0.18);background:rgba(220,53,69,0.06);color:#dc3545;font-family:'DM Sans',sans-serif;font-size:.84rem;font-weight:600;cursor:pointer;transition:all .18s;text-align:left}
   .asb-out:hover{background:rgba(220,53,69,0.12);border-color:rgba(220,53,69,0.32)}
   .asb-out-ico{width:28px;height:28px;border-radius:7px;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:rgba(220,53,69,0.08)}
@@ -37,54 +39,175 @@ const css = `
   .asb-oc .offcanvas-body{padding:0;overflow:hidden}
   .asb-oc.offcanvas{background:#fff!important}
   .asb-oc .offcanvas-header{padding:1rem 1.2rem;border-bottom:1px solid #e2e8f0}
+  @keyframes badge-pop{0%{transform:scale(0);opacity:0}100%{transform:scale(1);opacity:1}}
 `;
 
-// ✅ Updated NAV with Emergency section
+// ─────────────────────────────────────────────────────────────
+// Seen-ID tracking
+// Badge count = items in the API response whose IDs are NOT yet
+// in the "seen" set for that section. The set grows whenever
+// the admin actually visits that section page (call markSectionSeen).
+// ─────────────────────────────────────────────────────────────
+const STORE_KEY = 'admin_seen_ids_v1';
+
+function loadSeen() {
+  try { return JSON.parse(localStorage.getItem(STORE_KEY) || '{}'); } catch { return {}; }
+}
+function saveSeen(seen) {
+  try { localStorage.setItem(STORE_KEY, JSON.stringify(seen)); } catch {}
+}
+
+/**
+ * Call this inside each admin page component when it mounts / loads data.
+ * Pass the section key (matches NAV key) and the array of item IDs currently shown.
+ *
+ * Example (inside AdminChangeRequests.jsx):
+ *   useEffect(() => {
+ *     if (items.length) {
+ *       markSectionSeen('change-requests', items.map(i => i.id));
+ *       dispatchSeenUpdate();
+ *     }
+ *   }, [items]);
+ */
+export function markSectionSeen(section, ids = []) {
+  const seen = loadSeen();
+  seen[section] = [...new Set([...(seen[section] || []), ...ids.map(String)])];
+  saveSeen(seen);
+}
+
+/** Fire this after markSectionSeen so the sidebar re-counts immediately. */
+export function dispatchSeenUpdate() {
+  window.dispatchEvent(new Event('admin-seen-updated'));
+}
+
+function countUnseen(section, items = []) {
+  const seen = new Set(loadSeen()[section] || []);
+  return items.filter(item => {
+    const id = String(item.id ?? item.pk ?? item._id ?? '');
+    return id && !seen.has(id);
+  }).length;
+}
+
+// ─────────────────────────────────────────────────────────────
+// useAdminNotifCounts — exported so AdminApp/AdminShell can use
+// it to pass `counts` into <AdminSidebar counts={counts} />.
+// ─────────────────────────────────────────────────────────────
+const BASE = API_BASE;
+const hdr = (token) => ({
+  Authorization: `Bearer ${token}`,
+  'ngrok-skip-browser-warning': 'true',
+});
+
+export function useAdminNotifCounts(token) {
+  const [counts, setCounts] = useState({});
+
+  const refresh = useCallback(async () => {
+    if (!token) return;
+    const safe = async (fn) => { try { return await fn(); } catch { return null; } };
+    const toArr = (res) => {
+      if (!res) return [];
+      if (Array.isArray(res)) return res;
+      if (Array.isArray(res.results)) return res.results;
+      // Unwrap any first array-valued key
+      const first = Object.values(res).find(Array.isArray);
+      return first || [];
+    };
+
+    const [changeRes, ticketRes, feedbackRes, supplyRes, maintRes, emergencyRes] = await Promise.all([
+      safe(() => fetch(`${BASE}/bookings/change-requests/?status=PENDING`,      { headers: hdr(token) }).then(r => r.ok ? r.json() : null)),
+      safe(() => fetch(`${BASE}/support/all/?status=OPEN`,                       { headers: hdr(token) }).then(r => r.ok ? r.json() : null)),
+      safe(() => fetch(`${BASE}/feedback/?status=PENDING`,                       { headers: hdr(token) }).then(r => r.ok ? r.json() : null)),
+      safe(() => fetch(`${BASE}/admin/supply-requests/?status=PENDING`,          { headers: hdr(token) }).then(r => r.ok ? r.json() : null)),
+      safe(() => fetch(`${BASE}/admin/maintenance-requests/?status=PENDING`,     { headers: hdr(token) }).then(r => r.ok ? r.json() : null)),
+      safe(() => fetch(`${BASE}/receptionist/emergencies/?status=ACTIVE`,        { headers: hdr(token) }).then(r => r.ok ? r.json() : null)),
+    ]);
+
+    setCounts({
+      pendingChanges:     countUnseen('change-requests',      toArr(changeRes)),
+      pendingTickets:     countUnseen('support',              toArr(ticketRes)),
+      pendingFeedback:    countUnseen('feedback',             toArr(feedbackRes)),
+      pendingSupply:      countUnseen('supply-requests',      toArr(supplyRes)),
+      pendingMaintenance: countUnseen('maintenance-requests', toArr(maintRes)),
+      activeEmergencies:  countUnseen('emergency',            toArr(emergencyRes)),
+    });
+  }, [token]);
+
+  useEffect(() => {
+    refresh();
+    const interval = setInterval(refresh, 60_000); // poll every minute
+    return () => clearInterval(interval);
+  }, [refresh]);
+
+  // Re-count instantly whenever markSectionSeen + dispatchSeenUpdate is called
+  useEffect(() => {
+    window.addEventListener('admin-seen-updated', refresh);
+    return () => window.removeEventListener('admin-seen-updated', refresh);
+  }, [refresh]);
+
+  return { counts, refresh };
+}
+
+// ─────────────────────────────────────────────────────────────
+// Badge colours per badge key
+// ─────────────────────────────────────────────────────────────
+const BADGE_COLORS = {
+  pendingChanges:     { bg: 'rgba(245,158,11,0.14)', color: '#b45309' },
+  pendingTickets:     { bg: 'rgba(220,53,69,0.12)',  color: '#dc3545' },
+  pendingFeedback:    { bg: 'rgba(59,130,246,0.12)', color: '#2563eb' },
+  pendingSupply:      { bg: 'rgba(245,158,11,0.14)', color: '#b45309' },
+  pendingMaintenance: { bg: 'rgba(220,53,69,0.12)',  color: '#dc3545' },
+  activeEmergencies:  { bg: 'rgba(220,53,69,0.15)',  color: '#dc2626' },
+};
+
+function NavBadge({ count, badgeKey }) {
+  if (!count || count <= 0) return null;
+  const { bg, color } = BADGE_COLORS[badgeKey] || { bg: 'rgba(220,53,69,0.12)', color: '#dc3545' };
+  return (
+    <span className="asb-badge-count" style={{ background: bg, color }}>
+      {count > 99 ? '99+' : count}
+    </span>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// NAV definition
+// ─────────────────────────────────────────────────────────────
 const NAV = [
-  // Management Section
-  { key: 'dashboard', label: 'Dashboard', Icon: LayoutDashboard, section: 'MANAGEMENT' },
-  { key: 'task-monitor', label: 'Task Monitor', Icon: ClipboardList },
-  
-  // Requests Section
-  { key: 'supply-requests', label: 'Supply Requests', Icon: Package, section: 'REQUESTS' },
-  { key: 'maintenance-requests', label: 'Maintenance Requests', Icon: Wrench},
-  
-  // User Management Section
-  { key: 'users', label: 'Users', Icon: Users, section: 'USER MANAGEMENT' },
-  { key: 'guests', label: 'Guests', Icon: Users},
-  
-  // Booking Section
-  { key: 'bookings', label: 'Bookings', Icon: BedDouble, section: 'BOOKINGS' },
-  { key: 'change-requests', label: 'Change Requests', Icon: RefreshCw, badge: 'pendingChanges'},
-  { key: 'rooms', label: 'Rooms', Icon: Hotel},
-  { key: 'payments', label: 'Payments', Icon: CreditCard},
-  
-  // Operations Section
-  { key: 'feedback', label: 'Guest Feedback', Icon: MessageCircle, badge: 'pendingFeedback', section: 'OPERATIONS' },
-  { key: 'rewards', label: 'Rewards', Icon: Star},
-  { key: 'support', label: 'Support', Icon: MessageCircle, badge: 'pendingTickets'},
-  
-  // Partners Section
-  { key: 'partner-management', label: 'Partner Management', Icon: Building2, section: 'PARTNERS' },
-  { key: 'commission-dashboard', label: 'Commission Analytics', Icon: BarChart3},
-  
-  // Emergency Section
-  { key: 'emergency', label: 'Live Alerts', Icon: AlertTriangle, section: 'EMERGENCY' },
-  { key: 'emergency-log', label: 'Emergency Log', Icon: FileText},
-  
-  // Settings Section
-  { key: 'settings', label: 'Settings', Icon: Settings, section: 'SYSTEM' },
+  { key: 'dashboard',            label: 'Dashboard',            Icon: LayoutDashboard, section: 'MANAGEMENT' },
+  { key: 'task-monitor',         label: 'Task Monitor',         Icon: ClipboardList },
+
+  { key: 'supply-requests',      label: 'Supply Requests',      Icon: Package,      section: 'REQUESTS', badge: 'pendingSupply' },
+  { key: 'maintenance-requests', label: 'Maintenance Requests', Icon: Wrench,        badge: 'pendingMaintenance' },
+
+  { key: 'users',                label: 'Users',                Icon: Users,         section: 'USER MANAGEMENT' },
+  { key: 'guests',               label: 'Guests',               Icon: Users },
+
+  { key: 'bookings',             label: 'Bookings',             Icon: BedDouble,     section: 'BOOKINGS' },
+  { key: 'change-requests',      label: 'Change Requests',      Icon: RefreshCw,     badge: 'pendingChanges' },
+  { key: 'rooms',                label: 'Rooms',                Icon: Hotel },
+  { key: 'payments',             label: 'Payments',             Icon: CreditCard },
+
+  { key: 'feedback',             label: 'Guest Feedback',       Icon: MessageCircle, section: 'OPERATIONS', badge: 'pendingFeedback' },
+  { key: 'rewards',              label: 'Rewards',              Icon: Star },
+
+  { key: 'partner-management',   label: 'Partner Management',   Icon: Building2,     section: 'PARTNERS' },
+  { key: 'commission-dashboard', label: 'Commission Analytics', Icon: BarChart3 },
+
+  { key: 'emergency',            label: 'Live Alerts',          Icon: AlertTriangle, section: 'EMERGENCY', badge: 'activeEmergencies' },
+  { key: 'emergency-log',        label: 'Emergency Log',        Icon: FileText },
+
+  { key: 'settings',             label: 'Settings',             Icon: Settings,      section: 'SYSTEM' },
 ];
-function ini(u) { 
-  const n = u?.username || u?.email || 'A'; 
-  return n.slice(0, 2).toUpperCase(); 
+
+function ini(u) {
+  const n = u?.username || u?.email || 'A';
+  return n.slice(0, 2).toUpperCase();
+}
+function uname(u) {
+  return u?.username || u?.email?.split('@')[0] || 'Admin';
 }
 
-function uname(u) { 
-  return u?.username || u?.email?.split('@')[0] || 'Admin'; 
-}
-
-function Inner({ page, setPage, user, onLogout, counts }) {
+function Inner({ page, setPage, user, onLogout, counts = {} }) {
   return (
     <>
       <style>{css}</style>
@@ -108,11 +231,15 @@ function Inner({ page, setPage, user, onLogout, counts }) {
       <nav className="asb-nav">
         {NAV.map(({ key, label, Icon, section, badge }) => (
           <div key={key}>
-            {section && <div className="asb-sec" style={key !== 'dashboard' ? { marginTop: '.65rem' } : {}}>{section}</div>}
+            {section && (
+              <div className="asb-sec" style={key !== 'dashboard' ? { marginTop: '.65rem' } : {}}>
+                {section}
+              </div>
+            )}
             <button className={`asb-btn${page === key ? ' on' : ''}`} onClick={() => setPage(key)}>
               <span className="asb-ico"><Icon size={14}/></span>
               {label}
-              {badge && counts?.[badge] > 0 && <span className="asb-badge-count">{counts[badge]}</span>}
+              {badge && <NavBadge count={counts[badge]} badgeKey={badge} />}
             </button>
           </div>
         ))}
@@ -126,11 +253,7 @@ function Inner({ page, setPage, user, onLogout, counts }) {
 }
 
 export function AdminSidebar({ page, setPage, user, onLogout, open, onClose, counts }) {
-  const nav = (k) => { 
-    setPage(k); 
-    onClose?.(); 
-  };
-  
+  const nav = (k) => { setPage(k); onClose?.(); };
   return (
     <>
       <aside className="asb d-none d-md-flex flex-column">

@@ -159,7 +159,7 @@ const Homepage = ({ onLoginClick, onRegisterClick }) => {
       } else {
         setTestimonials([
           { id: 1, guest_name: 'Maria Santos', rating: 5, message: 'Absolutely wonderful stay! The staff was incredibly warm and the room was spotless.' },
-          { id: 2, guest_name: 'John Reyes', rating: 5, message: 'Best hotel in Bayawan City by far. The breakfast was amazing!' },
+          { id: 2, guest_name: 'John Reyes', rating: 5, message: 'Best hotel in Cebu City by far. The breakfast was amazing!' },
           { id: 3, guest_name: 'Ana Villanueva', rating: 5, message: 'Perfect getaway. Everything was top-notch. Highly recommended!' },
         ]);
       }
@@ -482,13 +482,13 @@ const Homepage = ({ onLoginClick, onRegisterClick }) => {
         >
           <div style={{ maxWidth: 800, padding: '0 24px' }}>
             <div className="hero-badge" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: 'rgba(201,168,76,0.2)', border: '1px solid rgba(201,168,76,0.5)', backdropFilter: 'blur(10px)', borderRadius: 50, padding: '8px 20px', fontSize: '0.75rem', fontWeight: 600, letterSpacing: '1.5px', textTransform: 'uppercase', marginBottom: 28, color: '#f0d98a' }}>
-              <Star size={12} fill="#f0d98a" color="#f0d98a" /> Bayawan City, Negros Oriental
+              <Star size={12} fill="#f0d98a" color="#f0d98a" />Province of cebu
             </div>
             <h1 className="hero-title hero-title-text" style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 'clamp(2.8rem, 7vw, 4.6rem)', fontWeight: 700, lineHeight: 1.1, marginBottom: 22, letterSpacing: '-0.5px' }}>
               Where Every Stay Becomes&nbsp;<em style={{ fontStyle: 'italic', color: '#f0d98a' }}>a Memory</em>
             </h1>
             <p className="hero-sub" style={{ fontSize: 'clamp(1rem, 2.5vw, 1.15rem)', lineHeight: 1.7, opacity: 0.88, marginBottom: 36 }}>
-              Experience luxury, warmth, and Filipino hospitality at Bayawan Mini Hotel — your perfect sanctuary in the heart of the city.
+              Experience luxury, warmth, and Filipino hospitality at Cebu Mini Hotel — your perfect sanctuary in the heart of the city.
             </p>
             <div className="hero-cta" style={{ display: 'flex', gap: 14, justifyContent: 'center', flexWrap: 'wrap' }}>
               <button className="btn-gold" onClick={() => document.getElementById('search')?.scrollIntoView({ behavior: 'smooth' })}>
@@ -662,7 +662,7 @@ const Homepage = ({ onLoginClick, onRegisterClick }) => {
           <div style={{ textAlign: 'center', marginBottom: 52 }}>
             <div className="ornament"><CheckCircle size={14} color="#C9A84C" /></div>
             <h2 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 'clamp(2rem, 5vw, 2.6rem)', fontWeight: 600 }}>Why Choose Us?</h2>
-            <p style={{ color: '#8a96a8', marginTop: 10, fontSize: '0.95rem', maxWidth: 500, margin: '10px auto 0' }}>What sets Bayawan Mini Hotel apart from the rest.</p>
+            <p style={{ color: '#8a96a8', marginTop: 10, fontSize: '0.95rem', maxWidth: 500, margin: '10px auto 0' }}>What sets Cebu Mini Hotel apart from the rest.</p>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16 }}>
             {WHY_US.map((item, i) => (
@@ -714,8 +714,8 @@ const Homepage = ({ onLoginClick, onRegisterClick }) => {
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 24 }}>
             {[
-              { icon: <MapPin size={22} color="#C9A84C" />, title: 'Our Location', lines: ['Bayawan City, Negros Oriental', 'Philippines 6221'] },
-              { icon: <Phone size={22} color="#C9A84C" />, title: 'Call Us', lines: ['+63 32 888 8888', 'info@bayawanhotel.com'] },
+              { icon: <MapPin size={22} color="#C9A84C" />, title: 'Our Location', lines: ['Cebu City, Negros Occidental', 'Philippines 6221'] },
+              { icon: <Phone size={22} color="#C9A84C" />, title: 'Call Us', lines: ['+63 32 888 8888', 'info@cebuhotel.com'] },
               { icon: <Clock size={22} color="#C9A84C" />, title: 'Hours', lines: ['Check-in: 2:00 PM', 'Check-out: 12:00 PM', 'Front Desk: 24/7'] },
             ].map((card, i) => (
               <div key={i} style={{ background: '#faf8f4', border: '1px solid #ede9df', borderRadius: 18, padding: '32px 28px', display: 'flex', flexDirection: 'column', gap: 12, transition: 'box-shadow 0.3s' }} onMouseEnter={e => (e.currentTarget.style.boxShadow = '0 10px 28px rgba(0,0,0,0.08)')} onMouseLeave={e => (e.currentTarget.style.boxShadow = 'none')}>

@@ -99,6 +99,34 @@ const LAYOUT_CSS = `
   .rc-oc .offcanvas-body{padding:0;overflow:hidden}
   .rc-oc.offcanvas{background:#fff!important}
   .rc-oc .offcanvas-header{padding:1rem 1.1rem;border-bottom:1px solid #e2e8f0}
+
+  /* Notification badges */
+  .rc-badge{
+    margin-left:auto;min-width:18px;height:18px;border-radius:99px;
+    background:linear-gradient(135deg,#ef4444,#f87171);
+    color:#fff;font-size:.58rem;font-weight:800;
+    display:inline-flex;align-items:center;justify-content:center;
+    padding:0 .35rem;line-height:1;flex-shrink:0;
+    box-shadow:0 1px 4px rgba(239,68,68,0.4);
+    animation:badge-pop .25s cubic-bezier(.34,1.56,.64,1);
+    letter-spacing:0;
+  }
+  .rc-badge-gold{
+    background:linear-gradient(135deg,#b45309,#d97706);
+    box-shadow:0 1px 4px rgba(217,119,6,0.4);
+  }
+  .rc-badge-blue{
+    background:linear-gradient(135deg,#1d4ed8,#3b82f6);
+    box-shadow:0 1px 4px rgba(59,130,246,0.4);
+  }
+  .rc-badge-orange{
+    background:linear-gradient(135deg,#c2410c,#ea580c);
+    box-shadow:0 1px 4px rgba(234,88,12,0.4);
+  }
+  @keyframes badge-pop{
+    0%{transform:scale(0);opacity:0}
+    100%{transform:scale(1);opacity:1}
+  }
 `;
 
 const NAV = [
@@ -153,7 +181,78 @@ function Clock() {
   return <span className="rc-topbar-time">{time.toLocaleTimeString('en-PH', { hour:'2-digit', minute:'2-digit', second:'2-digit' })} · {time.toLocaleDateString('en-PH', { weekday:'short', month:'short', day:'numeric' })}</span>;
 }
 
-function SidebarInner({ page, setPage, user, onLogout }) {
+// Fetch notification counts for sidebar badges
+function useNotifCounts(token) {
+  const [counts, setCounts] = useState({});
+
+  const refresh = async () => {
+    if (!token) return;
+    const hdr = { Authorization: `Bearer ${token}`, 'ngrok-skip-browser-warning': 'true' };
+    const today = new Date().toISOString().slice(0, 10);
+
+    const safe = async (fn) => { try { return await fn(); } catch { return null; } };
+
+    const [arrivalsRes, departuresRes, changeRes, tasksRes, roomIssuesRes, servicesRes, emergencyRes] = await Promise.all([
+      safe(() => fetch(`${BASE}/receptionist/arrivals/?date=${today}`, { headers: hdr }).then(r => r.json())),
+      safe(() => fetch(`${BASE}/receptionist/departures/?date=${today}`, { headers: hdr }).then(r => r.json())),
+      safe(() => fetch(`${BASE}/receptionist/change-requests/?status=PENDING`, { headers: hdr }).then(r => r.json())),
+      safe(() => fetch(`${BASE}/receptionist/tasks/?status=PENDING`, { headers: hdr }).then(r => r.json())),
+      safe(() => fetch(`${BASE}/receptionist/room-issues/?status=OPEN`, { headers: hdr }).then(r => r.json())),
+      safe(() => fetch(`${BASE}/receptionist/services/?status=PENDING`, { headers: hdr }).then(r => r.json())),
+      safe(() => fetch(`${BASE}/receptionist/emergencies/?status=ACTIVE`, { headers: hdr }).then(r => r.json())),
+    ]);
+
+    const count = (res, key) => {
+      if (!res) return 0;
+      if (Array.isArray(res)) return res.length;
+      if (key && Array.isArray(res[key])) return res[key].length;
+      if (res.count != null) return res.count;
+      if (Array.isArray(res.results)) return res.results.length;
+      return 0;
+    };
+
+    setCounts({
+      arrivals:         count(arrivalsRes, 'arrivals'),
+      departures:       count(departuresRes, 'departures'),
+      'change-requests': count(changeRes),
+      tasks:            count(tasksRes),
+      'room-issues':    count(roomIssuesRes),
+      services:         count(servicesRes),
+      emergency:        count(emergencyRes),
+    });
+  };
+
+  useEffect(() => {
+    refresh();
+    const interval = setInterval(refresh, 60_000); // refresh every minute
+    return () => clearInterval(interval);
+  }, [token]);
+
+  return counts;
+}
+
+// Badge color per nav key
+const BADGE_COLOR = {
+  arrivals:          'rc-badge-blue',
+  departures:        'rc-badge-orange',
+  emergency:         '', // red (default)
+  'change-requests': 'rc-badge-gold',
+  tasks:             'rc-badge-gold',
+  'room-issues':     '',
+  services:          'rc-badge-gold',
+};
+
+function NavBadge({ count, navKey }) {
+  if (!count || count <= 0) return null;
+  const color = BADGE_COLOR[navKey] ?? '';
+  return (
+    <span className={`rc-badge ${color}`}>
+      {count > 99 ? '99+' : count}
+    </span>
+  );
+}
+
+function SidebarInner({ page, setPage, user, onLogout, counts = {} }) {
   return <>
     <div className="rc-sb-logo">
       <div className="rc-sb-logo-row">
@@ -176,6 +275,7 @@ function SidebarInner({ page, setPage, user, onLogout }) {
           <button className={`rc-sb-btn${page===key?' on':''}`} onClick={() => setPage(key)}>
             <span className="rc-sb-ico"><Icon size={14}/></span>
             {label}
+            <NavBadge count={counts[key]} navKey={key} />
           </button>
         </div>
       ))}
@@ -243,6 +343,7 @@ function ReceptionistLogin({ onLogin }) {
 function ReceptionistShell({ user, token, onLogout }) {
   const [page,     setPage]     = useState('dashboard');
   const [menuOpen, setMenuOpen] = useState(false);
+  const counts = useNotifCounts(token);
 
   const nav = (k) => { setPage(k); setMenuOpen(false); };
 
@@ -272,7 +373,7 @@ function ReceptionistShell({ user, token, onLogout }) {
     <div className="rc-shell">
       {/* Desktop sidebar */}
       <aside className="rc-sb d-none d-md-flex flex-column">
-        <SidebarInner page={page} setPage={nav} user={user} onLogout={onLogout}/>
+        <SidebarInner page={page} setPage={nav} user={user} onLogout={onLogout} counts={counts}/>
       </aside>
 
       {/* Mobile offcanvas */}
@@ -286,7 +387,7 @@ function ReceptionistShell({ user, token, onLogout }) {
           </div>
         </Offcanvas.Header>
         <Offcanvas.Body>
-          <SidebarInner page={page} setPage={nav} user={user} onLogout={onLogout}/>
+          <SidebarInner page={page} setPage={nav} user={user} onLogout={onLogout} counts={counts}/>
         </Offcanvas.Body>
       </Offcanvas>
 

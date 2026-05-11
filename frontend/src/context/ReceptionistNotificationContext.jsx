@@ -6,8 +6,6 @@ import {
   Flame, Heart, Shield, Clock, CheckCircle, Loader2
 } from 'lucide-react';
 import { API_BASE } from '../constants/config';
-import { useTranslation } from 'react-i18next'
-import i18next from 'i18next'
 
 const ReceptionistNotificationContext = createContext(null);
 
@@ -16,70 +14,70 @@ const POLL_INTERVAL = 30000; // 30 seconds
 // Define notification types with Lucide icons
 export const NOTIF_TYPES = {
   urgent_emergency: { 
-    label: i18next.t('urgentEmergency', 'URGENT EMERGENCY'), 
+    label: 'URGENT EMERGENCY', 
     colour: '#dc2626', 
     priority: 1, 
     Icon: AlertTriangle,
     bg: 'rgba(220,38,38,0.15)'
   },
   active_emergency: { 
-    label: i18next.t('activeEmergency', 'Active Emergency'), 
+    label: 'Active Emergency', 
     colour: '#ef4444', 
     priority: 2, 
     Icon: Bell,
     bg: 'rgba(239,68,68,0.1)'
   },
   cancellation_request: { 
-    label: i18next.t('cancellationRequest2', 'Cancellation Request'), 
+    label: 'Cancellation Request', 
     colour: '#ef4444', 
     priority: 3, 
     Icon: X,
     bg: 'rgba(239,68,68,0.1)'
   },
   change_request: { 
-    label: i18next.t('changeRequest', 'Change Request'), 
+    label: 'Change Request', 
     colour: '#8b5cf6', 
     priority: 4, 
     Icon: ArrowRightLeft,
     bg: 'rgba(139,92,246,0.1)'
   },
   pending_arrival: { 
-    label: i18next.t('pendingArrival', 'Pending Arrival'), 
+    label: 'Pending Arrival', 
     colour: '#3b82f6', 
     priority: 5, 
     Icon: CalendarCheck,
     bg: 'rgba(59,130,246,0.1)'
   },
   service_request: { 
-    label: i18next.t('serviceRequest', 'Service Request'), 
+    label: 'Service Request', 
     colour: '#f59e0b', 
     priority: 6, 
     Icon: Wrench,
     bg: 'rgba(245,158,11,0.1)'
   },
   room_issue: { 
-    label: i18next.t('roomIssue', 'Room Issue'), 
+    label: 'Room Issue', 
     colour: '#ef4444', 
     priority: 7, 
     Icon: Hammer,
     bg: 'rgba(239,68,68,0.1)'
   },
   guest_complaint: { 
-    label: i18next.t('guestComplaint', 'Guest Complaint'), 
+    label: 'Guest Complaint', 
     colour: '#f97316', 
     priority: 8, 
     Icon: MessageSquare,
     bg: 'rgba(249,115,22,0.1)'
   },
   dirty_room: { 
-    label: i18next.t('roomNeedsCleaning', 'Room Needs Cleaning'), 
+    label: 'Room Needs Cleaning', 
     colour: '#f59e0b', 
     priority: 9, 
     Icon: BedDouble,
     bg: 'rgba(245,158,11,0.1)'
   },
   pending_task: { 
-    label: i18next.t('pendingStaffTask', 'Pending Staff Task'), 
+    label: 'Pending Staff Task', 
     colour: '#3b82f6', 
     priority: 10, 
     Icon: ClipboardList,
@@ -94,13 +92,13 @@ function formatTimeAgo(dateString) {
   const now = new Date();
   const seconds = Math.floor((now - date) / 1000);
   
-  if (seconds < 60) return i18next.t('secondsSecAgo', '{{seconds}} sec ago', { seconds });
+  if (seconds < 60) return `${seconds} sec ago`;
   const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return i18next.t('minutesMinAgo', '{{minutes}} min ago', { minutes });
+  if (minutes < 60) return `${minutes} min ago`;
   const hours = Math.floor(minutes / 60);
-  if (hours < 24) return i18next.t('hoursHourvalAgo', '{{hours}} hour{{val}} ago', { hours, val: hours !== 1 ? 's' : '' });
+  if (hours < 24) return `${hours} hour${hours !== 1 ? 's' : ''} ago`;
   const days = Math.floor(hours / 24);
-  return i18next.t('daysDayvalAgo', '{{days}} day{{val}} ago', { days, val: days !== 1 ? 's' : '' });
+  return `${days} day${days !== 1 ? 's' : ''} ago`;
 }
 
 // Derive notifications from API data
@@ -119,8 +117,8 @@ function deriveReceptionistNotifs(data) {
       notifs.push({
         id: `emergency-${emergency.id}`,
         type: isUrgent ? 'urgent_emergency' : 'active_emergency',
-        title: isUrgent ? 'URGENT EMERGENCY' : i18next.t('activeEmergency', 'Active Emergency'),
-        message: i18next.t('valInRoomVal2', '{{val}} in Room {{val2}}', { val: emergency.emergencyTypeName || emergency.emergencyType?.toUpperCase() || 'Emergency', val2: emergency.roomNumber || 'Unknown' }),
+        title: isUrgent ? 'URGENT EMERGENCY' : 'Active Emergency',
+        message: `${emergency.emergencyTypeName || emergency.emergencyType?.toUpperCase() || 'Emergency'} in Room ${emergency.roomNumber || 'Unknown'}`,
         guestName: emergency.guestName || 'Guest',
         roomNumber: emergency.roomNumber,
         time: emergency.createdAt || now,
@@ -135,10 +133,10 @@ function deriveReceptionistNotifs(data) {
   const cancelRequests = data.cancellationRequests || [];
   cancelRequests.forEach(req => {
     notifs.push({
-      id: i18next.t('cancelid', 'cancel-{{id}}', { id: req.id }),
+      id: `cancel-${req.id}`,
       type: 'cancellation_request',
-      title: i18next.t('cancellationRequest2', 'Cancellation Request'),
-      message: i18next.t('bookingBooking_reference', 'Booking {{booking_reference}}', { booking_reference: req.booking_reference }),
+      title: 'Cancellation Request',
+      message: `Booking ${req.booking_reference}`,
       guestName: req.guest_name,
       roomNumber: req.room_number,
       time: req.created_at || now,
@@ -154,8 +152,8 @@ function deriveReceptionistNotifs(data) {
     notifs.push({
       id: `change-${req.id}`,
       type: 'change_request',
-      title: i18next.t('changeRequest', 'Change Request'),
-      message: i18next.t('bookingBookingreference', 'Booking {{bookingReference}}', { bookingReference: req.bookingReference }),
+      title: 'Change Request',
+      message: `Booking ${req.bookingReference}`,
       guestName: req.guestName,
       roomNumber: req.roomNumber,
       time: req.createdAt || req.created_at || now,
@@ -169,10 +167,10 @@ function deriveReceptionistNotifs(data) {
   const arrivals = data.arrivals || [];
   arrivals.forEach(arrival => {
     notifs.push({
-      id: i18next.t('arrivalid', 'arrival-{{id}}', { id: arrival.id }),
+      id: `arrival-${arrival.id}`,
       type: 'pending_arrival',
-      title: i18next.t('arrivalToday', 'Arrival Today'),
-      message: i18next.t('roomtypeRoomnumber', '{{roomType}} #{{roomNumber}}', { roomType: arrival.roomType, roomNumber: arrival.roomNumber }),
+      title: 'Arrival Today',
+      message: `${arrival.roomType} #${arrival.roomNumber}`,
       guestName: arrival.guestUsername || arrival.guestEmail,
       roomNumber: arrival.roomNumber,
       time: arrival.checkInDate || now,
@@ -189,8 +187,8 @@ function deriveReceptionistNotifs(data) {
     notifs.push({
       id: `service-${service.id}`,
       type: 'service_request',
-      title: i18next.t('servicetypeRequest', '{{serviceType}} Request', { serviceType }),
-      message: i18next.t('roomRoom_number', 'Room {{room_number}}', { room_number: service.room_number }),
+      title: `${serviceType} Request`,
+      message: `Room ${service.room_number}`,
       guestName: service.guest_name,
       roomNumber: service.room_number,
       time: service.created_at || now,
@@ -206,7 +204,7 @@ function deriveReceptionistNotifs(data) {
     notifs.push({
       id: `issue-${issue.id}`,
       type: 'room_issue',
-      title: i18next.t('roomIssueVal', 'Room Issue: {{val}}', { val: issue.title?.substring(0, 40) }),
+      title: `Room Issue: ${issue.title?.substring(0, 40)}`,
       message: issue.description?.substring(0, 80) || 'Reported issue',
       guestName: issue.reported_by_name,
       roomNumber: issue.room_number,
@@ -240,8 +238,8 @@ function deriveReceptionistNotifs(data) {
     notifs.push({
       id: `dirty-${room.id}`,
       type: 'dirty_room',
-      title: i18next.t('roomNeedsCleaning', 'Room Needs Cleaning'),
-      message: i18next.t('roomtypeRoomnumber', '{{roomType}} #{{roomNumber}}', { roomType: room.roomType, roomNumber: room.roomNumber }),
+      title: 'Room Needs Cleaning',
+      message: `${room.roomType} #${room.roomNumber}`,
       roomNumber: room.roomNumber,
       time: room.updated_at || room.updatedAt || now,
       read: false,
@@ -276,7 +274,6 @@ function deriveReceptionistNotifs(data) {
 }
 
 export function ReceptionistNotificationProvider({ children, token }) {
-  const { t } = useTranslation()
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(false);
   const [lastChecked, setLastChecked] = useState(null);
@@ -314,7 +311,7 @@ export function ReceptionistNotificationProvider({ children, token }) {
     
     try {
       const headers = { 
-        Authorization: t('bearerToken', 'Bearer {{token}}', { token }),
+        Authorization: `Bearer ${token}`,
         'ngrok-skip-browser-warning': 'true'
       };
       const today = new Date().toISOString().slice(0, 10);
@@ -332,14 +329,14 @@ export function ReceptionistNotificationProvider({ children, token }) {
         tasksRes,
       ] = await Promise.allSettled([
         fetch(`${API_BASE}/emergency/active/`, { headers }),
-        fetch(t('api_basebookingscancelrequestsstatuspending', '{{API_BASE}}/bookings/cancel-requests/?status=PENDING', { API_BASE }), { headers }),
-        fetch(t('api_basebookingschangerequestsstatuspending', '{{API_BASE}}/bookings/change-requests/?status=PENDING', { API_BASE }), { headers }),
+        fetch(`${API_BASE}/bookings/cancel-requests/?status=PENDING`, { headers }),
+        fetch(`${API_BASE}/bookings/change-requests/?status=PENDING`, { headers }),
         fetch(`${API_BASE}/receptionist/arrivals/?date=${today}`, { headers }),
-        fetch(t('api_baseservicesreceptionstatuspending', '{{API_BASE}}/services/reception/?status=PENDING', { API_BASE }), { headers }),
-        fetch(t('api_basehousekeepersroomissuesstatuspending', '{{API_BASE}}/housekeepers/room-issues/?status=PENDING', { API_BASE }), { headers }),
-        fetch(t('api_basecomplaintsstaffstatuspending', '{{API_BASE}}/complaints/staff/?status=PENDING', { API_BASE }), { headers }),
-        fetch(t('api_basereceptionistroomsstatusdirty', '{{API_BASE}}/receptionist/rooms/?status=DIRTY', { API_BASE }), { headers }),
-        fetch(t('api_basestafftaskspendinglimit50', '{{API_BASE}}/staff/tasks/pending/?limit=50', { API_BASE }), { headers }),
+        fetch(`${API_BASE}/services/reception/?status=PENDING`, { headers }),
+        fetch(`${API_BASE}/housekeepers/room-issues/?status=PENDING`, { headers }),
+        fetch(`${API_BASE}/complaints/staff/?status=PENDING`, { headers }),
+        fetch(`${API_BASE}/receptionist/rooms/?status=DIRTY`, { headers }),
+        fetch(`${API_BASE}/staff/tasks/pending/?limit=50`, { headers }),
       ]);
 
       // Parse responses

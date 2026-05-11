@@ -4,7 +4,7 @@ from .views import (
     SendEmergencyAlertView,
     MyEmergencyAlertsView,
     AllEmergencyAlertsView,
-    ResolveEmergencyView,
+    ResolveEmergencyView, AdvanceEmergencyStatusView,
 )
 
 urlpatterns = [
@@ -12,4 +12,5 @@ urlpatterns = [
     path('my-alerts/', MyEmergencyAlertsView.as_view(), name='my-emergency-alerts'),
     path('all/', AllEmergencyAlertsView.as_view(), name='all-emergency-alerts'),
     path('<int:emergency_id>/resolve/', ResolveEmergencyView.as_view(), name='resolve-emergency'),
+    path('<int:emergency_id>/advance/', AdvanceEmergencyStatusView.as_view(), name='advance-emergency'),
 ]

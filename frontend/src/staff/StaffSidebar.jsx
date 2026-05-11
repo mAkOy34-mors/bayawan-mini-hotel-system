@@ -6,7 +6,6 @@ import { LayoutDashboard, ClipboardList, Sparkles, AlertTriangle, User, LogOut, 
 const COMMON_NAV_ITEMS = [
   { key: 'dashboard', label: 'Dashboard', Icon: LayoutDashboard },
   { key: 'tasks', label: 'My Tasks', Icon: ClipboardList },
-  { key: 'service-tasks', label: 'Service Tasks', Icon: Sparkles },
   { key: 'emergency', label: 'Emergency', Icon: AlertTriangle },
   { key: 'profile', label: 'My Profile', Icon: User },
 ];
@@ -57,7 +56,7 @@ function SidebarContent({ page, setPage, user, onLogout }) {
           </div>
           <div>
             <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: '1rem', fontWeight: 600 }}>Staff Portal</div>
-            <div style={{ fontSize: '0.6rem', color: '#8a96a8' }}>Bayawan Mini Hotel</div>
+            <div style={{ fontSize: '0.6rem', color: '#8a96a8' }}>Cebu Mini Hotel</div>
           </div>
         </div>
       </div>
@@ -130,7 +129,7 @@ function SidebarContent({ page, setPage, user, onLogout }) {
       </nav>
 
       <div style={{ padding: '0.7rem 1rem', borderTop: '1px solid #e2e8f0', background: '#f8f9fb', fontSize: '0.62rem', color: '#cbd5e1', textAlign: 'center' }}>
-        © 2026 Bayawan Mini Hotel
+        © 2026 Cebu Mini Hotel
       </div>
     </>
   );

@@ -13,7 +13,6 @@ from apps.bookings.models import Booking
 User = get_user_model()
 
 
-# apps/emergency/views.py - Update SendEmergencyAlertView
 class SendEmergencyAlertView(APIView):
     """POST /api/v1/emergency/alert/"""
     permission_classes = [IsAuthenticated]
@@ -22,11 +21,9 @@ class SendEmergencyAlertView(APIView):
         emergency_type = request.data.get('emergencyType')
         emergency_type_name = request.data.get('emergencyTypeName')
 
-        # Get data from frontend
         room_number = request.data.get('roomNumber', '')
         guest_name = request.data.get('guestName', '')
 
-        # Get user's current booking
         today = timezone.now().date()
         booking = Booking.objects.filter(
             user=request.user,
@@ -35,7 +32,6 @@ class SendEmergencyAlertView(APIView):
             check_out_date__gte=today
         ).first()
 
-        # DEBUG: Print to console to see what's happening
         print(f"=== Emergency Alert Debug ===")
         print(f"User: {request.user.username}")
         print(f"Today: {today}")
@@ -51,7 +47,6 @@ class SendEmergencyAlertView(APIView):
                 print(f"Room ID: {booking.room.id}")
                 print(f"Room number: {booking.room.room_number}")
 
-        # 🔑 Get room number from booking if not provided or if it's 'Not assigned'
         if booking and booking.room and booking.room.room_number:
             room_number = booking.room.room_number
             print(f"Using room from booking: {room_number}")
@@ -59,22 +54,18 @@ class SendEmergencyAlertView(APIView):
             room_number = 'Unknown'
             print(f"No valid room found, using: {room_number}")
 
-        # Also try to get guest name from booking if not provided
         if not guest_name and booking and booking.user:
             guest_name = booking.user.get_full_name() or booking.user.username
 
-        # Ensure room_number is not too long
         if room_number and len(room_number) > 50:
             room_number = room_number[:50]
 
-        # Get guest phone from guest information if available
         guest_phone = None
         if booking and booking.guest_information:
             guest_phone = booking.guest_information.contact_number
         elif hasattr(request.user, 'guest_information'):
             guest_phone = request.user.guest_information.contact_number
 
-        # Create emergency alert
         alert = EmergencyAlert.objects.create(
             user=request.user,
             booking=booking,
@@ -88,7 +79,6 @@ class SendEmergencyAlertView(APIView):
         print(f"Created alert #{alert.id} with room number: {alert.room_number}")
         print(f"=================================")
 
-        # Broadcast to WebSocket
         try:
             channel_layer = get_channel_layer()
             async_to_sync(channel_layer.group_send)(
@@ -111,8 +101,9 @@ class SendEmergencyAlertView(APIView):
             'success': True,
             'alert_id': alert.id,
             'message': 'Emergency alert sent successfully',
-            'room_number': alert.room_number  # Return to frontend
+            'room_number': alert.room_number
         })
+
 
 class MyEmergencyAlertsView(APIView):
     """GET /api/v1/emergency/my-alerts/"""
@@ -147,7 +138,6 @@ class AllEmergencyAlertsView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        # Allow all staff roles to view emergencies
         allowed_roles = ['ADMIN', 'RECEPTIONIST', 'HOUSEKEEPER', 'MAINTENANCE', 'SECURITY', 'STAFF', 'MANAGEMENT',
                          'FRONT_DESK']
 
@@ -155,7 +145,7 @@ class AllEmergencyAlertsView(APIView):
             return Response({'error': 'Unauthorized'}, status=403)
 
         alerts = EmergencyAlert.objects.all()
-        active = alerts.filter(status='ACTIVE')
+        active = alerts.filter(status__in=['ACTIVE', 'ACCEPTED', 'IN_PROGRESS'])
 
         return Response({
             'emergencies': [{
@@ -183,41 +173,97 @@ class AllEmergencyAlertsView(APIView):
         })
 
 
-class ResolveEmergencyView(APIView):
-    """POST /api/v1/emergency/<id>/resolve/"""
+class AdvanceEmergencyStatusView(APIView):
+    """
+    POST /api/v1/emergency/<id>/advance/
+    Advances the emergency through the status pipeline:
+      ACTIVE → ACCEPTED → IN_PROGRESS → RESOLVED
+    The modal button label updates to reflect the next action.
+    """
     permission_classes = [IsAuthenticated]
 
-    def post(self, request, emergency_id):
-        # Allow all staff roles to resolve emergencies
-        allowed_roles = ['ADMIN', 'RECEPTIONIST', 'HOUSEKEEPER', 'MAINTENANCE', 'SECURITY', 'STAFF', 'MANAGEMENT',
-                         'FRONT_DESK']
+    ALLOWED_ROLES = [
+        'ADMIN', 'RECEPTIONIST', 'HOUSEKEEPER',
+        'MAINTENANCE', 'SECURITY', 'STAFF', 'MANAGEMENT', 'FRONT_DESK'
+    ]
 
-        if not (request.user.is_staff or request.user.role in allowed_roles):
+    # Human-readable label for each transition action
+    ACTION_LABELS = {
+        'ACTIVE':      'Accept',
+        'ACCEPTED':    'Mark In Progress',
+        'IN_PROGRESS': 'Resolve',
+    }
+
+    def post(self, request, emergency_id):
+        if not (request.user.is_staff or request.user.role in self.ALLOWED_ROLES):
             return Response({'error': 'Unauthorized'}, status=403)
 
         try:
             alert = EmergencyAlert.objects.get(id=emergency_id)
-            alert.status = 'RESOLVED'
-            alert.resolved_at = timezone.now()
-            alert.resolved_by = request.user
-            alert.save()
+        except EmergencyAlert.DoesNotExist:
+            return Response({'error': 'Emergency not found'}, status=404)
 
-            # Broadcast resolution to WebSocket
+        if not alert.can_advance():
+            return Response(
+                {'error': f'Emergency is already {alert.status} and cannot be advanced further.'},
+                status=400
+            )
+
+        next_status = alert.next_status()
+        now = timezone.now()
+
+        # Stamp the right timestamp field
+        if next_status == 'ACCEPTED':
+            alert.accepted_at = now
+            alert.accepted_by = request.user
+        elif next_status == 'IN_PROGRESS':
+            alert.in_progress_at = now
+        elif next_status == 'RESOLVED':
+            alert.resolved_at = now
+            alert.resolved_by = request.user
+
+        alert.status = next_status
+        alert.save()
+
+        # Broadcast the status change via WebSocket
+        try:
             channel_layer = get_channel_layer()
+            # Always use emergency_broadcast so the consumer re-broadcasts as
+            # EMERGENCY_STATUS_UPDATED (uppercase) to every connected client.
+            # The frontend listens for EMERGENCY_STATUS_UPDATED for ALL statuses,
+            # including RESOLVED — so we no longer need a separate resolved path here.
             async_to_sync(channel_layer.group_send)(
                 'emergency_alerts',
                 {
-                    'type': 'emergency_resolved',
+                    'type': 'emergency_broadcast',
                     'emergency_id': alert.id,
-                    'resolved_by': request.user.username,
-                    'resolved_at': alert.resolved_at.isoformat(),
+                    'status': alert.status,
+                    'accepted_at': alert.accepted_at.isoformat() if alert.accepted_at else None,
+                    'in_progress_at': alert.in_progress_at.isoformat() if alert.in_progress_at else None,
+                    'resolved_at': alert.resolved_at.isoformat() if alert.resolved_at else None,
+                    'updated_by': request.user.id,
                 }
             )
+        except Exception as e:
+            print(f"WebSocket broadcast error: {e}")
 
-            return Response({
-                'success': True,
-                'message': 'Emergency marked as resolved'
-            })
+        # Tell the frontend what the next possible action will be (for button label)
+        next_action = self.ACTION_LABELS.get(alert.status)
 
-        except EmergencyAlert.DoesNotExist:
-            return Response({'error': 'Emergency not found'}, status=404)
+        return Response({
+            'success': True,
+            'emergencyId': alert.id,
+            'status': alert.status,
+            'nextAction': next_action,  # e.g. "Mark In Progress", or None if resolved
+            'message': f'Emergency status updated to {alert.status}',
+        })
+
+
+# Keep the old route as an alias so existing URL configs don't break
+class ResolveEmergencyView(AdvanceEmergencyStatusView):
+    """
+    POST /api/v1/emergency/<id>/resolve/
+    Deprecated alias — kept for backwards compatibility.
+    Prefer /advance/ for new integrations.
+    """
+    pass

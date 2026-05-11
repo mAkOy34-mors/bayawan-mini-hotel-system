@@ -3,13 +3,12 @@ import { useState, useEffect } from 'react';
 import { fmt } from '../utils/format';
 import { Alert } from '../components/ui/Alert';
 import { useAlert } from '../hooks/useAlert';
-import { API_BASE } from '../constants/config';
 import { fetchPayments, fetchRecentBookings } from '../services/api';
 import {
   Star, BarChart2, Wallet, CheckCircle2, Trophy,
-  Bell, Globe, Lock, Save, Send, HelpCircle,
+  Bell, Globe, Lock, Save,
   Phone, Mail, MessageCircle, ChevronDown, ChevronUp,
-  RefreshCw, ClipboardList,
+  HelpCircle,
 } from 'lucide-react';
 
 const sharedCss = `
@@ -163,43 +162,32 @@ export function RewardsPage({ token }) {
 
   useEffect(() => {
     Promise.all([
-      fetchRecentBookings(token).catch((err) => {
-        console.error('Bookings error:', err);
-        return [];
-      }),
-      fetchPayments(token).catch((err) => {
-        console.error('Payments error:', err);
-        return [];
-      }),
+      fetchRecentBookings(token).catch((err) => { console.error('Bookings error:', err); return []; }),
+      fetchPayments(token).catch((err)        => { console.error('Payments error:', err); return []; }),
     ]).then(([bData, pData]) => {
-      console.log('📦 Bookings:', bData);
-      console.log('💳 Payments:', pData);
       setBookings(Array.isArray(bData) ? bData : []);
       setPayments(Array.isArray(pData) ? pData : []);
       setLoading(false);
     });
   }, [token]);
 
-  // Paid amounts from payments table
   const isRefund  = (p) => p.description?.toLowerCase().startsWith('refund') || p.type === 'REFUND';
   const paidAmt   = payments.filter(p => p.status === 'PAID' && !isRefund(p)).reduce((s,p) => s + parseFloat(p.amount||0), 0);
   const refundAmt = payments.filter(p => isRefund(p)).reduce((s,p) => s + parseFloat(p.amount||0), 0);
   const netSpent  = Math.max(0, paidAmt - refundAmt);
 
-  // Points only from non-cancelled bookings
   const points = bookings
     .filter(b => b.status !== 'CANCELLED')
     .reduce((s,b) => s + Math.floor(parseFloat(b.totalAmount || b.total_amount || 0) / 100) * 10, 0);
 
-  const totalBookings    = bookings.length;
-  const activeBookings   = bookings.filter(b => !['CANCELLED','COMPLETED'].includes(b.status)).length;
-  const cancelledCount   = bookings.filter(b => b.status === 'CANCELLED').length;
+  const totalBookings  = bookings.length;
+  const activeBookings = bookings.filter(b => !['CANCELLED','COMPLETED'].includes(b.status)).length;
+  const cancelledCount = bookings.filter(b => b.status === 'CANCELLED').length;
 
   const tier      = TIERS.slice().reverse().find(t => points >= t.minPts) || TIERS[0];
   const nextTier  = TIERS[TIERS.indexOf(tier) + 1];
   const pctToNext = nextTier ? Math.min(100, ((points - tier.minPts) / (nextTier.minPts - tier.minPts)) * 100) : 100;
 
-  // History — all bookings including cancelled
   const history = bookings.slice(0, 10).map(b => ({
     date:      b.checkInDate?.slice(0,10) || b.check_in_date?.slice(0,10) || '—',
     desc:      `${b.room?.roomType || b.roomType || 'Room'} Booking`,
@@ -209,10 +197,10 @@ export function RewardsPage({ token }) {
   }));
 
   const faqs = [
-    { q:'How do I earn reward points?',        a:'Earn 10 points for every ₱100 spent on room bookings. Cancelled bookings do not earn points.' },
-    { q:'When do points expire?',               a:'Points are valid for 2 years from the date of earning. Tier status resets annually.' },
+    { q:'How do I earn reward points?',           a:'Earn 10 points for every ₱100 spent on room bookings. Cancelled bookings do not earn points.' },
+    { q:'When do points expire?',                 a:'Points are valid for 2 years from the date of earning. Tier status resets annually.' },
     { q:'Can I transfer points to another guest?', a:'Points are non-transferable between accounts.' },
-    { q:'How do I redeem my points?',           a:'Points can be redeemed during booking checkout. Minimum redemption is 500 points (₱50 value).' },
+    { q:'How do I redeem my points?',             a:'Points can be redeemed during booking checkout. Minimum redemption is 500 points (₱50 value).' },
   ];
 
   return (
@@ -223,13 +211,12 @@ export function RewardsPage({ token }) {
         <p className="op-sub">Your loyalty points, tier benefits and booking history</p>
       </div>
 
-      {/* Stats — 4 cards */}
       <div className="op-stat-grid">
         {[
-          { Icon: Star,      label:'Total Points',     value: loading ? '—' : points.toLocaleString(),    color:'gold',  sub: `${tier.name} tier` },
-          { Icon: BarChart2, label:'Total Bookings',   value: loading ? '—' : totalBookings,              color:'blue',  sub: `${activeBookings} active` },
-          { Icon: Wallet,    label:'Net Spent',        value: loading ? '—' : fmt(netSpent),              color:'green', sub: refundAmt > 0 ? `₱${refundAmt.toFixed(0)} refunded` : 'All time' },
-          { Icon: Trophy,    label:'Cancelled',        value: loading ? '—' : cancelledCount,             color:'red',   sub: 'bookings' },
+          { Icon: Star,      label:'Total Points',   value: loading ? '—' : points.toLocaleString(), color:'gold',  sub: `${tier.name} tier` },
+          { Icon: BarChart2, label:'Total Bookings', value: loading ? '—' : totalBookings,            color:'blue',  sub: `${activeBookings} active` },
+          { Icon: Wallet,    label:'Net Spent',      value: loading ? '—' : fmt(netSpent),            color:'green', sub: refundAmt > 0 ? `₱${refundAmt.toFixed(0)} refunded` : 'All time' },
+          { Icon: Trophy,    label:'Cancelled',      value: loading ? '—' : cancelledCount,           color:'red',   sub: 'bookings' },
         ].map((s, i) => (
           <div key={i} className={`op-stat ${s.color}`} style={{ animationDelay:`${i*0.07}s` }}>
             <div className="op-stat-ico"><s.Icon size={16}/></div>
@@ -237,15 +224,13 @@ export function RewardsPage({ token }) {
             <div className="op-stat-val">
               {loading
                 ? <span className="op-skel" style={{ display:'block', height:28, width:60 }}/>
-                : s.value
-              }
+                : s.value}
             </div>
             {!loading && <div className="op-stat-sub">{s.sub}</div>}
           </div>
         ))}
       </div>
 
-      {/* Tier card */}
       <div className="op-tier">
         <div className="op-tier-row">
           <div>
@@ -272,7 +257,6 @@ export function RewardsPage({ token }) {
         )}
       </div>
 
-      {/* Perks + History */}
       <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'1rem' }}>
         <div className="op-panel" style={{ animationDelay:'.12s', marginBottom:0 }}>
           <div className="op-panel-hd">
@@ -340,7 +324,6 @@ export function RewardsPage({ token }) {
         </div>
       </div>
 
-      {/* FAQ */}
       <div className="op-panel" style={{ animationDelay:'.18s', marginTop:'1rem' }}>
         <div className="op-panel-hd">
           <div className="op-panel-title"><HelpCircle size={16}/>Frequently Asked Questions</div>
@@ -387,7 +370,6 @@ export function SettingsPage({ user, token, lang, setLang }) {
         <p className="op-sub">Manage your account preferences and notifications</p>
       </div>
 
-      {/* Notifications */}
       <div className="op-panel">
         <div className="op-panel-hd">
           <div>
@@ -397,10 +379,10 @@ export function SettingsPage({ user, token, lang, setLang }) {
         </div>
         <div className="op-panel-body">
           {[
-            { key:'email',      label:'Email Notifications',  sub:'Booking confirmations, receipts' },
-            { key:'sms',        label:'SMS Notifications',    sub:'Check-in reminders via text' },
-            { key:'promotions', label:'Promotional Emails',   sub:'Special offers and discounts' },
-            { key:'reminders',  label:'Stay Reminders',       sub:'Reminders before your check-in' },
+            { key:'email',      label:'Email Notifications', sub:'Booking confirmations, receipts' },
+            { key:'sms',        label:'SMS Notifications',   sub:'Check-in reminders via text' },
+            { key:'promotions', label:'Promotional Emails',  sub:'Special offers and discounts' },
+            { key:'reminders',  label:'Stay Reminders',      sub:'Reminders before your check-in' },
           ].map(({ key, label, sub }) => (
             <div key={key} className="op-toggle-row">
               <div className="op-toggle-info">
@@ -417,7 +399,6 @@ export function SettingsPage({ user, token, lang, setLang }) {
         </div>
       </div>
 
-      {/* Preferences */}
       <div className="op-panel" style={{ animationDelay:'.07s' }}>
         <div className="op-panel-hd">
           <div className="op-panel-title"><Globe size={16}/>Preferences</div>
@@ -455,16 +436,15 @@ export function SettingsPage({ user, token, lang, setLang }) {
         </div>
       </div>
 
-      {/* Privacy */}
       <div className="op-panel" style={{ animationDelay:'.12s' }}>
         <div className="op-panel-hd">
           <div className="op-panel-title"><Lock size={16}/>Privacy & Security</div>
         </div>
         <div className="op-panel-body">
           {[
-            { label:'Two-Factor Authentication', sub:'Secure your account with 2FA',                    defaultOn: false },
-            { label:'Activity Log',              sub:'Show login and activity history',                 defaultOn: true  },
-            { label:'Data Sharing',              sub:'Share anonymous usage data to improve service',   defaultOn: false },
+            { label:'Two-Factor Authentication', sub:'Secure your account with 2FA',                  defaultOn: false },
+            { label:'Activity Log',              sub:'Show login and activity history',               defaultOn: true  },
+            { label:'Data Sharing',              sub:'Share anonymous usage data to improve service', defaultOn: false },
           ].map(({ label, sub, defaultOn }, idx) => {
             const [tog, setTog] = useState(defaultOn);
             return (
@@ -485,46 +465,14 @@ export function SettingsPage({ user, token, lang, setLang }) {
 
 /* ════════════════════════════════ SUPPORT ═══════════════════════════════ */
 export function SupportPage({ token }) {
-  const [form,      setForm]      = useState({ category:'BOOKING', subject:'', message:'' });
-  const [faqOpen,   setFaqOpen]   = useState(null);
-  const [submitted, setSubmitted] = useState(false);
-  const [sending,   setSending]   = useState(false);
-  const { alert, showAlert }      = useAlert();
-
-  const submit = async () => {
-    if (!form.subject || !form.message) { showAlert('Please fill in all fields', 'error'); return; }
-    setSending(true);
-    try {
-      const res = await fetch(`${API_BASE}/support/`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-        body: JSON.stringify({
-          email:    'guest@cebugrand.com',
-          subject:  form.subject,
-          message:  form.message,
-          priority: 'MEDIUM',
-        }),
-      });
-      if (res.ok) {
-        setSubmitted(true);
-        showAlert("Ticket submitted! We'll respond within 24 hours.", 'success');
-        setForm({ category:'BOOKING', subject:'', message:'' });
-      } else {
-        showAlert('Failed to submit ticket. Please try again.', 'error');
-      }
-    } catch {
-      showAlert('Connection error. Please try again.', 'error');
-    } finally {
-      setSending(false);
-    }
-  };
+  const [faqOpen, setFaqOpen] = useState(null);
 
   const faqs = [
-    { q:'How do I cancel a booking?',           a:'Go to My Bookings, select your reservation, and click "Cancel". A 50% refund of your deposit will be processed within 5–7 business days.' },
-    { q:'When will I receive my refund?',        a:'Refunds are processed within 5–7 business days to your original payment method.' },
-    { q:'Can I modify my booking dates?',        a:'Yes, submit a Change Request from My Bookings. Our team will review and respond within 24 hours.' },
-    { q:'How do I request an early check-in?',   a:'Early check-in is subject to availability and can be requested by contacting the front desk at least 24 hours before arrival.' },
-    { q:"What is the hotel's pet policy?",       a:'We are a pet-friendly hotel. Pets under 10kg are welcome in select rooms. A refundable pet deposit of ₱500 is required.' },
+    { q:'How do I cancel a booking?',          a:'Go to My Bookings, select your reservation, and click "Cancel". A 50% refund of your deposit will be processed within 5–7 business days.' },
+    { q:'When will I receive my refund?',       a:'Refunds are processed within 5–7 business days to your original payment method.' },
+    { q:'Can I modify my booking dates?',       a:'Yes, submit a Change Request from My Bookings. Our team will review and respond within 24 hours.' },
+    { q:'How do I request an early check-in?',  a:'Early check-in is subject to availability and can be requested by contacting the front desk at least 24 hours before arrival.' },
+    { q:"What is the hotel's pet policy?",      a:'We are a pet-friendly hotel. Pets under 10kg are welcome in select rooms. A refundable pet deposit of ₱500 is required.' },
   ];
 
   const contacts = [
@@ -536,13 +484,11 @@ export function SupportPage({ token }) {
   return (
     <div className="op-root">
       <style>{sharedCss}</style>
-      <Alert alert={alert}/>
       <div className="op-hd">
         <h1 className="op-title">Help & Support</h1>
         <p className="op-sub">We're here to help — contact us or browse common questions</p>
       </div>
 
-      {/* Contact cards */}
       <div className="op-contact-grid">
         {contacts.map((c, i) => (
           <div key={i} className={`op-contact-card ${c.cls}`} style={{ animationDelay:`${i*0.06}s` }}>
@@ -556,75 +502,20 @@ export function SupportPage({ token }) {
         ))}
       </div>
 
-      {/* Ticket + FAQ */}
-      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'1rem' }}>
-        <div className="op-panel" style={{ animationDelay:'.1s', marginBottom:0 }}>
-          <div className="op-panel-hd">
-            <div className="op-panel-title"><ClipboardList size={16}/>Submit a Ticket</div>
-          </div>
-          <div className="op-panel-body">
-            {submitted ? (
-              <div style={{ textAlign:'center', padding:'2rem 1rem' }}>
-                <div style={{ display:'flex', justifyContent:'center', marginBottom:'.65rem' }}>
-                  <CheckCircle2 size={48} strokeWidth={1.5} color="var(--green)"/>
-                </div>
-                <div style={{ fontFamily:"'Cormorant Garamond',serif", fontSize:'1.1rem', fontWeight:600, color:'var(--text)', marginBottom:'.3rem' }}>
-                  Ticket Submitted!
-                </div>
-                <div style={{ fontSize:'.79rem', color:'var(--text-muted)', marginBottom:'1rem' }}>
-                  We'll respond within 24 hours.
-                </div>
-                <button className="op-save-btn" style={{ margin:'0 auto' }} onClick={() => setSubmitted(false)}>
-                  Submit Another
-                </button>
-              </div>
-            ) : (
-              <>
-                <div className="op-f" style={{ marginBottom:'.85rem' }}>
-                  <label className="op-lbl">Category</label>
-                  <select className="op-select" value={form.category} onChange={e => setForm({...form, category:e.target.value})}>
-                    <option value="BOOKING">Booking Issue</option>
-                    <option value="PAYMENT">Payment Issue</option>
-                    <option value="ROOM">Room Request</option>
-                    <option value="REWARDS">Rewards</option>
-                    <option value="OTHER">Other</option>
-                  </select>
-                </div>
-                <div className="op-f" style={{ marginBottom:'.85rem' }}>
-                  <label className="op-lbl">Subject</label>
-                  <input className="op-input" type="text" value={form.subject}
-                    onChange={e => setForm({...form, subject:e.target.value})}
-                    placeholder="Brief summary of your issue"/>
-                </div>
-                <div className="op-f" style={{ marginBottom:'.85rem' }}>
-                  <label className="op-lbl">Message</label>
-                  <textarea className="op-textarea" rows={4} value={form.message}
-                    onChange={e => setForm({...form, message:e.target.value})}
-                    placeholder="Describe your issue in detail…"/>
-                </div>
-                <button className="op-save-btn" disabled={sending} onClick={submit}>
-                  {sending ? <><div className="op-spin"/>Sending…</> : <><Send size={14}/>Submit Ticket</>}
-                </button>
-              </>
-            )}
-          </div>
+      <div className="op-panel" style={{ animationDelay:'.1s' }}>
+        <div className="op-panel-hd">
+          <div className="op-panel-title"><HelpCircle size={16}/>Frequently Asked</div>
         </div>
-
-        <div className="op-panel" style={{ animationDelay:'.13s', marginBottom:0 }}>
-          <div className="op-panel-hd">
-            <div className="op-panel-title"><HelpCircle size={16}/>Frequently Asked</div>
-          </div>
-          <div className="op-panel-body">
-            {faqs.map((f, i) => (
-              <div key={i} className="op-faq-item" style={{ animationDelay:`${i*0.05}s` }}>
-                <div className="op-faq-q" onClick={() => setFaqOpen(faqOpen === i ? null : i)}>
-                  <span style={{ flex:1, marginRight:'.5rem' }}>{f.q}</span>
-                  {faqOpen === i ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}
-                </div>
-                {faqOpen === i && <div className="op-faq-a">{f.a}</div>}
+        <div className="op-panel-body">
+          {faqs.map((f, i) => (
+            <div key={i} className="op-faq-item" style={{ animationDelay:`${i*0.05}s` }}>
+              <div className="op-faq-q" onClick={() => setFaqOpen(faqOpen === i ? null : i)}>
+                <span style={{ flex:1, marginRight:'.5rem' }}>{f.q}</span>
+                {faqOpen === i ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}
               </div>
-            ))}
-          </div>
+              {faqOpen === i && <div className="op-faq-a">{f.a}</div>}
+            </div>
+          ))}
         </div>
       </div>
     </div>
