@@ -133,7 +133,7 @@ export function PublicHeader({ onLoginClick, onRegisterClick }) {
           </div>
           <div>
             <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: '1.1rem', fontWeight: 700, color: '#1a1f2e' }}>
-              Bayawan Mini Hotel
+              Cebu Mini Hotel
             </div>
             <div style={{ fontSize: '0.6rem', color: '#8a96a8', letterSpacing: '0.5px' }}>
               LUXURY STAY
@@ -366,7 +366,7 @@ export function PublicHeader({ onLoginClick, onRegisterClick }) {
             <div style={{ marginTop: 'auto', paddingTop: '30px', textAlign: 'center' }}>
               <div style={{ fontSize: '0.7rem', color: '#8a96a8' }}>
                 <Hotel size={14} style={{ display: 'inline', marginRight: '5px' }} />
-                Bayawan Mini Hotel
+                Cebu Mini Hotel
               </div>
               <div style={{ fontSize: '0.6rem', color: '#cbd5e1', marginTop: '5px' }}>
                 © 2026 All rights reserved
